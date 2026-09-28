@@ -24,6 +24,9 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   is the left side, as in IntelliJ), a commit against the working tree, or a branch against the
   current branch.
 - **Changes panel**: a directory tree or a flat list, with added, modified, deleted, renamed and copied files.
+  Select several files with Ctrl or Cmd and Shift. For the files of a commit: Revert Selected
+  Changes, Cherry-Pick Selected Changes (both change only the working tree, and fall back to a
+  three-way merge) and Get from Revision.
 - **Commit details**: the full message, hash, author, committer, parents and refs.
 - **Diff**: Monaco, side by side or unified, previous and next change, previous and next file,
   ignore whitespace, collapse unchanged regions, and single-side view for added or deleted files.
@@ -123,7 +126,7 @@ ui/e2e/run-all.sh /tmp/e2e /path/to/git.git     # also the large-repository scen
 ```
 
 The scenarios are `demo-repo`, `write-ops`, `changelists`, `push-update`, `stash`, `merge-tool`,
-`history`, `partial-commit`, `large-repo` and `collapse`. Each file says how to run it alone.
+`history`, `partial-commit`, `file-actions`, `large-repo` and `collapse`. Each file says how to run it alone.
 
 Each scenario takes screenshots and fails when the page logs an error.
 

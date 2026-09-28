@@ -192,10 +192,12 @@ fn file_level_revert_cherry_pick_and_get() {
     let c3 = git(&dir, &["rev-parse", "HEAD"]);
     let c2 = git(&dir, &["rev-parse", "HEAD^"]);
 
-    // Revert only a.txt of the last commit.
+    // Revert only a.txt of the last commit; a local change at the end of a.txt stays.
+    std::fs::write(dir.join("a.txt"), "one\nTWO\nthree\nlocal\n").unwrap();
     let r = repo.apply_file_changes(&c2, &c3, &["a.txt".into()], true).unwrap();
     assert!(r.ok, "{}", r.message);
-    assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "one\ntwo\nthree\n");
+    assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "one\ntwo\nthree\nlocal\n");
+    std::fs::write(dir.join("a.txt"), "one\ntwo\nthree\n").unwrap();
     assert_eq!(std::fs::read_to_string(dir.join("b.txt")).unwrap(), "b2\n");
     // Cherry-pick it back.
     assert!(repo.apply_file_changes(&c2, &c3, &["a.txt".into()], false).unwrap().ok);

@@ -1122,14 +1122,43 @@ sidebar.onContextMenu = (b, e) => {
     { label: "Copy Revision Number", action: () => void copyText(b.oid) },
   ]);
 };
-changes.onContextMenu = (c, e) =>
+/** The commits of the current comparison, when both sides are commits. */
+function comparedCommits(): { from: string; to: string } | null {
+  const from = typeof left === "object" ? ("commit" in left ? left.commit : `${left.parentOf}^`) : null;
+  const to = typeof rightRev === "object" && "commit" in rightRev ? rightRev.commit : null;
+  return from && to ? { from, to } : null;
+}
+
+async function fileChangesAction(files: Change[], kind: "revert" | "pick" | "get") {
+  const pair = comparedCommits();
+  if (!pair) return;
+  const paths = files.flatMap((c) => (c.old_path ? [c.path, c.old_path] : [c.path]));
+  const n = files.length;
+  if (kind === "get") {
+    const what = short(pair.to);
+    if (!(await confirmDialog("Get from Revision", `Replace ${n} file(s) in the working tree with their version in ${what}? Local changes to them are lost.`, "Get", true))) return;
+    await runOp({ op: "getFromRevision", rev: pair.to, paths }, "Getting files");
+  } else {
+    await runOp({ op: "applyFileChanges", from: pair.from, to: pair.to, paths, reverse: kind === "revert" }, kind === "revert" ? "Reverting changes" : "Applying changes");
+  }
+}
+
+changes.onContextMenu = (files, e) => {
+  const c = files[0];
+  const commits = !!comparedCommits() && files.every((f) => !f.rightRev);
+  const plural = files.length > 1 ? ` (${files.length} files)` : "";
   showMenu(e.clientX, e.clientY, [
-    { label: "Show Diff", action: () => void openFile(changeList.indexOf(c)) },
-    { label: "Show History", disabled: c.status === "D", action: () => showHistory(c.path) },
+    { label: "Show Diff", disabled: files.length !== 1, action: () => void openFile(changeList.indexOf(c)) },
+    { label: "Show History", disabled: files.length !== 1 || c.status === "D", action: () => showHistory(c.path) },
     { separator: true },
-    { label: "Copy Path", action: () => void copyText(c.path) },
-    { label: "Copy File Name", action: () => void copyText(c.path.split("/").pop() ?? c.path) },
+    { label: `Revert Selected Changes${plural}`, disabled: !commits, action: () => void fileChangesAction(files, "revert") },
+    { label: `Cherry-Pick Selected Changes${plural}`, disabled: !commits, action: () => void fileChangesAction(files, "pick") },
+    { label: `Get from Revision${plural}…`, disabled: !commits, action: () => void fileChangesAction(files, "get") },
+    { separator: true },
+    { label: files.length > 1 ? "Copy Paths" : "Copy Path", action: () => void copyText(files.map((f) => f.path).join("\n")) },
+    { label: "Copy File Name", disabled: files.length !== 1, action: () => void copyText(c.path.split("/").pop() ?? c.path) },
   ]);
+};
 
 async function askForRepo() {
   const picked = await pickFolder();

@@ -20,7 +20,9 @@ export class ChangesPanel {
   private active = -1;
   private collapsed = new Set<string>();
   onOpen: (index: number) => void = () => {};
-  onContextMenu: (change: Change, e: MouseEvent) => void = () => {};
+  /** The right-clicked file, or all selected files when it is one of them. */
+  onContextMenu: (changes: Change[], e: MouseEvent) => void = () => {};
+  private selected = new Set<number>();
   onSwap: () => void = () => {};
 
   constructor() {
@@ -63,6 +65,7 @@ export class ChangesPanel {
   setChanges(changes: Change[]) {
     this.changes = changes;
     this.active = -1;
+    this.selected.clear();
     this.collapsed.clear();
     this.count.textContent = `${changes.length} file${changes.length === 1 ? "" : "s"}`;
     this.render();
@@ -70,8 +73,11 @@ export class ChangesPanel {
 
   setActive(i: number) {
     this.active = i;
+    if (!this.selected.has(i)) this.selected = new Set(i >= 0 ? [i] : []);
     for (const el of this.list.querySelectorAll(".change")) {
-      el.classList.toggle("active", Number((el as HTMLElement).dataset.index) === i);
+      const idx = Number((el as HTMLElement).dataset.index);
+      el.classList.toggle("active", idx === i);
+      el.classList.toggle("selected", this.selected.has(idx) && idx !== i);
     }
     this.list.querySelector(".change.active")?.scrollIntoView({ block: "nearest" });
   }
@@ -162,10 +168,30 @@ export class ChangesPanel {
       c.old_path ? h("span", { class: "dir" }, `← ${c.old_path}`) : withDir && slash > 0 ? h("span", { class: "dir" }, c.path.slice(0, slash)) : "",
     );
     item.title = c.old_path ? `${c.old_path} → ${c.path}` : c.path;
-    item.addEventListener("click", () => this.onOpen(i));
+    item.addEventListener("click", (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (this.selected.has(i)) this.selected.delete(i);
+        else this.selected.add(i);
+        this.setActive(this.active);
+        return;
+      }
+      if (e.shiftKey && this.active >= 0) {
+        const order = [...this.list.querySelectorAll<HTMLElement>(".change")].map((x) => Number(x.dataset.index));
+        const [a, b] = [order.indexOf(this.active), order.indexOf(i)].sort((x, y) => x - y);
+        this.selected = new Set(order.slice(a, b + 1));
+        this.setActive(this.active);
+        return;
+      }
+      this.selected = new Set([i]);
+      this.onOpen(i);
+    });
     item.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      this.onContextMenu(c, e);
+      if (!this.selected.has(i)) {
+        this.selected = new Set([i]);
+        this.setActive(this.active);
+      }
+      this.onContextMenu([...this.selected].sort((a, b) => a - b).map((x) => this.changes[x]), e);
     });
     return item;
   }

@@ -168,7 +168,8 @@ impl Repo {
 
     /// Applies the change of some files between two commits to the working tree, as IntelliJ's
     /// Cherry-Pick Selected Changes; with `reverse`, it removes that change, as Revert Selected Changes.
-    /// A change that does not apply cleanly falls back to a three-way merge and can leave conflicts.
+    /// A change that does not apply cleanly falls back to a three-way merge and can leave conflicts; the
+    /// three-way merge needs the files to match the index.
     pub fn apply_file_changes(&self, from: &str, to: &str, paths: &[String], reverse: bool) -> Result<OpResult> {
         let (from, to) = (safe(from)?, safe(to)?);
         for p in paths {
@@ -180,11 +181,19 @@ impl Repo {
         if patch.is_empty() {
             return Err(GitError("The selected files have no changes".into()));
         }
+        let what = if reverse { "Reverted" } else { "Applied" };
+        // A plain apply changes only the working tree, so local changes in the same files are fine.
+        let mut plain = vec!["apply"];
+        if reverse {
+            plain.push("-R");
+        }
+        if self.git_stdin(&plain, &patch).is_ok() {
+            return Ok(OpResult::ok_msg(format!("{what} the changes of {} file(s)", paths.len())));
+        }
         let mut apply = vec!["apply", "--3way"];
         if reverse {
             apply.push("-R");
         }
-        let what = if reverse { "Reverted" } else { "Applied" };
         match self.git_stdin(&apply, &patch) {
             Ok(_) => Ok(OpResult::ok_msg(format!("{what} the changes of {} file(s)", paths.len()))),
             Err(e) => {

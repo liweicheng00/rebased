@@ -160,7 +160,7 @@ input { font: inherit; }
 .changes { flex: 1; overflow: auto; padding: 2px 0; outline: none; }
 .change, .dir-row { display: flex; gap: 6px; align-items: baseline; padding: 1px 8px; white-space: nowrap; cursor: default; }
 .change:hover, .dir-row:hover { background: var(--hover); }
-.change.active { background: var(--select); }
+.change.active, .change.selected { background: var(--select); }
 .changes:focus .change.active { background: var(--select-strong); }
 .dir-name { color: var(--fg); }
 .dir-count { color: var(--muted); font-size: 11px; }

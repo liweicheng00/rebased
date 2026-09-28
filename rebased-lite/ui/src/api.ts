@@ -201,7 +201,9 @@ export type Op =
   | { op: "stashDrop"; index: number }
   | { op: "stashBranch"; index: number; branch: string }
   | { op: "resolveText"; path: string; text: string }
-  | { op: "resolveSide"; paths: string[]; side: "ours" | "theirs" };
+  | { op: "resolveSide"; paths: string[]; side: "ours" | "theirs" }
+  | { op: "applyFileChanges"; from: string; to: string; paths: string[]; reverse: boolean }
+  | { op: "getFromRevision"; rev: string; paths: string[] };
 
 export interface HistoryEntry {
   oid: string;
