@@ -4,6 +4,7 @@
 pub mod changelist;
 pub mod ops;
 pub mod remote;
+pub mod stash;
 pub mod worktree;
 
 use rebased_graph::linear::GraphCommit;

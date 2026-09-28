@@ -295,11 +295,11 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 /* left pane: branches and commit tabs */
 .leftpane { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--panel); border-right: 1px solid var(--border); }
 .leftpane[hidden] { display: none; }
-.leftpane > .sidebar, .leftpane > .commit-panel { flex: 1; min-height: 0; border-right: 0; }
+.leftpane > .sidebar, .leftpane > .commit-panel, .leftpane > .stash-panel { flex: 1; min-height: 0; border-right: 0; }
 .leftpane > [hidden] { display: none !important; }
 .leftpane .sidebar > .pane-title { display: none; }
-.lp-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 4px; gap: 2px; }
-.lp-tab { padding: 6px 10px 5px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; }
+.lp-tabs { display: flex; overflow: hidden; border-bottom: 1px solid var(--border); padding: 0 4px; gap: 2px; }
+.lp-tab { white-space: nowrap; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 6px 8px 5px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; }
 .lp-tab:hover { color: var(--fg); }
 .lp-tab.on { color: var(--fg); border-bottom-color: var(--accent); }
 
@@ -331,6 +331,18 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .commit-summary { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .commit-button { flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; padding: 4px 14px; border-radius: 5px; border: 1px solid var(--accent); cursor: pointer; }
 .commit-button:disabled { opacity: 0.5; cursor: default; }
+
+/* stash panel */
+.stash-panel { display: flex; flex-direction: column; min-height: 0; }
+.stash-all { font-size: 12px; }
+.stash-list { flex: 1; overflow: auto; outline: none; }
+.stash-row { padding: 5px 10px; border-bottom: 1px solid var(--border); cursor: default; }
+.stash-row:hover { background: var(--hover); }
+.stash-row.selected { background: var(--select); }
+.stash-list:focus .stash-row.selected { background: var(--select-strong); }
+.stash-message { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stash-meta { display: flex; gap: 8px; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; }
+.stash-branch { color: var(--local); }
 
 /* push dialog */
 .push-route { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }

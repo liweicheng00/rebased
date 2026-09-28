@@ -70,6 +70,8 @@ export interface Change {
   status: string;
   path: string;
   old_path: string | null;
+  /** Client side only: a right revision for this file that differs from the compared revision. */
+  rightRev?: RevSpec;
 }
 
 export interface FileContent {
@@ -193,7 +195,27 @@ export type Op =
   | { op: "addFiles"; paths: string[] }
   | { op: "deleteUnversioned"; paths: string[] }
   | { op: "push"; branch: string; remote: string; remoteBranch: string; force: boolean; setUpstream: boolean; tags: boolean }
-  | { op: "update"; mode: "merge" | "rebase" };
+  | { op: "update"; mode: "merge" | "rebase" }
+  | { op: "stashPush"; message: string; paths: string[]; includeUntracked: boolean; keepIndex: boolean }
+  | { op: "stashApply"; index: number; pop: boolean; restoreIndex: boolean }
+  | { op: "stashDrop"; index: number }
+  | { op: "stashBranch"; index: number; branch: string };
+
+export interface Stash {
+  index: number;
+  oid: string;
+  message: string;
+  branch: string | null;
+  time: number;
+}
+
+export interface StashDetail {
+  oid: string;
+  base: string;
+  untrackedOid: string | null;
+  changes: Change[];
+  untracked: string[];
+}
 
 export interface OutgoingCommit {
   oid: string;
@@ -255,6 +277,8 @@ export const api = {
   localChanges: () => call<LocalChanges>("local_changes"),
   changeListOp: (op: ChangeListOp) => call<LocalChanges>("changelist_op", op),
   headMessage: () => call<string>("head_message"),
+  stashes: () => call<Stash[]>("stashes"),
+  stashDetail: (index: number) => call<StashDetail>("stash_detail", { index }),
   pushInfo: (branch?: string) => call<PushInfo>("push_info", { branch: branch ?? null }),
   compare: (left: RevSpec, right: RevSpec) => call<{ changes: Change[] }>("compare", { left, right }),
   filePair: (left: RevSpec, right: RevSpec, path: string, oldPath: string | null) =>

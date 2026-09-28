@@ -15,11 +15,13 @@ export class OpBanner {
   }
 
   update(state: RepoState | null) {
-    if (!state || state.operation === "none") {
+    // Conflicts without an operation come from a stash apply or pop.
+    if (!state || (state.operation === "none" && state.conflicts.length === 0)) {
       this.el.hidden = true;
       return;
     }
-    const name = { merge: "Merge", rebase: "Rebase", "cherry-pick": "Cherry-pick", revert: "Revert" }[state.operation];
+    const op = state.operation === "none" ? null : state.operation;
+    const name = op ? { merge: "Merge", rebase: "Rebase", "cherry-pick": "Cherry-pick", revert: "Revert" }[op] : null;
     const cont = h("button", { class: "primary", disabled: state.conflicts.length > 0 }, "Continue");
     const abort = h("button", {}, "Abort");
     const resolve = h("button", { disabled: state.conflicts.length === 0, title: "Stage the conflicted files after you fixed them in your editor" }, "Mark Resolved");
@@ -42,18 +44,20 @@ export class OpBanner {
       h(
         "div",
         { class: "op-row" },
-        h("b", {}, `${name} in progress`),
+        h("b", {}, name ? `${name} in progress` : "Unresolved conflicts"),
         h(
           "span",
           { class: "muted-inline" },
-          state.conflicts.length
-            ? `${state.conflicts.length} file(s) have conflicts. Fix them in your editor, mark them resolved, then continue.`
-            : "No conflicts are left. Continue to finish.",
+          !name
+            ? `${state.conflicts.length} file(s) have conflicts. Fix them, then mark them resolved.`
+            : state.conflicts.length
+              ? `${state.conflicts.length} file(s) have conflicts. Fix them in your editor, mark them resolved, then continue.`
+              : "No conflicts are left. Continue to finish.",
         ),
         h("span", { class: "spacer" }),
         resolve,
-        abort,
-        cont,
+        name ? abort : "",
+        name ? cont : "",
       ),
       state.conflicts.length ? files : "",
     );

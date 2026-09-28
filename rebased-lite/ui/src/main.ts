@@ -13,6 +13,7 @@ import {
   type RecentBranch,
   type RepoState,
   type RevSpec,
+  type Stash,
   type Row,
   type ViewResult,
   type Worktree,
@@ -22,6 +23,7 @@ import { confirmDialog, formDialog, interactiveRebaseDialog, messageDialog, push
 import { toast } from "./notify";
 import { OpBanner } from "./op-banner";
 import { CommitPanel, type LocalFile } from "./commit-panel";
+import { StashPanel } from "./stash-panel";
 import { ChangesPanel } from "./changes-panel";
 import { menuBelow, showMenu, type MenuItem } from "./context-menu";
 import { DetailsPanel } from "./details-panel";
@@ -43,6 +45,7 @@ const changes = new ChangesPanel();
 const details = new DetailsPanel();
 const diff = new DiffView();
 const commitPanel = new CommitPanel();
+const stashPanel = new StashPanel();
 
 let view: ViewResult | null = null;
 let refs: BranchInfo[] = [];
@@ -79,8 +82,9 @@ const center = h("section", { class: "center" }, banner.el, filterBar.el, log.el
 const right = h("section", { class: "right" }, changes.el, detailsGrip, details.el);
 const tabBranches = h("button", { class: "lp-tab", title: `Branches (${mod}1)` }, "Branches");
 const tabCommit = h("button", { class: "lp-tab", title: `Commit (${mod}K)` }, "Commit");
-const leftPane = h("aside", { class: "leftpane" }, h("div", { class: "lp-tabs" }, tabBranches, tabCommit), sidebar.el, commitPanel.el);
-function showLeftTab(tab: "branches" | "commit") {
+const tabStash = h("button", { class: "lp-tab", title: "Stashes" }, "Stash");
+const leftPane = h("aside", { class: "leftpane" }, h("div", { class: "lp-tabs" }, tabBranches, tabCommit, tabStash), sidebar.el, commitPanel.el, stashPanel.el);
+function showLeftTab(tab: "branches" | "commit" | "stash") {
   settings.leftTab = tab;
   save();
   if (!settings.showSidebar) {
@@ -89,11 +93,14 @@ function showLeftTab(tab: "branches" | "commit") {
   }
   tabBranches.classList.toggle("on", tab === "branches");
   tabCommit.classList.toggle("on", tab === "commit");
+  tabStash.classList.toggle("on", tab === "stash");
   sidebar.el.hidden = tab !== "branches";
   commitPanel.el.hidden = tab !== "commit";
+  stashPanel.el.hidden = tab !== "stash";
 }
 tabBranches.addEventListener("click", () => showLeftTab("branches"));
 tabCommit.addEventListener("click", () => showLeftTab("commit"));
+tabStash.addEventListener("click", () => showLeftTab("stash"));
 const top = h("div", { class: "top" }, leftPane, sideGrip, center, rightGrip, right);
 const workspace = h("main", { class: "workspace" }, top, diffGrip, diff.el);
 const welcome = h("main", { class: "welcome" });
@@ -254,6 +261,12 @@ async function loadLocalChanges() {
   }
   const n = commitPanel.changeCount;
   tabCommit.textContent = n ? `Commit (${n})` : "Commit";
+  try {
+    stashPanel.set(await api.stashes());
+  } catch {
+    stashPanel.set([]);
+  }
+  tabStash.textContent = stashPanel.count ? `Stash (${stashPanel.count})` : "Stash";
 }
 
 // Files change outside the app; reload the local changes when the window gets the focus.
@@ -372,7 +385,7 @@ async function openFile(i: number) {
   changes.setActive(i);
   const c = changeList[i];
   try {
-    const pair = await api.filePair(left, rightRev, c.path, c.old_path);
+    const pair = await api.filePair(left, c.rightRev ?? rightRev, c.path, c.old_path);
     if (req !== request || active !== i) return;
     diff.show(c, pair.left, pair.right);
   } catch (e) {
@@ -382,6 +395,7 @@ async function openFile(i: number) {
 
 function showSelection(rows: Row[]) {
   selected = rows;
+  stashPanel.clearSelection();
   diffSource = "log";
   commitPanel.setActiveFile(null);
   void details.show(rows);
@@ -836,6 +850,10 @@ commitPanel.onFileMenu = (files, e) => {
     }
     items.push({ label: "New Changelist…", action: () => void newChangeList(paths) });
   }
+  items.push({ separator: true }, {
+    label: "Stash Selected Files…",
+    action: () => void stashChanges(files.flatMap((f) => (f.change.old_path ? [f.change.path, f.change.old_path] : [f.change.path])), untracked.length > 0, ""),
+  });
   items.push({ separator: true }, { label: files.length > 1 ? "Copy Paths" : "Copy Path", action: () => void copyText(files.map((f) => f.change.path).join("\n")) });
   showMenu(e.clientX, e.clientY, items);
 };
@@ -848,6 +866,7 @@ commitPanel.onListMenu = (l, e) =>
     { label: "Edit Changelist…", action: () => void editChangeList(l) },
     { label: "Remove Changelist…", disabled: commitPanel.lists.length === 1, action: () => void removeChangeList(l) },
     { separator: true },
+    { label: "Stash Changelist…", disabled: !l.changes.length, action: () => void stashChanges(l.changes.flatMap((c) => (c.old_path ? [c.path, c.old_path] : [c.path])), false, l.name) },
     { label: "Rollback…", disabled: !l.changes.length, action: () => void rollback(l.changes.map((c) => ({ key: `f:${c.path}`, change: c, list: l.id }))) },
   ]);
 commitPanel.onUnversionedMenu = (e) => {
@@ -856,6 +875,80 @@ commitPanel.onUnversionedMenu = (e) => {
     { label: "Delete All…", action: () => void api.localChanges().then((lc) => deleteUnversioned(lc.unversioned.map((p) => ({ key: `u:${p}`, change: { status: "?", path: p, old_path: null }, list: null })))) },
   ]);
 };
+
+// ---- stashes ----
+
+async function showStash(s: Stash) {
+  const req = ++request;
+  diffSource = "log";
+  commitPanel.setActiveFile(null);
+  changes.setTitle(`stash@{${s.index}}: ${s.message}`);
+  changes.setMessage("Loading…");
+  diff.message("Loading…");
+  details.clear();
+  try {
+    const d = await api.stashDetail(s.index);
+    if (req !== request) return;
+    left = { commit: d.base };
+    rightRev = { commit: d.oid };
+    active = -1;
+    diff.setSides(short(d.base), `stash@{${s.index}}`);
+    const untrackedRev: RevSpec | undefined = d.untrackedOid ? { commit: d.untrackedOid } : undefined;
+    changeList = [...d.changes, ...d.untracked.map((p) => ({ status: "A", path: p, old_path: null, rightRev: untrackedRev }))];
+    changes.setChanges(changeList);
+    if (changeList.length) void openFile(changes.firstInOrder());
+    else diff.message("The stash has no changes.");
+  } catch (e) {
+    if (req === request) {
+      changes.setMessage(String(e));
+      diff.message("");
+    }
+  }
+}
+
+async function stashChanges(paths: string[], hasUntracked: boolean, suggested: string) {
+  const all = paths.length === 0;
+  const r = await formDialog(all ? "Stash Local Changes" : `Stash ${paths.length} File(s)`, [
+    { key: "message", label: "Message", value: suggested },
+    { key: "untracked", label: "Include unversioned files", type: "checkbox", value: hasUntracked },
+    ...(all ? [{ key: "keepIndex", label: "Keep the staged changes in the working tree", type: "checkbox" as const, value: false }] : []),
+  ], "Stash", "The stashed changes are removed from the working tree. Apply or pop the stash later from the Stash tab.");
+  if (!r) return;
+  await runOp(
+    { op: "stashPush", message: String(r.message), paths, includeUntracked: !!r.untracked, keepIndex: !!r.keepIndex },
+    "Stashing",
+  );
+}
+
+async function applyStash(s: Stash, pop: boolean, restoreIndex = false) {
+  await runOp({ op: "stashApply", index: s.index, pop, restoreIndex }, pop ? "Popping the stash" : "Applying the stash");
+}
+
+stashPanel.onSelect = (s) => void showStash(s);
+stashPanel.onRefresh = () => void loadLocalChanges();
+stashPanel.onStashAll = () => void stashChanges([], commitPanel.hasUnversioned, "");
+stashPanel.onMenu = (s, e) =>
+  showMenu(e.clientX, e.clientY, [
+    { label: "Apply", action: () => void applyStash(s, false) },
+    { label: "Pop", action: () => void applyStash(s, true) },
+    { label: "Apply with the Staged State", action: () => void applyStash(s, false, true) },
+    { separator: true },
+    {
+      label: "New Branch from Stash…",
+      action: async () => {
+        const r = await formDialog(`New branch from stash@{${s.index}}`, [{ key: "name", label: "Branch name", placeholder: "stash-work" }], "Create", "The branch starts at the commit the stash was made on. The stash is applied there and dropped.");
+        if (r && String(r.name).trim()) await runOp({ op: "stashBranch", index: s.index, branch: String(r.name).trim() }, "Creating branch");
+      },
+    },
+    {
+      label: "Drop…",
+      action: async () => {
+        if (await confirmDialog("Drop stash", `Drop stash@{${s.index}} "${s.message}"? This cannot be undone.`, "Drop", true)) await runOp({ op: "stashDrop", index: s.index }, "Dropping");
+      },
+    },
+    { separator: true },
+    { label: "Copy Message", action: () => void copyText(s.message) },
+  ]);
 
 // ---- menus ----
 

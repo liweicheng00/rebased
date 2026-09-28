@@ -40,6 +40,10 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   The panel also has Amend, Rollback, Add to Git, delete of unversioned files, and Undo of the last
   commit (the changes become local changes again). The changelists of a worktree are stored in its
   git directory, in `rebased-lite/changelists.json`.
+- **Stash**: the Stash tab lists the stashes. Select one to see its files and diffs, with its
+  unversioned files. Apply, pop, apply with the staged state, new branch from a stash, and drop.
+  Stash all local changes, the selected files, or one changelist. A conflict from apply or pop
+  shows in the conflict banner.
 - **Push and Update**: the push dialog lists the outgoing commits and lets you choose the remote,
   the remote branch, force push with lease, tags, and the tracked branch. A new branch shows
   "New". A rejected push offers Update. Update fetches the tracked branch and merges or rebases,
@@ -106,6 +110,7 @@ ui/e2e/make-demo-repo.sh /tmp/demo2
 node ui/e2e/write-ops.mjs /tmp/demo2 /tmp/shots         # write operations; it changes the repository
 node ui/e2e/changelists.mjs /tmp/demo3 /tmp/shots       # changelists; see the file for the setup
 node ui/e2e/push-update.mjs /tmp/demo4 /tmp/shots       # push, update, commit and push
+node ui/e2e/stash.mjs /tmp/demo5 /tmp/shots             # stashes
 ```
 
 Each scenario takes screenshots and fails when the page logs an error.

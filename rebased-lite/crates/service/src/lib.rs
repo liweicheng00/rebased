@@ -2,6 +2,7 @@
 
 pub use rebased_git::changelist::{ChangeListOp, LocalChanges};
 use rebased_git::remote::{PushInfo, UpdateMode};
+use rebased_git::stash::{Stash, StashDetail};
 use rebased_git::worktree::{RecentBranch, Worktree};
 use rebased_git::ops::{OpResult, PlanEntry, RepoState, ResetMode, RewriteRange};
 use rebased_git::{BranchInfo, Change, CommitDetails, CommitFull, FileContent, LogFilter, RefLabel, Repo, Rev, Topology};
@@ -223,6 +224,15 @@ pub enum Op {
     DeleteUnversioned { paths: Vec<String> },
     Push { branch: String, remote: String, remote_branch: String, #[serde(default)] force: bool, #[serde(default)] set_upstream: bool, #[serde(default)] tags: bool },
     Update { mode: UpdateMode },
+    StashPush { #[serde(default)] message: String, #[serde(default)] paths: Vec<String>, #[serde(default)] include_untracked: bool, #[serde(default)] keep_index: bool },
+    StashApply { index: usize, #[serde(default)] pop: bool, #[serde(default)] restore_index: bool },
+    StashDrop { index: usize },
+    StashBranch { index: usize, branch: String },
+}
+
+#[derive(Deserialize)]
+pub struct IndexArgs {
+    pub index: usize,
 }
 
 #[derive(Deserialize, Default)]
@@ -488,6 +498,14 @@ impl Service {
         self.with(|s| s.repo.push_info(args.branch.as_deref()).map_err(err))
     }
 
+    pub fn stashes(&self) -> Result<Vec<Stash>> {
+        self.with(|s| s.repo.stashes().map_err(err))
+    }
+
+    pub fn stash_detail(&self, args: IndexArgs) -> Result<StashDetail> {
+        self.with(|s| s.repo.stash_detail(args.index).map_err(err))
+    }
+
     pub fn head_message(&self) -> Result<String> {
         self.with(|s| s.repo.head_message().map_err(err))
     }
@@ -537,6 +555,10 @@ impl Service {
                 repo.push(&branch, &remote, &remote_branch, force, set_upstream, tags)
             }
             Op::Update { mode } => repo.update(mode),
+            Op::StashPush { message, paths, include_untracked, keep_index } => repo.stash_push(&message, &paths, include_untracked, keep_index),
+            Op::StashApply { index, pop, restore_index } => repo.stash_apply(index, pop, restore_index),
+            Op::StashDrop { index } => repo.stash_drop(index),
+            Op::StashBranch { index, branch } => repo.stash_branch(index, &branch),
         };
         let result = match result {
             Ok(r) => r,
@@ -591,6 +613,8 @@ impl Service {
             "local_changes" => serde_json::to_string(&self.local_changes()?),
             "changelist_op" => serde_json::to_string(&self.changelist_op(parse(body)?)?),
             "push_info" => serde_json::to_string(&self.push_info(parse(body)?)?),
+            "stashes" => serde_json::to_string(&self.stashes()?),
+            "stash_detail" => serde_json::to_string(&self.stash_detail(parse(body)?)?),
             "head_message" => serde_json::to_string(&self.head_message()?),
             "repo_state" => serde_json::to_string(&self.state()?),
             "worktrees" => serde_json::to_string(&self.worktrees()?),

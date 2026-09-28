@@ -120,6 +120,10 @@ export class CommitPanel {
     return this.data?.lists ?? [];
   }
 
+  get hasUnversioned(): boolean {
+    return (this.data?.unversioned.length ?? 0) > 0;
+  }
+
   get head(): string | null {
     return this.data?.head ?? null;
   }
