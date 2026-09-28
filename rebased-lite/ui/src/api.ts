@@ -199,7 +199,17 @@ export type Op =
   | { op: "stashPush"; message: string; paths: string[]; includeUntracked: boolean; keepIndex: boolean }
   | { op: "stashApply"; index: number; pop: boolean; restoreIndex: boolean }
   | { op: "stashDrop"; index: number }
-  | { op: "stashBranch"; index: number; branch: string };
+  | { op: "stashBranch"; index: number; branch: string }
+  | { op: "resolveText"; path: string; text: string }
+  | { op: "resolveSide"; paths: string[]; side: "ours" | "theirs" };
+
+export interface MergeSides {
+  path: string;
+  base: { text: string | null; label: string };
+  ours: { text: string | null; label: string };
+  theirs: { text: string | null; label: string };
+  binary: boolean;
+}
 
 export interface Stash {
   index: number;
@@ -278,6 +288,7 @@ export const api = {
   changeListOp: (op: ChangeListOp) => call<LocalChanges>("changelist_op", op),
   headMessage: () => call<string>("head_message"),
   stashes: () => call<Stash[]>("stashes"),
+  mergeSides: (path: string) => call<MergeSides>("merge_sides", { path }),
   stashDetail: (index: number) => call<StashDetail>("stash_detail", { index }),
   pushInfo: (branch?: string) => call<PushInfo>("push_info", { branch: branch ?? null }),
   compare: (left: RevSpec, right: RevSpec) => call<{ changes: Change[] }>("compare", { left, right }),

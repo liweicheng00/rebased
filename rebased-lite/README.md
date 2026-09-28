@@ -40,6 +40,11 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   The panel also has Amend, Rollback, Add to Git, delete of unversioned files, and Undo of the last
   commit (the changes become local changes again). The changelists of a worktree are stored in its
   git directory, in `rebased-lite/changelists.json`.
+- **Conflicts and the merge window**: a conflict from a merge, rebase, cherry-pick, revert, update
+  or stash opens the Conflicts dialog (Accept Yours, Accept Theirs, Merge…). The merge window
+  shows yours, the result and theirs side by side, aligned and scrolled together. Apply (» «) or
+  ignore (✕) each change, append the second side of a conflict, or apply all non-conflicting
+  changes at once. The result stays editable. A binary file or a deleted side takes one whole side.
 - **Stash**: the Stash tab lists the stashes. Select one to see its files and diffs, with its
   unversioned files. Apply, pop, apply with the staged state, new branch from a stash, and drop.
   Stash all local changes, the selected files, or one changelist. A conflict from apply or pop
@@ -95,6 +100,7 @@ npm --prefix ui run dev                            # UI on http://localhost:5173
 ```sh
 cargo test
 npm --prefix ui run typecheck
+npm --prefix ui test          # line diff and three-way merge chunks
 ```
 
 `cargo test -p rebased-graph` compares the graph output with the IntelliJ golden files.
@@ -111,6 +117,7 @@ node ui/e2e/write-ops.mjs /tmp/demo2 /tmp/shots         # write operations; it c
 node ui/e2e/changelists.mjs /tmp/demo3 /tmp/shots       # changelists; see the file for the setup
 node ui/e2e/push-update.mjs /tmp/demo4 /tmp/shots       # push, update, commit and push
 node ui/e2e/stash.mjs /tmp/demo5 /tmp/shots             # stashes
+node ui/e2e/merge-tool.mjs /tmp/demo6 /tmp/shots        # conflicts dialog and merge window
 ```
 
 Each scenario takes screenshots and fails when the page logs an error.

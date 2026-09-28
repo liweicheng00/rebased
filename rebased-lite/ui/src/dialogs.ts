@@ -34,7 +34,7 @@ function modal(title: string, body: Node[], buttons: DialogButton[], wide = fals
     const cancel = h("button", {}, "Cancel");
     cancel.addEventListener("click", () => close(null));
     const btns = buttons.map((b) => {
-      const el = h("button", { class: b.danger ? "danger" : b.primary ? "primary" : "" }, b.label);
+      const el = h("button", { class: (b.danger ? "danger" : b.primary ? "primary" : "") + (b.value === "merge" ? " merge-btn" : "") }, b.label);
       el.addEventListener("click", () => close(b.value));
       return el;
     });
@@ -296,4 +296,59 @@ export async function updateDialog(branch: string, upstream: string | null, mode
   const note = h("p", { class: "dialog-note" }, `Git fetches ${upstream ?? "the tracked branch"} first. Local changes are stashed and restored.`);
   const r = await modal(`Update ${branch}`, [list, note], [{ label: "Update", value: "ok", primary: true }]);
   return r === "ok" ? chosen : null;
+}
+
+export type ConflictAction = { action: "ours" | "theirs" | "merge"; paths: string[] };
+
+/** Lists the conflicted files, as IntelliJ's Conflicts dialog. Double-click a file to merge it. */
+export async function conflictsDialog(files: string[], oursLabel: string, theirsLabel: string): Promise<ConflictAction | null> {
+  const selected = new Set<string>(files.slice(0, 1));
+  let dbl: string | null = null;
+  const list = h("div", { class: "conflict-list" });
+  const rows = files.map((f) => {
+    const slash = f.lastIndexOf("/");
+    const row = h(
+      "div",
+      { class: "conflict-row", title: f },
+      h("span", { class: "status status-U" }, "U"),
+      h("span", { class: "path" }, f.slice(slash + 1)),
+      slash > 0 ? h("span", { class: "dir" }, f.slice(0, slash)) : "",
+    );
+    row.addEventListener("mousedown", (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (selected.has(f)) selected.delete(f);
+        else selected.add(f);
+      } else {
+        selected.clear();
+        selected.add(f);
+      }
+      mark();
+    });
+    row.addEventListener("dblclick", () => {
+      dbl = f;
+      (list.closest(".dialog")?.querySelector(".merge-btn") as HTMLButtonElement | null)?.click();
+    });
+    return row;
+  });
+  const mark = () => rows.forEach((r, i) => r.classList.toggle("selected", selected.has(files[i])));
+  list.append(...rows);
+  mark();
+  const body = [
+    h("p", { class: "dialog-note" }, `Yours: ${oursLabel}. Theirs: ${theirsLabel}.`),
+    list,
+  ];
+  const r = await modal(
+    `Conflicts (${files.length})`,
+    body,
+    [
+      { label: "Accept Yours", value: "ours" },
+      { label: "Accept Theirs", value: "theirs" },
+      { label: "Merge…", value: "merge", primary: true },
+    ],
+    true,
+  );
+  if (!r) return null;
+  const paths = dbl ? [dbl] : files.filter((f) => selected.has(f));
+  if (!paths.length) return null;
+  return { action: r as "ours" | "theirs" | "merge", paths: r === "merge" ? paths.slice(0, 1) : paths };
 }

@@ -3,6 +3,7 @@
 pub use rebased_git::changelist::{ChangeListOp, LocalChanges};
 use rebased_git::remote::{PushInfo, UpdateMode};
 use rebased_git::stash::{Stash, StashDetail};
+use rebased_git::merge::{MergeSides, Side};
 use rebased_git::worktree::{RecentBranch, Worktree};
 use rebased_git::ops::{OpResult, PlanEntry, RepoState, ResetMode, RewriteRange};
 use rebased_git::{BranchInfo, Change, CommitDetails, CommitFull, FileContent, LogFilter, RefLabel, Repo, Rev, Topology};
@@ -228,6 +229,13 @@ pub enum Op {
     StashApply { index: usize, #[serde(default)] pop: bool, #[serde(default)] restore_index: bool },
     StashDrop { index: usize },
     StashBranch { index: usize, branch: String },
+    ResolveText { path: String, text: String },
+    ResolveSide { paths: Vec<String>, side: Side },
+}
+
+#[derive(Deserialize)]
+pub struct PathArgs {
+    pub path: String,
 }
 
 #[derive(Deserialize)]
@@ -506,6 +514,10 @@ impl Service {
         self.with(|s| s.repo.stash_detail(args.index).map_err(err))
     }
 
+    pub fn merge_sides(&self, args: PathArgs) -> Result<MergeSides> {
+        self.with(|s| s.repo.merge_sides(&args.path).map_err(err))
+    }
+
     pub fn head_message(&self) -> Result<String> {
         self.with(|s| s.repo.head_message().map_err(err))
     }
@@ -559,6 +571,8 @@ impl Service {
             Op::StashApply { index, pop, restore_index } => repo.stash_apply(index, pop, restore_index),
             Op::StashDrop { index } => repo.stash_drop(index),
             Op::StashBranch { index, branch } => repo.stash_branch(index, &branch),
+            Op::ResolveText { path, text } => repo.resolve_with_text(&path, &text),
+            Op::ResolveSide { paths, side } => repo.resolve_with_side(&paths, side),
         };
         let result = match result {
             Ok(r) => r,
@@ -615,6 +629,7 @@ impl Service {
             "push_info" => serde_json::to_string(&self.push_info(parse(body)?)?),
             "stashes" => serde_json::to_string(&self.stashes()?),
             "stash_detail" => serde_json::to_string(&self.stash_detail(parse(body)?)?),
+            "merge_sides" => serde_json::to_string(&self.merge_sides(parse(body)?)?),
             "head_message" => serde_json::to_string(&self.head_message()?),
             "repo_state" => serde_json::to_string(&self.state()?),
             "worktrees" => serde_json::to_string(&self.worktrees()?),

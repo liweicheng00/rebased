@@ -195,7 +195,7 @@ export class DiffView {
   }
 }
 
-function languageFor(path: string): string | undefined {
+export function languageFor(path: string): string | undefined {
   const name = path.slice(path.lastIndexOf("/") + 1).toLowerCase();
   const ext = name.includes(".") ? "." + name.split(".").pop() : name;
   for (const l of monaco.languages.getLanguages()) {

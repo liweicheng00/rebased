@@ -19,7 +19,8 @@ import {
   type Worktree,
 } from "./api";
 import { showBranchSwitcher } from "./branch-switcher";
-import { confirmDialog, formDialog, interactiveRebaseDialog, messageDialog, pushDialog, resetDialog, updateDialog } from "./dialogs";
+import { openMergeTool } from "./merge-view";
+import { confirmDialog, conflictsDialog, formDialog, interactiveRebaseDialog, messageDialog, pushDialog, resetDialog, updateDialog } from "./dialogs";
 import { toast } from "./notify";
 import { OpBanner } from "./op-banner";
 import { CommitPanel, type LocalFile } from "./commit-panel";
@@ -641,13 +642,7 @@ banner.onAbort = async () => {
   }
 };
 banner.onMarkResolved = (paths) => void runOp({ op: "markResolved", paths }, "Marking resolved");
-banner.onShowFile = (path) => {
-  if (!view?.headOid) return;
-  void compare({ commit: view.headOid }, "worktree", "HEAD → working tree", "HEAD", "working tree").then(() => {
-    const i = changeList.findIndex((c) => c.path === path);
-    if (i >= 0) void openFile(i);
-  });
-};
+banner.onShowFile = (path) => void mergeFile(path);
 
 sidebar.onCheckout = (b) => void checkoutBranch(b);
 sidebar.onAddWorktree = () => void addWorktree();
@@ -831,7 +826,16 @@ updateBtn.addEventListener("click", () => void updateBranch());
 commitPanel.onFileMenu = (files, e) => {
   const tracked = files.filter((f) => f.list !== null);
   const untracked = files.filter((f) => f.list === null);
+  const conflicted = files.filter((f) => f.change.status === "U");
   const items: MenuItem[] = [
+    ...(conflicted.length
+      ? [
+          { label: "Resolve Conflict…", disabled: conflicted.length !== 1, action: () => void mergeFile(conflicted[0].change.path) } as MenuItem,
+          { label: "Accept Yours", action: () => void runOp({ op: "resolveSide", paths: conflicted.map((f) => f.change.path), side: "ours" }, "Resolving") } as MenuItem,
+          { label: "Accept Theirs", action: () => void runOp({ op: "resolveSide", paths: conflicted.map((f) => f.change.path), side: "theirs" }, "Resolving") } as MenuItem,
+          { separator: true } as MenuItem,
+        ]
+      : []),
     { label: "Show Diff", disabled: files.length !== 1, action: () => void showLocalDiff(files[0]) },
     { label: "Rollback…", shortcut: `${mod}⌥Z`, disabled: !tracked.length, action: () => void rollback(tracked) },
   ];
@@ -949,6 +953,57 @@ stashPanel.onMenu = (s, e) =>
     { separator: true },
     { label: "Copy Message", action: () => void copyText(s.message) },
   ]);
+
+// ---- conflicts ----
+
+/** Opens the merge window for one file. Returns true when the file was resolved. */
+async function mergeFile(path: string): Promise<boolean> {
+  let sides;
+  try {
+    sides = await api.mergeSides(path);
+  } catch (e) {
+    toast(String(e).replace(/^Error: /, ""), "error");
+    return false;
+  }
+  if (sides.binary || sides.ours.text === null || sides.theirs.text === null) {
+    const why = sides.binary ? "is binary" : sides.ours.text === null ? "was deleted in yours" : "was deleted in theirs";
+    const r = await conflictsDialog([path], sides.ours.label, sides.theirs.label);
+    if (!r || r.action === "merge") {
+      if (r) toast(`${path} ${why}. Take one whole side.`, "info");
+      return false;
+    }
+    return !!(await runOp({ op: "resolveSide", paths: [path], side: r.action }, "Resolving"))?.result.ok;
+  }
+  const outcome = await openMergeTool({
+    path,
+    base: sides.base.text,
+    ours: sides.ours.text,
+    theirs: sides.theirs.text,
+    oursLabel: sides.ours.label,
+    theirsLabel: sides.theirs.label,
+  });
+  if (outcome.kind === "cancel") return false;
+  const op: Op = outcome.kind === "save" ? { op: "resolveText", path, text: outcome.text } : { op: "resolveSide", paths: [path], side: outcome.side };
+  return !!(await runOp(op, "Resolving"))?.result.ok;
+}
+
+/** The Conflicts dialog: repeats until no conflict is left or the user closes it. */
+async function resolveConflicts() {
+  for (;;) {
+    const st = await api.repoState().catch(() => null);
+    if (!st?.conflicts.length) return;
+    const labels = await api.mergeSides(st.conflicts[0]).then((s) => [s.ours.label, s.theirs.label]).catch(() => ["yours", "theirs"]);
+    const r = await conflictsDialog(st.conflicts, labels[0], labels[1]);
+    if (!r) return;
+    if (r.action === "merge") {
+      await mergeFile(r.paths[0]);
+    } else {
+      await runOp({ op: "resolveSide", paths: r.paths, side: r.action }, "Resolving");
+    }
+  }
+}
+
+banner.onResolve = () => void resolveConflicts();
 
 // ---- menus ----
 
