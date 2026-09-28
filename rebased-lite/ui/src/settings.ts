@@ -41,7 +41,7 @@ const DEFAULTS: Settings = {
   sideBySide: true,
   ignoreWhitespace: false,
   collapseUnchanged: false,
-  sidebarWidth: 240,
+  sidebarWidth: 280,
   rightWidth: 360,
   diffRatio: 0.42,
   detailsRatio: 0.55,

@@ -4,6 +4,7 @@ pub use rebased_git::changelist::{ChangeListOp, LocalChanges};
 use rebased_git::remote::{PushInfo, UpdateMode};
 use rebased_git::stash::{Stash, StashDetail};
 use rebased_git::merge::{MergeSides, Side};
+use rebased_git::history::{Blame, HistoryEntry};
 use rebased_git::worktree::{RecentBranch, Worktree};
 use rebased_git::ops::{OpResult, PlanEntry, RepoState, ResetMode, RewriteRange};
 use rebased_git::{BranchInfo, Change, CommitDetails, CommitFull, FileContent, LogFilter, RefLabel, Repo, Rev, Topology};
@@ -236,6 +237,12 @@ pub enum Op {
 #[derive(Deserialize)]
 pub struct PathArgs {
     pub path: String,
+}
+
+#[derive(Deserialize)]
+pub struct BlameArgs {
+    pub path: String,
+    pub rev: RevSpec,
 }
 
 #[derive(Deserialize)]
@@ -518,6 +525,21 @@ impl Service {
         self.with(|s| s.repo.merge_sides(&args.path).map_err(err))
     }
 
+    pub fn file_history(&self, args: PathArgs) -> Result<Vec<HistoryEntry>> {
+        self.with(|s| s.repo.file_history(&args.path).map_err(err))
+    }
+
+    pub fn blame(&self, args: BlameArgs) -> Result<Blame> {
+        self.with(|s| {
+            let rev = match Self::rev(&s.repo, &args.rev)? {
+                Rev::Commit(o) => Some(o),
+                Rev::WorkTree => None,
+                Rev::EmptyTree => return Err("The file does not exist in this revision".into()),
+            };
+            s.repo.blame(rev.as_deref(), &args.path).map_err(err)
+        })
+    }
+
     pub fn head_message(&self) -> Result<String> {
         self.with(|s| s.repo.head_message().map_err(err))
     }
@@ -630,6 +652,8 @@ impl Service {
             "stashes" => serde_json::to_string(&self.stashes()?),
             "stash_detail" => serde_json::to_string(&self.stash_detail(parse(body)?)?),
             "merge_sides" => serde_json::to_string(&self.merge_sides(parse(body)?)?),
+            "file_history" => serde_json::to_string(&self.file_history(parse(body)?)?),
+            "blame" => serde_json::to_string(&self.blame(parse(body)?)?),
             "head_message" => serde_json::to_string(&self.head_message()?),
             "repo_state" => serde_json::to_string(&self.state()?),
             "worktrees" => serde_json::to_string(&self.worktrees()?),

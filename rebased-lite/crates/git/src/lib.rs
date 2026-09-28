@@ -2,6 +2,7 @@
 //! the same way IntelliJ does. See `docs/rebased-lite/design-spec.md`, chapters 3 and 6.
 
 pub mod changelist;
+pub mod history;
 pub mod merge;
 pub mod ops;
 pub mod remote;

@@ -102,13 +102,13 @@ pub(crate) fn safe(arg: &str) -> Result<&str> {
     }
 }
 
-struct CommitMeta {
-    parents: Vec<String>,
-    tree: String,
-    author_name: String,
-    author_email: String,
-    author_date: String,
-    message: String,
+pub(crate) struct CommitMeta {
+    pub(crate) parents: Vec<String>,
+    pub(crate) tree: String,
+    pub(crate) author_name: String,
+    pub(crate) author_email: String,
+    pub(crate) author_date: String,
+    pub(crate) message: String,
 }
 
 impl Repo {
@@ -315,7 +315,7 @@ impl Repo {
 
     // ---- in-memory rewrite ----
 
-    fn meta(&self, oid: &str) -> Result<CommitMeta> {
+    pub(crate) fn meta(&self, oid: &str) -> Result<CommitMeta> {
         let raw = self.git(&["show", "-s", "--format=%P%x00%T%x00%an%x00%ae%x00%ad%x00%B", "--date=raw", oid])?;
         let text = String::from_utf8_lossy(&raw);
         let f: Vec<&str> = text.splitn(6, '\0').collect();

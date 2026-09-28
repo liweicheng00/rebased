@@ -56,6 +56,13 @@ pub struct LocalChanges {
     pub head: Option<String>,
 }
 
+/// A file that goes into a commit in part: the content to commit.
+#[derive(Debug, Deserialize)]
+pub struct PartialFile {
+    pub path: String,
+    pub content: String,
+}
+
 /// A change to the changelists.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "op", rename_all = "camelCase", rename_all_fields = "camelCase")]
@@ -305,6 +312,118 @@ impl Repo {
             undo_to: old_head,
             undo_soft: true,
         })
+    }
+
+    /// Commits some files whole and some files in part, as IntelliJ does when you uncheck changes in the
+    /// diff. `partial` gives the content to commit for each partly committed file. The commit is built in a
+    /// temporary index, so the working tree and the other staged changes stay as they are; the index
+    /// entries of the committed files are set to the new commit. Commit hooks do not run.
+    pub fn commit_partial(&self, paths: &[String], unversioned: &[String], partial: &[PartialFile], message: &str, amend: bool) -> Result<OpResult> {
+        if message.trim().is_empty() {
+            return Err(GitError("The commit message is empty".into()));
+        }
+        if self.git_dir().join("MERGE_HEAD").exists() {
+            return Err(GitError("A merge is in progress: commit whole files to finish it".into()));
+        }
+        for p in paths.iter().chain(unversioned).chain(partial.iter().map(|f| &f.path)) {
+            inside(&self.root, p)?;
+        }
+        let old_head = self.resolve("HEAD");
+        let tmp = self.git_dir().join("rebased-lite").join("index.partial");
+        std::fs::create_dir_all(tmp.parent().unwrap()).map_err(|e| GitError(e.to_string()))?;
+        let _ = std::fs::remove_file(&tmp);
+        let tmp_s = tmp.to_string_lossy().into_owned();
+        let env = [("GIT_INDEX_FILE", tmp_s.as_str())];
+        let run = |args: &[&str]| self.git_write(args, &env).map_err(|(_, e)| GitError(e));
+        let result = (|| {
+            match &old_head {
+                Some(h) => run(&["read-tree", h])?,
+                None => run(&["read-tree", "--empty"])?,
+            };
+            let whole: Vec<&str> = paths.iter().chain(unversioned).map(String::as_str).collect();
+            if !whole.is_empty() {
+                let mut args = vec!["update-index", "--add", "--remove", "--"];
+                args.extend(&whole);
+                run(&args)?;
+            }
+            for f in partial {
+                let blob = self.hash_object(&f.content)?;
+                let mode = old_head
+                    .as_ref()
+                    .and_then(|h| self.git(&["ls-tree", h, "--", &f.path]).ok())
+                    .map(|b| String::from_utf8_lossy(&b).split_whitespace().next().unwrap_or("100644").to_string())
+                    .filter(|m| !m.is_empty())
+                    .unwrap_or_else(|| "100644".into());
+                run(&["update-index", "--add", "--cacheinfo", &format!("{mode},{blob},{}", f.path)])?;
+            }
+            let tree = run(&["write-tree"])?;
+            let mut parents: Vec<String> = Vec::new();
+            let mut author_env: Vec<(&str, String)> = Vec::new();
+            if amend {
+                let h = old_head.as_ref().ok_or_else(|| GitError("There is no commit to amend".into()))?;
+                let m = self.meta(h)?;
+                parents = m.parents.clone();
+                author_env = vec![("GIT_AUTHOR_NAME", m.author_name), ("GIT_AUTHOR_EMAIL", m.author_email), ("GIT_AUTHOR_DATE", m.author_date)];
+            } else if let Some(h) = &old_head {
+                parents.push(h.clone());
+            }
+            let mut args = vec!["commit-tree".to_string(), tree, "-m".into(), message.trim_end().to_string()];
+            for p in &parents {
+                args.extend(["-p".to_string(), p.clone()]);
+            }
+            let argv: Vec<&str> = args.iter().map(String::as_str).collect();
+            let envs: Vec<(&str, &str)> = author_env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+            let commit = self.git_write(&argv, &envs).map_err(|(_, e)| GitError(e))?;
+            let subject = message.lines().next().unwrap_or("");
+            let reflog = format!("commit{} (partial): {subject}", if amend { " (amend)" } else { "" });
+            let mut upd = vec!["update-ref", "-m", reflog.as_str(), "HEAD", commit.as_str()];
+            if let Some(h) = &old_head {
+                upd.push(h.as_str());
+            }
+            self.git_write(&upd, &[]).map_err(|(_, e)| GitError(e))?;
+            Ok(commit)
+        })();
+        let _ = std::fs::remove_file(&tmp);
+        let commit = result?;
+        // The real index gets the committed content of these files; the rest of the index stays.
+        let mut all: Vec<&str> = paths.iter().chain(unversioned).map(String::as_str).collect();
+        all.extend(partial.iter().map(|f| f.path.as_str()));
+        let mut args = vec!["reset", "-q", "--"];
+        args.extend(&all);
+        let _ = self.git_write(&args, &[]);
+        let files = all.len();
+        Ok(OpResult {
+            ok: true,
+            message: format!(
+                "{} {} ({files} file{}, {} in part)",
+                if amend { "Amended" } else { "Committed" },
+                &commit[..commit.len().min(8)],
+                if files == 1 { "" } else { "s" },
+                partial.len()
+            ),
+            conflicts: Vec::new(),
+            undo_to: old_head,
+            undo_soft: true,
+        })
+    }
+
+    fn hash_object(&self, content: &str) -> Result<String> {
+        use std::io::Write;
+        let mut child = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&self.root)
+            .args(["hash-object", "-w", "--stdin"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| GitError(format!("cannot run git: {e}")))?;
+        child.stdin.take().unwrap().write_all(content.as_bytes()).map_err(|e| GitError(e.to_string()))?;
+        let out = child.wait_with_output().map_err(|e| GitError(e.to_string()))?;
+        if !out.status.success() {
+            return Err(GitError(String::from_utf8_lossy(&out.stderr).trim().to_string()));
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
 
     /// Discards the local changes of tracked files: the index and the working tree get the HEAD content.

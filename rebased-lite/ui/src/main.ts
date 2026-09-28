@@ -20,6 +20,7 @@ import {
 } from "./api";
 import { showBranchSwitcher } from "./branch-switcher";
 import { openMergeTool } from "./merge-view";
+import { openHistory } from "./history-view";
 import { confirmDialog, conflictsDialog, formDialog, interactiveRebaseDialog, messageDialog, pushDialog, resetDialog, updateDialog } from "./dialogs";
 import { toast } from "./notify";
 import { OpBanner } from "./op-banner";
@@ -261,13 +262,13 @@ async function loadLocalChanges() {
     commitPanel.clear();
   }
   const n = commitPanel.changeCount;
-  tabCommit.textContent = n ? `Commit (${n})` : "Commit";
+  tabCommit.replaceChildren("Commit", n ? h("span", { class: "lp-count" }, String(n)) : "");
   try {
     stashPanel.set(await api.stashes());
   } catch {
     stashPanel.set([]);
   }
-  tabStash.textContent = stashPanel.count ? `Stash (${stashPanel.count})` : "Stash";
+  tabStash.replaceChildren("Stash", stashPanel.count ? h("span", { class: "lp-count" }, String(stashPanel.count)) : "");
 }
 
 // Files change outside the app; reload the local changes when the window gets the focus.
@@ -386,8 +387,10 @@ async function openFile(i: number) {
   changes.setActive(i);
   const c = changeList[i];
   try {
-    const pair = await api.filePair(left, c.rightRev ?? rightRev, c.path, c.old_path);
+    const r = c.rightRev ?? rightRev;
+    const pair = await api.filePair(left, r, c.path, c.old_path);
     if (req !== request || active !== i) return;
+    diff.setSource(c.status === "D" ? { path: c.old_path ?? c.path, rev: left } : { path: c.path, rev: r });
     diff.show(c, pair.left, pair.right);
   } catch (e) {
     if (req === request) diff.message(String(e));
@@ -682,6 +685,9 @@ async function showLocalDiff(f: LocalFile) {
       : { left: { text: null, binary: false, size: 0, missing: true }, right: (await api.filePair("worktree", "worktree", change.path, null)).right };
     if (req !== localRequest || diffSource !== "local") return;
     if (f.change.status === "?") pair.left = { text: null, binary: false, size: 0, missing: true };
+    diff.setSource(
+      f.change.status === "D" ? (head ? { path: f.change.old_path ?? f.change.path, rev: { commit: head } } : null) : { path: f.change.path, rev: "worktree" },
+    );
     diff.show(change, pair.left, pair.right);
   } catch (e) {
     if (req === localRequest) diff.message(String(e));
@@ -837,6 +843,7 @@ commitPanel.onFileMenu = (files, e) => {
         ]
       : []),
     { label: "Show Diff", disabled: files.length !== 1, action: () => void showLocalDiff(files[0]) },
+    { label: "Show History", disabled: files.length !== 1 || files[0].list === null || files[0].change.status === "A", action: () => showHistory(files[0].change.old_path ?? files[0].change.path) },
     { label: "Rollback…", shortcut: `${mod}⌥Z`, disabled: !tracked.length, action: () => void rollback(tracked) },
   ];
   if (untracked.length) {
@@ -953,6 +960,21 @@ stashPanel.onMenu = (s, e) =>
     { separator: true },
     { label: "Copy Message", action: () => void copyText(s.message) },
   ]);
+
+// ---- file history ----
+
+function showHistory(path: string) {
+  void openHistory(path, {
+    load: api.fileHistory,
+    pair: api.filePair,
+    blame: api.blame,
+    showInLog: (oid) => void jumpToOid(oid, true),
+  });
+}
+
+diff.onBlame = api.blame;
+diff.onBlameClick = (oid) => void jumpToOid(oid, true);
+diff.onHistory = showHistory;
 
 // ---- conflicts ----
 
@@ -1089,6 +1111,8 @@ sidebar.onContextMenu = (b, e) => {
 changes.onContextMenu = (c, e) =>
   showMenu(e.clientX, e.clientY, [
     { label: "Show Diff", action: () => void openFile(changeList.indexOf(c)) },
+    { label: "Show History", disabled: c.status === "D", action: () => showHistory(c.path) },
+    { separator: true },
     { label: "Copy Path", action: () => void copyText(c.path) },
     { label: "Copy File Name", action: () => void copyText(c.path.split("/").pop() ?? c.path) },
   ]);

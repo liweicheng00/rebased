@@ -185,3 +185,39 @@ fn commit_during_merge_takes_the_whole_index() {
     assert_eq!(git(&dir, &["rev-list", "--parents", "-n", "1", "HEAD"]).split(' ').count(), 3);
     assert_eq!(git(&dir, &["status", "--porcelain"]), "");
 }
+
+#[test]
+fn partial_commit_takes_the_given_content() {
+    use rebased_git::changelist::PartialFile;
+    let dir = temp_repo("partial");
+    let repo = Repo::open(&dir).unwrap();
+    std::fs::write(dir.join("a.txt"), "one\ntwo\n").unwrap();
+    git(&dir, &["commit", "-q", "-am", "Two lines"]);
+    // The working tree has two changes; only the first one goes into the commit.
+    std::fs::write(dir.join("a.txt"), "ONE\ntwo\nthree\n").unwrap();
+    std::fs::write(dir.join("b.txt"), "b2\n").unwrap();
+    std::fs::write(dir.join("c.txt"), "c2\n").unwrap();
+    git(&dir, &["add", "c.txt"]);
+    let before = git(&dir, &["rev-parse", "HEAD"]);
+    let r = repo
+        .commit_partial(&strings(&["b.txt"]), &[], &[PartialFile { path: "a.txt".into(), content: "ONE\ntwo\n".into() }], "Part of a", false)
+        .unwrap();
+    assert!(r.ok && r.undo_soft, "{}", r.message);
+    assert_eq!(git(&dir, &["show", "HEAD:a.txt"]), "ONE\ntwo");
+    assert_eq!(git(&dir, &["show", "--name-only", "--format=", "HEAD"]), "a.txt\nb.txt");
+    assert_eq!(git(&dir, &["rev-parse", "HEAD^"]), before);
+    // The rest of a.txt stays a local change; c.txt stays staged; the working tree did not change.
+    assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "ONE\ntwo\nthree\n");
+    assert_eq!(git(&dir, &["diff", "--name-only"]), "a.txt");
+    assert_eq!(git(&dir, &["diff", "--cached", "--name-only"]), "c.txt");
+    assert_eq!(git(&dir, &["log", "-1", "--format=%s"]), "Part of a");
+
+    // Amend with another part keeps the author and the parent.
+    let r = repo
+        .commit_partial(&[], &[], &[PartialFile { path: "a.txt".into(), content: "ONE\ntwo\nthree\n".into() }], "All of a", true)
+        .unwrap();
+    assert!(r.ok);
+    assert_eq!(git(&dir, &["rev-parse", "HEAD^"]), before);
+    assert_eq!(git(&dir, &["diff", "--name-only"]), "");
+    assert!(repo.commit_partial(&[], &[], &[PartialFile { path: "../x".into(), content: String::new() }], "x", false).is_err());
+}

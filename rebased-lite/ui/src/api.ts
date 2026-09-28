@@ -203,6 +203,22 @@ export type Op =
   | { op: "resolveText"; path: string; text: string }
   | { op: "resolveSide"; paths: string[]; side: "ours" | "theirs" };
 
+export interface HistoryEntry {
+  oid: string;
+  parents: string[];
+  subject: string;
+  author: string;
+  time: number;
+  status: string;
+  path: string;
+  oldPath: string | null;
+}
+
+export interface Blame {
+  commits: { oid: string; author: string; time: number; summary: string; uncommitted: boolean }[];
+  lines: number[];
+}
+
 export interface MergeSides {
   path: string;
   base: { text: string | null; label: string };
@@ -288,6 +304,8 @@ export const api = {
   changeListOp: (op: ChangeListOp) => call<LocalChanges>("changelist_op", op),
   headMessage: () => call<string>("head_message"),
   stashes: () => call<Stash[]>("stashes"),
+  fileHistory: (path: string) => call<HistoryEntry[]>("file_history", { path }),
+  blame: (path: string, rev: RevSpec) => call<Blame>("blame", { path, rev }),
   mergeSides: (path: string) => call<MergeSides>("merge_sides", { path }),
   stashDetail: (index: number) => call<StashDetail>("stash_detail", { index }),
   pushInfo: (branch?: string) => call<PushInfo>("push_info", { branch: branch ?? null }),

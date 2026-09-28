@@ -24,7 +24,7 @@ await page.waitForSelector(".log-row", { timeout: 30000 });
 await page.click(".lp-tab:has-text('Commit')");
 await page.waitForSelector(".cl-file");
 console.log("tree:", await tree());
-check("tab shows the count", (await page.textContent(".lp-tab:has-text('Commit')")).includes("(5)"));
+check("tab shows the count", (await page.textContent(".lp-tab:has-text('Commit') .lp-count")) === "5");
 await page.click(".cl-file:has-text('arith.rs')");
 await page.waitForTimeout(1200);
 await shot("cl1-commit-panel");

@@ -3,7 +3,7 @@
 import * as monaco from "monaco-editor/esm/vs/editor/edcore.main";
 import "monaco-editor/esm/vs/basic-languages/monaco.contribution";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
-import type { Change, FileContent } from "./api";
+import type { Blame, Change, FileContent, RevSpec } from "./api";
 import { statusName } from "./changes-panel";
 import { copyText, h } from "./dom";
 import { save, settings } from "./settings";
@@ -26,8 +26,18 @@ export class DiffView {
   private single: monaco.editor.IStandaloneCodeEditor;
   private singleHost: HTMLElement;
   private path = "";
+  /** The file and revision that Annotate shows: the right side, or the left side of a deleted file. */
+  private source: { path: string; rev: RevSpec } | null = null;
+  private annotateBox: HTMLInputElement;
+  private historyBtn: HTMLButtonElement;
+  private blameDeco: string[] = [];
+  private blameEditor: monaco.editor.IStandaloneCodeEditor | null = null;
+  private blameRequest = 0;
   onPrevFile: () => void = () => {};
   onNextFile: () => void = () => {};
+  onBlame: (path: string, rev: RevSpec) => Promise<Blame> = () => Promise.reject(new Error("no blame"));
+  onBlameClick: (oid: string) => void = () => {};
+  onHistory: (path: string) => void = () => {};
 
   constructor() {
     const btn = (label: string, title: string, fn: () => void) => {
@@ -48,6 +58,10 @@ export class DiffView {
     this.sides = h("span", { class: "diff-sides" });
     this.stats = h("span", { class: "diff-stats" });
     const copyPath = btn("⧉", "Copy the file path", () => this.path && void copyText(this.path));
+    this.annotateBox = h("input", { type: "checkbox" });
+    this.annotateBox.addEventListener("change", () => void this.annotate());
+    const annotate = h("label", { class: "diff-option", title: "Show the commit that last changed each line (git blame). Click an annotation to go to its commit." }, this.annotateBox, "Annotate");
+    this.historyBtn = btn("🕘", "Show the history of this file", () => this.source && this.onHistory(this.source.path));
     const toolbar = h(
       "div",
       { class: "diff-toolbar" },
@@ -57,9 +71,11 @@ export class DiffView {
       btn("⇥", "Next file (Alt+Down)", () => this.onNextFile()),
       this.title,
       copyPath,
+      this.historyBtn,
       this.stats,
       h("span", { class: "spacer" }),
       this.sides,
+      annotate,
       toggle("Side by side", "sideBySide", "Show the two versions side by side, or in one column"),
       toggle("Ignore whitespace", "ignoreWhitespace", "Ignore leading and trailing whitespace changes"),
       toggle("Collapse unchanged", "collapseUnchanged", "Hide unchanged regions"),
@@ -87,6 +103,13 @@ export class DiffView {
     });
     this.applyOptions();
     this.editor.onDidUpdateDiff(() => this.updateStats());
+    for (const e of [this.editor.getModifiedEditor(), this.single]) {
+      e.onMouseDown((ev) => {
+        if (!this.annotateBox.checked || this.blameEditor !== e || ev.target.type !== monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS) return;
+        const oid = this.blameOids[(ev.target.position?.lineNumber ?? 0) - 1];
+        if (oid) this.onBlameClick(oid);
+      });
+    }
     this.message("Select a file to see the diff.");
   }
 
@@ -124,11 +147,73 @@ export class DiffView {
     if (changes.length) this.editor.revealLineInCenter(changes[0].modifiedStartLineNumber || 1);
   }
 
+  private blameOids: (string | null)[] = [];
+
+  /** Sets what Annotate and History use for the file on show. */
+  setSource(source: { path: string; rev: RevSpec } | null) {
+    this.source = source;
+    this.historyBtn.disabled = !source;
+  }
+
+  private clearBlame() {
+    this.blameRequest++;
+    if (this.blameEditor) {
+      this.blameEditor.updateOptions({ lineNumbers: "on", lineNumbersMinChars: 5 });
+      this.blameDeco = this.blameEditor.deltaDecorations(this.blameDeco, []);
+    }
+    this.blameEditor = null;
+    this.blameOids = [];
+  }
+
+  /** Shows the annotations of the source file in the gutter of the right editor. */
+  private async annotate() {
+    this.clearBlame();
+    if (!this.annotateBox.checked || !this.source || !this.notice.hidden) return;
+    const req = this.blameRequest;
+    const editor = this.singleHost.hidden ? this.editor.getModifiedEditor() : this.single;
+    let blame: Blame;
+    try {
+      blame = await this.onBlame(this.source.path, this.source.rev);
+    } catch (e) {
+      if (req === this.blameRequest) this.stats.append(h("span", { class: "muted-inline" }, ` · annotate: ${String(e).replace(/^Error: /, "")}`));
+      return;
+    }
+    if (req !== this.blameRequest) return;
+    const now = Date.now() / 1000;
+    const times = blame.commits.filter((c) => !c.uncommitted).map((c) => c.time);
+    const oldest = Math.min(now, ...times);
+    const labels: string[] = [];
+    const deco: monaco.editor.IModelDeltaDecoration[] = [];
+    this.blameOids = [];
+    blame.lines.forEach((ci, i) => {
+      const c = blame.commits[ci];
+      const first = i === 0 || blame.lines[i - 1] !== ci;
+      this.blameOids.push(c.uncommitted ? null : c.oid);
+      const date = new Date(c.time * 1000).toISOString().slice(0, 10);
+      labels.push(!first ? "" : c.uncommitted ? "not committed" : `${date} ${c.author.length > 14 ? c.author.slice(0, 13) + "…" : c.author}`);
+      // Newer lines get a stronger color, as in IntelliJ.
+      const age = c.uncommitted ? 0 : Math.min(4, Math.floor(((now - c.time) / Math.max(1, now - oldest)) * 5));
+      deco.push({
+        range: new monaco.Range(i + 1, 1, i + 1, 1),
+        options: {
+          linesDecorationsClassName: `blame-age-${age}`,
+          lineNumberClassName: first ? "blame-first" : "blame-rest",
+          lineNumberHoverMessage: c.uncommitted ? { value: "Not committed yet" } : { value: `**${c.oid.slice(0, 8)}** ${c.author}, ${date}\n\n${c.summary}` },
+        } as monaco.editor.IModelDecorationOptions,
+      });
+    });
+    editor.updateOptions({ lineNumbers: (n: number) => labels[n - 1] ?? "", lineNumbersMinChars: 26 });
+    this.blameDeco = editor.deltaDecorations([], deco);
+    this.blameEditor = editor;
+  }
+
   setSides(left: string, right: string) {
     this.sides.textContent = `${left}  ⟷  ${right}`;
   }
 
   message(text: string, title = "") {
+    this.clearBlame();
+    this.setSource(null);
     this.path = "";
     this.sides.textContent = "";
     this.title.textContent = title;
@@ -139,6 +224,8 @@ export class DiffView {
   }
 
   show(change: Change, left: FileContent, right: FileContent) {
+    this.clearBlame();
+    queueMicrotask(() => void this.annotate());
     this.path = change.path;
     this.title.replaceChildren(
       h("span", { class: `status status-${change.status}`, title: statusName(change.status) }, change.status),

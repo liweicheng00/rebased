@@ -40,6 +40,11 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   The panel also has Amend, Rollback, Add to Git, delete of unversioned files, and Undo of the last
   commit (the changes become local changes again). The changelists of a worktree are stored in its
   git directory, in `rebased-lite/changelists.json`.
+- **File history and annotate**: Show History (from the changes panels or the 🕘 button of the
+  diff) lists the commits that changed a file, across renames, with the change of the file in each
+  commit. Annotate shows the commit, author and date of each line in the gutter (git blame), with
+  an age color. It works for commits, local changes (uncommitted lines are marked) and history.
+  Click an annotation to go to its commit.
 - **Conflicts and the merge window**: a conflict from a merge, rebase, cherry-pick, revert, update
   or stash opens the Conflicts dialog (Accept Yours, Accept Theirs, Merge…). The merge window
   shows yours, the result and theirs side by side, aligned and scrolled together. Apply (» «) or
@@ -105,20 +110,16 @@ npm --prefix ui test          # line diff and three-way merge chunks
 
 `cargo test -p rebased-graph` compares the graph output with the IntelliJ golden files.
 
-UI scenarios run in Chromium against the dev server:
+UI scenarios run in Chromium against the dev server. One script runs all of them on fresh demo
+repositories:
 
 ```sh
-ui/e2e/make-demo-repo.sh /tmp/demo
-node ui/e2e/demo-repo.mjs /tmp/demo /tmp/shots        # a small repository with every case
-node ui/e2e/large-repo.mjs /path/to/git.git /tmp/shots  # a large repository, for example git/git
-node ui/e2e/collapse.mjs /path/to/git.git /tmp/shots    # collapse linear branches in a large repository
-ui/e2e/make-demo-repo.sh /tmp/demo2
-node ui/e2e/write-ops.mjs /tmp/demo2 /tmp/shots         # write operations; it changes the repository
-node ui/e2e/changelists.mjs /tmp/demo3 /tmp/shots       # changelists; see the file for the setup
-node ui/e2e/push-update.mjs /tmp/demo4 /tmp/shots       # push, update, commit and push
-node ui/e2e/stash.mjs /tmp/demo5 /tmp/shots             # stashes
-node ui/e2e/merge-tool.mjs /tmp/demo6 /tmp/shots        # conflicts dialog and merge window
+ui/e2e/run-all.sh /tmp/e2e                      # the demo scenarios
+ui/e2e/run-all.sh /tmp/e2e /path/to/git.git     # also the large-repository scenarios
 ```
+
+The scenarios are `demo-repo`, `write-ops`, `changelists`, `push-update`, `stash`, `merge-tool`,
+`history`, `large-repo` and `collapse`. Each file says how to run it alone.
 
 Each scenario takes screenshots and fails when the page logs an error.
 
