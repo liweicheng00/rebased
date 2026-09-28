@@ -323,7 +323,7 @@ get_file_pair(left: Rev, right: Rev | "WORKTREE", change: Change): { left?: Blob
 3. **Graph 右側的 commit 表格欄位。** 預設建議 subject、author、date、refs。
 4. **大檔案門檻。** 6.3 節的 5 MB 是暫定值。
 
-## 11. 實作狀態（v0.2，2026-09-28）
+## 11. 實作狀態（v0.3，2026-09-28）
 
 程式碼在 `rebased-lite/`。
 
@@ -337,6 +337,11 @@ get_file_pair(left: Rev, right: Rev | "WORKTREE", change: Change): { left?: Blob
 | 6.3 TextMate 上色 | **未完成。** 目前使用 Monaco 內建的 Monarch 語法。改用 TextMate 語法是下一步。 |
 | 8.1 演算法一致性 | 完成（見 4.1–4.8）。 |
 | 完整介面（v0.2） | 完成：歡迎畫面與最近的 repo、分支側欄（ahead/behind）、篩選列（文字、使用者、路徑、日期、分支）、篩選後以虛線連接、hash 跳轉、箭頭跳轉、commit 詳細資料、樹狀或平面的變更清單、diff 工具列、右鍵選單、快捷鍵、Refresh、Fetch、欄位與面板調整、深淺色主題、狀態列。 |
+| 收合線性分支（v0.3） | 完成。移植 IntelliJ 的 `LinearFragmentGenerator` 規則（短片段上限 10、有 ref 的 commit 不收合）。可以全部收合、全部展開、收合單一分支，點虛線展開。git/git 從 85,787 列降到 49,818 列，約 350 ms。跳到被收合的 commit 時，自動展開該片段。 |
+| 寫入操作（v0.3） | 完成：checkout（分支、遠端分支、revision）、新增分支與 tag、改名、刪除、merge、rebase、cherry-pick、revert、reset（soft、mixed、keep、hard）、編輯訊息、squash、drop、互動式 rebase。squash、drop、編輯訊息、互動式 rebase 在記憶體中執行（`git merge-tree --write-tree` 與 `git commit-tree`），有衝突時不改動任何檔案或 ref。每個操作完成後的通知有 Undo。進行中的 merge、rebase、cherry-pick、revert 會顯示橫幅，列出衝突檔案，並提供 Mark Resolved、Abort、Continue。已推送的 commit 在改寫前會警告。 |
+| 深色模式（v0.3） | 完成。淺色、深色、跟隨系統三種。所有新的對話框、通知、橫幅都支援兩種主題。原生 Linux 視窗會跟隨 GTK 的深色主題。 |
+| Worktree 管理（v0.3） | 完成：列出、新增（新分支或既有分支、指定起點）、開啟、移除（有變更時再確認後強制移除）、prune。 |
+| 近期分支（v0.3） | 完成。從 HEAD reflog 讀出近期切換過的分支，顯示在側欄最上方與工具列的分支切換器。 |
 | 8.3 資源量測 | 見下表。 |
 
 資源量測（Linux x86_64、Xvfb、WebKitGTK 軟體繪圖，git/git）：
@@ -348,3 +353,9 @@ get_file_pair(left: Rev, right: Rev | "WORKTREE", change: Change): { left?: Blob
 | graph 計算（layout + IntelliSort） | 未量測 | 54 ms，Rust 核心峰值 38 MB |
 
 macOS 的 WKWebView 數字會不同，還需要在 macOS 上量測。
+
+v0.3 沒有做的事：
+- 沒有 push 與 pull。Fetch 以外的遠端操作還沒有做。
+- 沒有內建的衝突解決編輯器。衝突要在外部編輯器解決，再按 Mark Resolved。
+- 互動式 rebase 不支援 edit（停在某個 commit 讓使用者修改），因為它需要停在中途的 rebase 流程。
+- v0.3 的寫入操作只在 Linux 上測試過。

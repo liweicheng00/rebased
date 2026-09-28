@@ -1,6 +1,6 @@
 // Branches panel: local branches, remote branches grouped by remote, and tags.
 
-import type { BranchInfo } from "./api";
+import type { BranchInfo, RecentBranch, Worktree } from "./api";
 import { h } from "./dom";
 
 export class Sidebar {
@@ -8,11 +8,17 @@ export class Sidebar {
   private list: HTMLElement;
   private search: HTMLInputElement;
   private refs: BranchInfo[] = [];
+  private recent: RecentBranch[] = [];
+  private worktrees: Worktree[] = [];
   private collapsed = new Set<string>(["Tags"]);
   private filterSet = new Set<string>();
   onNavigate: (b: BranchInfo) => void = () => {};
   onToggleFilter: (b: BranchInfo) => void = () => {};
   onContextMenu: (b: BranchInfo, e: MouseEvent) => void = () => {};
+  onCheckout: (b: BranchInfo) => void = () => {};
+  onOpenWorktree: (w: Worktree) => void = () => {};
+  onWorktreeMenu: (w: Worktree, e: MouseEvent) => void = () => {};
+  onAddWorktree: () => void = () => {};
 
   constructor() {
     this.search = h("input", { class: "sidebar-search", placeholder: "Search branches and tags", spellcheck: false });
@@ -26,6 +32,16 @@ export class Sidebar {
     this.render();
   }
 
+  setRecent(recent: RecentBranch[]) {
+    this.recent = recent;
+    this.render();
+  }
+
+  setWorktrees(w: Worktree[]) {
+    this.worktrees = w;
+    this.render();
+  }
+
   setFilter(names: string[]) {
     this.filterSet = new Set(names);
     this.render();
@@ -36,6 +52,11 @@ export class Sidebar {
     const match = (b: BranchInfo) => !q || b.name.toLowerCase().includes(q);
     const groups: [string, BranchInfo[]][] = [];
     const current = this.refs.filter((b) => b.current);
+    const recent = this.recent
+      .filter((r) => !q || r.name.toLowerCase().includes(q))
+      .map((r) => this.refs.find((b) => b.kind === "local" && b.name === r.name))
+      .filter((b): b is BranchInfo => !!b);
+    if (recent.length) groups.push(["Recent", recent]);
     const locals = this.refs.filter((b) => b.kind === "local" && match(b));
     groups.push(["Local", locals]);
     const remotes = new Map<string, BranchInfo[]>();
@@ -71,8 +92,51 @@ export class Sidebar {
       if (!open) continue;
       for (const b of items) frag.append(this.item(b, title.startsWith("Remote") ? b.name.slice(b.name.indexOf("/") + 1) : b.name));
     }
-    if (!frag.childNodes.length) frag.append(h("div", { class: "muted" }, "No branches."));
+    this.renderWorktrees(frag);
     this.list.replaceChildren(frag);
+  }
+
+  private renderWorktrees(frag: DocumentFragment) {
+    const title = "Worktrees";
+    const open = !this.collapsed.has(title);
+    const add = h("button", { class: "icon-button group-action", title: "Add a worktree" }, "+");
+    add.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.onAddWorktree();
+    });
+    const header = h(
+      "div",
+      { class: "group-header" },
+      h("span", { class: "twisty" }, open ? "▾" : "▸"),
+      h("span", {}, title),
+      h("span", { class: "group-count" }, String(this.worktrees.length)),
+      add,
+    );
+    header.addEventListener("click", () => {
+      if (this.collapsed.has(title)) this.collapsed.delete(title);
+      else this.collapsed.add(title);
+      this.render();
+    });
+    frag.append(header);
+    if (!open) return;
+    for (const w of this.worktrees) {
+      const name = w.path.split(/[\\/]/).pop() ?? w.path;
+      const detail = w.branch ?? (w.detached ? `detached ${w.head?.slice(0, 8) ?? ""}` : w.bare ? "bare" : "");
+      const el = h(
+        "div",
+        { class: "branch worktree" + (w.current ? " current" : ""), title: `${w.path}${w.locked ? "\nlocked" : ""}${w.prunable ? "\nprunable: the folder is missing" : ""}` },
+        h("span", { class: "branch-icon" }, w.current ? "●" : "▣"),
+        h("span", { class: "branch-name" }, name),
+        h("span", { class: "worktree-branch" }, detail),
+        w.prunable ? h("span", { class: "behind" }, "missing") : w.locked ? h("span", { class: "muted-inline" }, "🔒") : "",
+      );
+      el.addEventListener("dblclick", () => !w.current && this.onOpenWorktree(w));
+      el.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        this.onWorktreeMenu(w, e);
+      });
+      frag.append(el);
+    }
   }
 
   private item(b: BranchInfo, label: string): HTMLElement {
@@ -81,6 +145,7 @@ export class Sidebar {
     if (b.ahead) badges.append(h("span", { class: "ahead", title: `${b.ahead} commits ahead of ${b.upstream}` }, `↑${b.ahead}`));
     if (b.behind) badges.append(h("span", { class: "behind", title: `${b.behind} commits behind ${b.upstream}` }, `↓${b.behind}`));
     const filterBtn = h("button", { class: "filter-toggle" + (filtered ? " on" : ""), title: filtered ? "Remove from the log filter" : "Show only this branch in the log" }, "⏷");
+    filterBtn.addEventListener("dblclick", (e) => e.stopPropagation());
     filterBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       this.onToggleFilter(b);
@@ -94,7 +159,7 @@ export class Sidebar {
       filterBtn,
     );
     el.addEventListener("click", () => this.onNavigate(b));
-    el.addEventListener("dblclick", () => this.onToggleFilter(b));
+    el.addEventListener("dblclick", () => (b.kind === "tag" ? this.onToggleFilter(b) : this.onCheckout(b)));
     el.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       this.onContextMenu(b, e);

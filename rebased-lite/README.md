@@ -8,11 +8,16 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 ## Features
 
 - **Open**: a welcome screen, a native folder dialog, recent repositories, and `rebased-lite <path>` on the command line.
-- **Branches panel**: local branches with ahead and behind counts, remote branches by remote, and tags.
-  Click to go to the commit. Double-click, or use the filter button, to show only that branch.
+- **Branches panel**: recent branches (from the HEAD reflog), local branches with ahead and behind
+  counts, remote branches by remote, tags, and worktrees. Click to go to the commit.
+  Double-click a branch to check it out. Use the filter button to show only that branch.
+- **Branch switcher**: the current branch in the toolbar opens a searchable list. Recent branches
+  come first.
 - **Commit graph**: all branches, remotes and tags, with virtual scrolling and no commit limit.
   It uses the IntelliJ rules: long-edge cuts with arrows, IntelliSort, and branch colors.
   Click an arrow to go to the other end of the edge.
+- **Collapse linear branches**: the ⊟ and ⊞ buttons collapse and expand all linear branches, as
+  in IntelliJ. Click a dotted edge to expand one branch. The context menu collapses one branch.
 - **Filters**: text in the message, user, path, date and branch. A filtered graph joins the
   visible commits with dashed edges. Type a hash and press Enter to go to a commit.
 - **Compare**: one commit against its parent, two commits (Ctrl or Cmd click; the lower commit
@@ -22,6 +27,13 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 - **Commit details**: the full message, hash, author, committer, parents and refs.
 - **Diff**: Monaco, side by side or unified, previous and next change, previous and next file,
   ignore whitespace, collapse unchanged regions, and single-side view for added or deleted files.
+- **Write operations**: check out a branch or a revision, new branch, new tag, rename, delete,
+  merge, rebase, cherry-pick, revert, reset (soft, mixed, keep or hard), edit a commit message,
+  squash, drop, and interactive rebase. Squash, drop, edit and interactive rebase run in memory:
+  a conflict stops them before a file or a ref changes. A notification after each operation has
+  an Undo button. A banner shows a merge, rebase, cherry-pick or revert in progress, with its
+  conflicting files and the Mark Resolved, Abort and Continue actions.
+- **Worktrees**: list, add (on a new or an existing branch), open, remove and prune.
 - **Other**: context menus, Refresh, Fetch, column choice and resize, resizable panels,
   light, dark or system theme, and a status bar.
 
@@ -75,6 +87,9 @@ UI scenarios run in Chromium against the dev server:
 ui/e2e/make-demo-repo.sh /tmp/demo
 node ui/e2e/demo-repo.mjs /tmp/demo /tmp/shots        # a small repository with every case
 node ui/e2e/large-repo.mjs /path/to/git.git /tmp/shots  # a large repository, for example git/git
+node ui/e2e/collapse.mjs /path/to/git.git /tmp/shots    # collapse linear branches in a large repository
+ui/e2e/make-demo-repo.sh /tmp/demo2
+node ui/e2e/write-ops.mjs /tmp/demo2 /tmp/shots         # write operations; it changes the repository
 ```
 
 Each scenario takes screenshots and fails when the page logs an error.

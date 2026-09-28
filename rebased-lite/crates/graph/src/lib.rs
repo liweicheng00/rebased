@@ -4,6 +4,7 @@
 //! so the graph looks the same as in Rebased. See `docs/rebased-lite/design-spec.md`, chapter 4.
 
 pub mod bek;
+pub mod collapse;
 pub mod filter;
 pub mod layout;
 pub mod linear;
@@ -17,9 +18,11 @@ use std::cmp::Ordering;
 use std::hash::Hash;
 use std::sync::Arc;
 
-pub type VisibleGraph = SortedLinearGraph<Arc<PermanentLinearGraph>, Arc<SortIndexMap>>;
+pub type SortedGraph = SortedLinearGraph<Arc<PermanentLinearGraph>, Arc<SortIndexMap>>;
+/// The rows on screen: the sorted graph with collapsed fragments removed.
+pub type VisibleGraph = collapse::CollapsedGraph<SortedGraph>;
 pub type LayoutIndexFn = Box<dyn Fn(usize) -> i32 + Send + Sync>;
-pub type Printer = PrintElementGenerator<VisibleGraph, LayoutIndexFn>;
+pub type Printer = PrintElementGenerator<Arc<VisibleGraph>, LayoutIndexFn>;
 
 /// Ref kinds in the order of `GitBranchLayoutComparator`: the first kind is laid out leftmost.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -61,6 +64,10 @@ pub struct Graph {
     limits: EdgeLimits,
     /// Edges (child node, parent node) drawn dashed: they skip hidden commits in a filtered view.
     dotted: std::collections::HashSet<(usize, usize)>,
+    /// Sorted rows with a ref; a collapsed fragment never hides them.
+    pinned: std::collections::HashSet<usize>,
+    collapse: Arc<collapse::CollapseState>,
+    visible: Arc<VisibleGraph>,
 }
 
 /// Same as Java `String.hashCode`, so branch colors match Rebased.
@@ -116,14 +123,94 @@ impl Graph {
             })
             .collect();
 
+        let permanent = Arc::new(permanent);
+        let sort = Arc::new(sort);
+        let pinned = branches.iter().map(|&n| sort.sorted_index(n)).collect();
+        let collapse = Arc::new(collapse::CollapseState::default());
+        let visible = Arc::new(collapse::CollapsedGraph::new(
+            SortedLinearGraph { graph: permanent.clone(), map: sort.clone() },
+            collapse.clone(),
+        ));
         Graph {
-            permanent: Arc::new(permanent),
+            permanent,
             layout: Arc::new(layout),
-            sort: Arc::new(sort),
+            sort,
             head_ref_color,
             limits: EdgeLimits::new(options.show_long_edges),
             dotted: Default::default(),
+            pinned,
+            collapse,
+            visible,
         }
+    }
+
+    fn sorted(&self) -> SortedGraph {
+        SortedLinearGraph { graph: self.permanent.clone(), map: self.sort.clone() }
+    }
+
+    fn set_collapse(&mut self, state: collapse::CollapseState) {
+        self.collapse = Arc::new(state);
+        self.visible = Arc::new(collapse::CollapsedGraph::new(self.sorted(), self.collapse.clone()));
+    }
+
+    pub fn collapse_all(&mut self) {
+        let state = collapse::CollapseState::collapse_all(&self.sorted(), &self.pinned);
+        self.set_collapse(state);
+    }
+
+    pub fn expand_all(&mut self) {
+        self.set_collapse(collapse::CollapseState::default());
+    }
+
+    pub fn has_collapsed(&self) -> bool {
+        !self.collapse.is_empty()
+    }
+
+    /// Collapses the linear fragment around a visible row. Returns false when there is no fragment.
+    pub fn collapse_at(&mut self, row: usize) -> bool {
+        let mut state = self.collapse_state();
+        if !collapse::collapse_at(&mut state, &self.visible, row, &self.pinned) {
+            return false;
+        }
+        self.set_collapse(state);
+        true
+    }
+
+    /// Expands the collapsed edge between two visible rows.
+    pub fn expand_edge(&mut self, up: usize, down: usize) -> bool {
+        let (du, dd) = (self.visible.delegate_row(up), self.visible.delegate_row(down));
+        let mut state = self.collapse_state();
+        if !state.expand(&self.sorted(), du, dd) {
+            return false;
+        }
+        self.set_collapse(state);
+        true
+    }
+
+    fn collapse_state(&self) -> collapse::CollapseState {
+        let mut s = (*self.collapse).clone();
+        if s.hidden.is_empty() {
+            s.hidden = vec![false; self.permanent.nodes_count()];
+        }
+        s
+    }
+
+    /// Visible row of a node; expands the fragment that hides it.
+    pub fn reveal_node(&mut self, node: usize) -> usize {
+        let delegate = self.sort.sorted_index(node);
+        if self.visible.compiled_row(delegate).is_none() {
+            let mut state = self.collapse_state();
+            if !state.reveal(&self.sorted(), delegate) {
+                state = collapse::CollapseState::default();
+            }
+            self.set_collapse(state);
+        }
+        self.visible.compiled_row(delegate).expect("node is visible after expand")
+    }
+
+    /// Whether the edge between two visible rows is a collapsed fragment that can be expanded.
+    pub fn is_collapsed_edge(&self, edge: &linear::Edge) -> bool {
+        edge.ty == EdgeType::Dotted && edge.as_normal().is_some_and(|(u, d)| self.visible.is_collapsed_edge(u, d))
     }
 
     /// Marks edges (child node, parent node) as dotted.
@@ -147,27 +234,24 @@ impl Graph {
     }
 
     pub fn row_count(&self) -> usize {
-        self.permanent.nodes_count()
+        self.visible.nodes_count()
     }
 
-    /// Permanent node (index into the input commits) shown at `row`.
+    /// Permanent node (index into the input commits) shown at a visible row.
     pub fn node_at_row(&self, row: usize) -> usize {
-        self.sort.usual_index(row)
+        self.sort.usual_index(self.visible.delegate_row(row))
     }
 
-    pub fn row_of_node(&self, node: usize) -> usize {
-        self.sort.sorted_index(node)
-    }
-
-    pub fn visible_graph(&self) -> VisibleGraph {
-        SortedLinearGraph { graph: self.permanent.clone(), map: self.sort.clone() }
+    /// Visible row of a node, or `None` when a collapsed fragment hides it.
+    pub fn row_of_node(&self, node: usize) -> Option<usize> {
+        self.visible.compiled_row(self.sort.sorted_index(node))
     }
 
     /// A row printer that owns its data, so it can live next to the graph in app state.
     pub fn printer(&self) -> Printer {
-        let (layout, sort) = (self.layout.clone(), self.sort.clone());
-        let layout_index: LayoutIndexFn = Box::new(move |row| layout.layout_index(sort.usual_index(row)));
-        PrintElementGenerator::new(self.visible_graph(), layout_index, self.limits)
+        let (layout, sort, visible) = (self.layout.clone(), self.sort.clone(), self.visible.clone());
+        let layout_index: LayoutIndexFn = Box::new(move |row| layout.layout_index(sort.usual_index(visible.delegate_row(row))));
+        PrintElementGenerator::new(self.visible.clone(), layout_index, self.limits)
     }
 
     /// Color key of a permanent node; see GraphColorGetterByHead and GraphColorManagerImpl.

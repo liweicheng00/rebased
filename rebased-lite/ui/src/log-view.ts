@@ -28,6 +28,10 @@ export class LogView {
   onSelectionChange: (rows: Row[]) => void = () => {};
   onContextMenu: (row: Row, e: MouseEvent) => void = () => {};
   onRowsLoaded: (rows: Row[]) => void = () => {};
+  onExpandEdge: (up: number, down: number) => void = () => {};
+  onCollapseAll: () => void = () => {};
+  onExpandAll: () => void = () => {};
+  private collapsed = false;
 
   constructor() {
     this.header = h("div", { class: "log-header" });
@@ -62,7 +66,12 @@ export class LogView {
       }
       return c;
     };
+    const collapse = h("button", { class: "icon-button", title: "Collapse all linear branches" }, "⊟");
+    const expand = h("button", { class: "icon-button", title: "Expand all linear branches", disabled: !this.collapsed }, "⊞");
+    collapse.addEventListener("click", () => this.onCollapseAll());
+    expand.addEventListener("click", () => this.onExpandAll());
     this.header.replaceChildren(
+      h("div", { class: "hcol graph-tools" }, collapse, expand),
       col("subject", "Subject"),
       settings.showAuthor ? col("author", "Author", "authorWidth") : "",
       settings.showDate ? col("date", "Date", "dateWidth") : "",
@@ -78,6 +87,12 @@ export class LogView {
     this.el.style.setProperty("--date-w", `${settings.dateWidth}px`);
     this.header.querySelector<HTMLElement>(".author")?.style.setProperty("flex-basis", `${settings.authorWidth}px`);
     this.header.querySelector<HTMLElement>(".date")?.style.setProperty("flex-basis", `${settings.dateWidth}px`);
+  }
+
+  setCollapsed(c: boolean) {
+    if (this.collapsed === c) return;
+    this.collapsed = c;
+    this.buildHeader();
   }
 
   reset(rowCount: number, recommendedWidth: number, keepScroll = false) {
@@ -186,16 +201,26 @@ export class LogView {
     g.scale(dpr, dpr);
     paintRow(g, r.elements, fg, selected);
     const arrows = r.elements.filter((e) => e.j !== undefined);
-    if (arrows.length) {
+    const collapsedEdges = r.elements.filter((e) => e.x !== undefined);
+    if (arrows.length || collapsedEdges.length) {
       canvas.addEventListener("mousedown", (e) => {
         const lane = Math.floor(e.offsetX / ELEMENT_WIDTH);
+        const fold = collapsedEdges.find((a) => a.p === lane || a.o === lane);
+        if (fold?.x && e.button === 0) {
+          e.stopPropagation();
+          this.onExpandEdge(fold.x[0], fold.x[1]);
+          return;
+        }
         const hit = arrows.find((a) => a.p === lane || a.o === lane);
-        if (hit && hit.j !== undefined) {
+        if (hit && hit.j !== undefined && e.button === 0) {
           e.stopPropagation();
           this.jumpTo(hit.j, true);
         }
       });
-      canvas.title = "Click an arrow to go to the other end of the edge";
+      canvas.title = collapsedEdges.length
+        ? "Click the dotted edge to expand the collapsed branch"
+        : "Click an arrow to go to the other end of the edge";
+      if (collapsedEdges.length) canvas.style.cursor = "pointer";
     }
     const subject = h("span", { class: "subject", title: r.subject });
     for (const ref of r.refs) subject.append(h("span", { class: `ref ref-${ref.kind}`, title: ref.name }, ref.name));
@@ -286,6 +311,12 @@ export class LogView {
   }
 
   private selectionTimer = 0;
+
+  /** The selected rows now, sorted top to bottom. It does not wait for the selection debounce. */
+  async selectedRows(): Promise<Row[]> {
+    const rows = await Promise.all([...this.selection].sort((a, b) => a - b).map((i) => this.rowAsync(i)));
+    return rows.filter((r): r is Row => r !== null);
+  }
 
   private changed() {
     this.render();

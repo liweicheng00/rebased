@@ -1,7 +1,7 @@
 // Hides the console window on Windows release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use rebased_service::{CompareArgs, FilePairArgs, FindArgs, OidArgs, OpenArgs, RowsArgs, Service, ViewArgs};
+use rebased_service::{CollapseArgs, CompareArgs, FilePairArgs, FindArgs, OidArgs, Op, OpenArgs, RowsArgs, Service, ViewArgs};
 use serde_json::Value;
 use tauri::State;
 
@@ -60,6 +60,36 @@ fn file_pair(state: State<'_, Service>, args: FilePairArgs) -> Result<Value, Str
     json(state.file_pair(args))
 }
 
+#[tauri::command(async)]
+fn collapse(state: State<'_, Service>, args: CollapseArgs) -> Result<Value, String> {
+    json(state.collapse(args))
+}
+
+#[tauri::command(async)]
+fn worktrees(state: State<'_, Service>) -> Result<Value, String> {
+    json(state.worktrees())
+}
+
+#[tauri::command(async)]
+fn recent_branches(state: State<'_, Service>) -> Result<Value, String> {
+    json(state.recent_branches())
+}
+
+#[tauri::command(async)]
+fn repo_state(state: State<'_, Service>) -> Result<Value, String> {
+    json(state.state())
+}
+
+#[tauri::command(async)]
+fn rewrite_range(state: State<'_, Service>, args: OidArgs) -> Result<Value, String> {
+    json(state.rewrite_range(args))
+}
+
+#[tauri::command(async)]
+fn run_op(state: State<'_, Service>, args: Op) -> Result<Value, String> {
+    json(state.run_op(args))
+}
+
 /// The repository path given on the command line, if any.
 #[tauri::command]
 fn initial_path() -> Option<String> {
@@ -70,7 +100,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Service::default())
-        .invoke_handler(tauri::generate_handler![initial_path, open, set_view, refresh, fetch, refs, rows, commit, find, compare, file_pair])
+        .invoke_handler(tauri::generate_handler![initial_path, open, set_view, refresh, fetch, refs, rows, commit, find, compare, file_pair, collapse, repo_state, rewrite_range, run_op, worktrees, recent_branches])
         .run(tauri::generate_context!())
         .expect("error while running Rebased Lite");
 }

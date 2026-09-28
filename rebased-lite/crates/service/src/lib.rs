@@ -1,5 +1,7 @@
 //! App state and commands. Every command takes and returns JSON-serializable values.
 
+use rebased_git::worktree::{RecentBranch, Worktree};
+use rebased_git::ops::{OpResult, PlanEntry, RepoState, ResetMode, RewriteRange};
 use rebased_git::{BranchInfo, Change, CommitDetails, CommitFull, FileContent, LogFilter, RefLabel, Repo, Rev, Topology};
 use rebased_graph::linear::{GraphCommit, PermanentLinearGraph};
 use rebased_graph::print::{Direction, PrintElement};
@@ -60,6 +62,8 @@ pub struct ViewArgs {
     pub intelli_sort: bool,
     pub show_long_edges: bool,
     pub filter: LogFilter,
+    /// Collapse every linear branch after the graph is built.
+    pub collapse_linear: bool,
 }
 
 fn yes() -> bool {
@@ -83,6 +87,7 @@ pub struct ViewResult {
     pub total_commits: usize,
     pub row_count: usize,
     pub filtered: bool,
+    pub collapsed: bool,
     pub recommended_width: usize,
     pub load_ms: u128,
 }
@@ -100,6 +105,9 @@ pub struct El {
     pub c: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub j: Option<usize>,
+    /// Rows (upper, lower) of a collapsed fragment; clicking the edge expands it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub x: Option<[usize; 2]>,
 }
 
 #[derive(Serialize)]
@@ -167,10 +175,53 @@ pub struct FindArgs {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FindResult {
     pub oid: Option<String>,
     /// Row in the current view; `None` when the commit is hidden by the filter or unknown.
     pub row: Option<usize>,
+    /// The new row count when finding the commit expanded a collapsed branch.
+    pub row_count: Option<usize>,
+}
+
+#[derive(Deserialize)]
+pub struct CollapseArgs {
+    pub mode: String,
+    pub row: Option<usize>,
+    pub up: Option<usize>,
+    pub down: Option<usize>,
+}
+
+/// A write operation.
+#[derive(Deserialize)]
+#[serde(tag = "op", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum Op {
+    Checkout { target: String, kind: String },
+    CreateBranch { name: String, at: String, checkout: bool },
+    CreateTag { name: String, at: String, #[serde(default)] message: String },
+    RenameBranch { from: String, to: String },
+    DeleteBranch { name: String, force: bool },
+    DeleteTag { name: String },
+    Merge { rev: String },
+    Rebase { onto: String },
+    CherryPick { oids: Vec<String> },
+    Revert { oids: Vec<String> },
+    Reset { to: String, mode: ResetMode },
+    Continue,
+    Abort,
+    MarkResolved { paths: Vec<String> },
+    Rewrite { base: String, plan: Vec<PlanEntry>, what: String },
+    Undo { to: String, expected_head: String },
+    AddWorktree { path: String, branch: String, new_branch: bool, at: String },
+    RemoveWorktree { path: String, force: bool },
+    PruneWorktrees,
+}
+
+#[derive(Serialize)]
+pub struct OpOutcome {
+    pub result: OpResult,
+    pub view: ViewResult,
+    pub head: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -191,7 +242,10 @@ fn build_view(repo: &Repo, topo: &Topology, full: &PermanentLinearGraph, args: &
     let options = GraphOptions { intelli_sort: args.intelli_sort, show_long_edges: args.show_long_edges };
     let f = &args.filter;
     if f.is_empty() {
-        let graph = repo.build_graph(topo, &options);
+        let mut graph = repo.build_graph(topo, &options);
+        if args.collapse_linear {
+            graph.collapse_all();
+        }
         let printer = graph.printer();
         return Ok(View { graph, printer, nodes: None, index: HashMap::new() });
     }
@@ -236,6 +290,9 @@ fn build_view(repo: &Repo, topo: &Topology, full: &PermanentLinearGraph, args: &
         let index = &index;
         ps.iter().filter(|p| p.1).map(move |p| (index[&child], index[&p.0]))
     }));
+    if args.collapse_linear {
+        graph.collapse_all();
+    }
     let printer = graph.printer();
     Ok(View { graph, printer, nodes: Some(filtered.nodes), index })
 }
@@ -267,6 +324,7 @@ impl Service {
             total_commits: s.topo.oids.len(),
             row_count: s.view.graph.row_count(),
             filtered: s.view.nodes.is_some(),
+            collapsed: s.view.graph.has_collapsed(),
             recommended_width: s.view.printer.recommended_width(),
             load_ms: t.elapsed().as_millis(),
         }
@@ -351,10 +409,100 @@ impl Service {
 
     pub fn find(&self, args: FindArgs) -> Result<FindResult> {
         self.with(|s| {
-            let Some(oid) = s.repo.resolve(&args.query) else { return Ok(FindResult { oid: None, row: None }) };
-            let row = s.topo.node_of(&oid).and_then(|n| s.view.view_node(n)).map(|v| s.view.graph.row_of_node(v));
-            Ok(FindResult { oid: Some(oid), row })
+            let Some(oid) = s.repo.resolve(&args.query) else { return Ok(FindResult { oid: None, row: None, row_count: None }) };
+            let Some(view_node) = s.topo.node_of(&oid).and_then(|n| s.view.view_node(n)) else {
+                return Ok(FindResult { oid: Some(oid), row: None, row_count: None });
+            };
+            if let Some(row) = s.view.graph.row_of_node(view_node) {
+                return Ok(FindResult { oid: Some(oid), row: Some(row), row_count: None });
+            }
+            // A collapsed fragment hides the commit: expand it.
+            let row = s.view.graph.reveal_node(view_node);
+            s.view.printer = s.view.graph.printer();
+            Ok(FindResult { oid: Some(oid), row: Some(row), row_count: Some(s.view.graph.row_count()) })
         })
+    }
+
+    /// Collapses or expands linear branches. `all`: collapse all; `none`: expand all; or one fragment at `row`,
+    /// or the collapsed edge `up`..`down`.
+    pub fn collapse(&self, args: CollapseArgs) -> Result<ViewResult> {
+        self.with(|s| {
+            let t = std::time::Instant::now();
+            match args.mode.as_str() {
+                "all" => s.view.graph.collapse_all(),
+                "none" => s.view.graph.expand_all(),
+                "row" => {
+                    if !s.view.graph.collapse_at(args.row.unwrap_or(0)) {
+                        return Err("There is no linear branch to collapse here".into());
+                    }
+                }
+                "edge" => {
+                    let (u, d) = (args.up.unwrap_or(0), args.down.unwrap_or(0));
+                    if !s.view.graph.expand_edge(u, d) {
+                        return Err("This edge is not a collapsed branch".into());
+                    }
+                }
+                m => return Err(format!("unknown collapse mode {m}")),
+            }
+            s.settings.collapse_linear = args.mode == "all";
+            s.view.printer = s.view.graph.printer();
+            Ok(Self::result(s, t))
+        })
+    }
+
+    pub fn worktrees(&self) -> Result<Vec<Worktree>> {
+        self.with(|s| s.repo.worktrees().map_err(err))
+    }
+
+    pub fn recent_branches(&self) -> Result<Vec<RecentBranch>> {
+        self.with(|s| s.repo.recent_branches(10).map_err(err))
+    }
+
+    pub fn state(&self) -> Result<RepoState> {
+        self.with(|s| s.repo.state().map_err(err))
+    }
+
+    pub fn rewrite_range(&self, args: OidArgs) -> Result<RewriteRange> {
+        self.with(|s| s.repo.rewrite_range(&args.oid).map_err(err))
+    }
+
+    /// Runs a write operation, then reloads commits and refs. A failed operation still reloads,
+    /// because git can stop halfway (for example at a conflict).
+    pub fn run_op(&self, op: Op) -> Result<OpOutcome> {
+        let root = self.with(|s| Ok(s.repo.root.clone()))?;
+        let repo = Repo::open(&root).map_err(err)?;
+        let result = match op {
+            Op::Checkout { target, kind } => repo.checkout(&target, &kind),
+            Op::CreateBranch { name, at, checkout } => repo.create_branch(&name, &at, checkout),
+            Op::CreateTag { name, at, message } => repo.create_tag(&name, &at, &message),
+            Op::RenameBranch { from, to } => repo.rename_branch(&from, &to),
+            Op::DeleteBranch { name, force } => repo.delete_branch(&name, force),
+            Op::DeleteTag { name } => repo.delete_tag(&name),
+            Op::Merge { rev } => repo.merge(&rev),
+            Op::Rebase { onto } => repo.rebase(&onto),
+            Op::CherryPick { oids } => repo.cherry_pick(&oids),
+            Op::Revert { oids } => repo.revert(&oids),
+            Op::Reset { to, mode } => repo.reset(&to, mode),
+            Op::Continue => repo.continue_or_abort(false),
+            Op::Abort => repo.continue_or_abort(true),
+            Op::MarkResolved { paths } => repo.mark_resolved(&paths),
+            Op::Rewrite { base, plan, what } => repo.rewrite(&base, &plan, &what),
+            Op::Undo { to, expected_head } => repo.undo(&to, &expected_head),
+            Op::AddWorktree { path, branch, new_branch, at } => {
+                repo.add_worktree(&path, &branch, new_branch, &at).map(|_| OpResult::ok_msg(format!("Added worktree {path}")))
+            }
+            Op::RemoveWorktree { path, force } => {
+                repo.remove_worktree(&path, force).map(|_| OpResult::ok_msg(format!("Removed worktree {path}")))
+            }
+            Op::PruneWorktrees => repo.prune_worktrees().map(|_| OpResult::ok_msg("Pruned stale worktrees")),
+        };
+        let result = match result {
+            Ok(r) => r,
+            Err(e) => OpResult { ok: false, message: e.to_string(), conflicts: Vec::new(), undo_to: None },
+        };
+        let view = self.refresh()?;
+        let head = view.head_oid.clone();
+        Ok(OpOutcome { result, view, head })
     }
 
     fn rev(repo: &Repo, spec: &RevSpec) -> Result<Rev> {
@@ -397,6 +545,12 @@ impl Service {
             "rows" => serde_json::to_string(&self.rows(parse(body)?)?),
             "commit" => serde_json::to_string(&self.commit(parse(body)?)?),
             "find" => serde_json::to_string(&self.find(parse(body)?)?),
+            "collapse" => serde_json::to_string(&self.collapse(parse(body)?)?),
+            "repo_state" => serde_json::to_string(&self.state()?),
+            "worktrees" => serde_json::to_string(&self.worktrees()?),
+            "recent_branches" => serde_json::to_string(&self.recent_branches()?),
+            "rewrite_range" => serde_json::to_string(&self.rewrite_range(parse(body)?)?),
+            "run_op" => serde_json::to_string(&self.run_op(parse(body)?)?),
             "compare" => serde_json::to_string(&self.compare(parse(body)?)?),
             "file_pair" => serde_json::to_string(&self.file_pair(parse(body)?)?),
             _ => return Err(format!("unknown command {cmd}")),
@@ -408,7 +562,7 @@ impl Service {
 fn el(graph: &Graph, e: &PrintElement) -> El {
     let c = graph.element_color(e);
     match *e {
-        PrintElement::Node { pos, .. } => El { k: 'n', p: pos, o: pos, d: 'd', a: false, t: false, s: false, c, j: None },
+        PrintElement::Node { pos, .. } => El { k: 'n', p: pos, o: pos, d: 'd', a: false, t: false, s: false, c, j: None, x: None },
         PrintElement::Edge { pos, other_pos, dir, arrow, terminal, edge, .. } => El {
             k: 'e',
             p: pos,
@@ -419,6 +573,7 @@ fn el(graph: &Graph, e: &PrintElement) -> El {
             s: graph.is_edge_dashed(&edge),
             c,
             j: if arrow { if dir == Direction::Up { edge.up } else { edge.down } } else { None },
+            x: if graph.is_collapsed_edge(&edge) { edge.up.zip(edge.down).map(|(u, d)| [u, d]) } else { None },
         },
     }
 }

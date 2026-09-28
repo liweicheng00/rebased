@@ -5,6 +5,7 @@ export type Theme = "system" | "light" | "dark";
 export interface Settings {
   intelliSort: boolean;
   showLongEdges: boolean;
+  collapseLinear: boolean;
   theme: Theme;
   showAuthor: boolean;
   showDate: boolean;
@@ -26,6 +27,7 @@ export interface Settings {
 const DEFAULTS: Settings = {
   intelliSort: true,
   showLongEdges: false,
+  collapseLinear: false,
   theme: "system",
   showAuthor: true,
   showDate: true,

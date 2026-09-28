@@ -25,7 +25,12 @@ git clone -q "$dir-origin" "$dir" && cd "$dir"
 git config user.name "Ada Lovelace" && git config user.email ada@example.com
 git checkout -q -b feature/cli origin/feature/cli
 echo '    // local change not pushed' >> cli.rs; GIT_AUTHOR_DATE=2026-09-09T12:00 GIT_COMMITTER_DATE=2026-09-09T12:00 git commit -qam "Print arguments one per line"
-git checkout -q main
+# A branch whose README note conflicts with the upstream note, for the merge conflict scenario.
+git checkout -q -b topic/readme main
+echo "- local note" >> README.md; GIT_AUTHOR_DATE=2026-09-11T10:00 GIT_COMMITTER_DATE=2026-09-11T10:00 git commit -qam "Add a local README note"
+# Visit branches so that the reflog has recent branches.
+git checkout -q fix/readme 2>/dev/null || git checkout -q -b fix/readme origin/fix/readme
+git checkout -q feature/cli && git checkout -q main
 echo 'fn helper() {}' >> main.rs; echo notes > NOTES.txt
 cd "$dir-origin" && echo "- upstream note" >> README.md && c 2026-09-10T10:00 "Update README upstream"
 cd "$dir" && git fetch -q

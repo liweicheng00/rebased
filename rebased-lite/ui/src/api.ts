@@ -17,6 +17,7 @@ export interface ViewResult {
   totalCommits: number;
   rowCount: number;
   filtered: boolean;
+  collapsed: boolean;
   recommendedWidth: number;
   loadMs: number;
 }
@@ -32,6 +33,8 @@ export interface El {
   s: boolean;
   c: number;
   j?: number;
+  /** Rows [upper, lower] of a collapsed branch; clicking the edge expands it. */
+  x?: [number, number];
 }
 
 export interface RefLabel {
@@ -106,8 +109,84 @@ async function call<T>(cmd: string, args?: unknown): Promise<T> {
 export interface ViewSettings {
   intelliSort: boolean;
   showLongEdges: boolean;
+  collapseLinear: boolean;
   filter: LogFilter;
 }
+
+export interface RepoState {
+  operation: "none" | "merge" | "rebase" | "cherry-pick" | "revert";
+  branch: string | null;
+  head: string | null;
+  conflicts: string[];
+  changedFiles: number;
+}
+
+export interface OpResult {
+  ok: boolean;
+  message: string;
+  conflicts: string[];
+  undoTo: string | null;
+}
+
+export interface OpOutcome {
+  result: OpResult;
+  view: ViewResult;
+  head: string | null;
+}
+
+export type PlanAction = "pick" | "reword" | "squash" | "fixup" | "drop";
+
+export interface PlanEntry {
+  oid: string;
+  action: PlanAction;
+  message?: string;
+}
+
+export interface RewriteRange {
+  base: string;
+  entries: { oid: string; subject: string; message: string; author: string }[];
+  published: boolean;
+}
+
+export interface Worktree {
+  path: string;
+  head: string | null;
+  branch: string | null;
+  detached: boolean;
+  bare: boolean;
+  locked: boolean;
+  prunable: boolean;
+  current: boolean;
+  main: boolean;
+}
+
+export interface RecentBranch {
+  name: string;
+  oid: string;
+  subject: string;
+  time: number;
+}
+
+export type Op =
+  | { op: "checkout"; target: string; kind: "local" | "remote" | "commit" }
+  | { op: "createBranch"; name: string; at: string; checkout: boolean }
+  | { op: "createTag"; name: string; at: string; message: string }
+  | { op: "renameBranch"; from: string; to: string }
+  | { op: "deleteBranch"; name: string; force: boolean }
+  | { op: "deleteTag"; name: string }
+  | { op: "merge"; rev: string }
+  | { op: "rebase"; onto: string }
+  | { op: "cherryPick"; oids: string[] }
+  | { op: "revert"; oids: string[] }
+  | { op: "reset"; to: string; mode: "soft" | "mixed" | "hard" | "keep" }
+  | { op: "continue" }
+  | { op: "abort" }
+  | { op: "markResolved"; paths: string[] }
+  | { op: "rewrite"; base: string; plan: PlanEntry[]; what: string }
+  | { op: "undo"; to: string; expectedHead: string }
+  | { op: "addWorktree"; path: string; branch: string; newBranch: boolean; at: string }
+  | { op: "removeWorktree"; path: string; force: boolean }
+  | { op: "pruneWorktrees" };
 
 export const api = {
   open: (path: string, view: ViewSettings) => call<ViewResult>("open", { path, ...view }),
@@ -117,7 +196,14 @@ export const api = {
   refs: () => call<BranchInfo[]>("refs"),
   rows: (start: number, end: number) => call<Row[]>("rows", { start, end }),
   commit: (oid: string) => call<CommitInfo>("commit", { oid }),
-  find: (query: string) => call<{ oid: string | null; row: number | null }>("find", { query }),
+  find: (query: string) => call<{ oid: string | null; row: number | null; rowCount: number | null }>("find", { query }),
+  collapse: (mode: "all" | "none" | "row" | "edge", row?: number, up?: number, down?: number) =>
+    call<ViewResult>("collapse", { mode, row, up, down }),
+  repoState: () => call<RepoState>("repo_state"),
+  rewriteRange: (base: string) => call<RewriteRange>("rewrite_range", { oid: base }),
+  runOp: (op: Op) => call<OpOutcome>("run_op", op),
+  worktrees: () => call<Worktree[]>("worktrees"),
+  recentBranches: () => call<RecentBranch[]>("recent_branches"),
   compare: (left: RevSpec, right: RevSpec) => call<{ changes: Change[] }>("compare", { left, right }),
   filePair: (left: RevSpec, right: RevSpec, path: string, oldPath: string | null) =>
     call<{ left: FileContent; right: FileContent }>("file_pair", { left, right, path, oldPath }),
@@ -129,11 +215,11 @@ export async function initialPath(): Promise<string | null> {
   return invoke<string | null>("initial_path");
 }
 
-/** Asks for a repository folder: a native dialog in the app, a text prompt in a browser. */
-export async function pickFolder(): Promise<string | null> {
+/** Asks for a folder with the native dialog. Returns null in a browser, where the caller shows a text field. */
+export async function pickFolder(title = "Open Git Repository"): Promise<string | null> {
   if (inTauri) {
     const { open } = await import("@tauri-apps/plugin-dialog");
-    const r = await open({ directory: true, multiple: false, title: "Open Git Repository" });
+    const r = await open({ directory: true, multiple: false, title });
     return typeof r === "string" ? r : null;
   }
   return null;
