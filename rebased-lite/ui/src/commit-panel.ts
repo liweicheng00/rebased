@@ -151,7 +151,10 @@ export class CommitPanel {
     this.updateTarget();
   }
 
-  clear() {
+  private emptyText = "Open a repository to see its local changes.";
+
+  clear(message?: string) {
+    this.emptyText = message ?? "Open a repository to see its local changes.";
     this.data = null;
     this.files = [];
     this.included.clear();
@@ -334,7 +337,7 @@ export class CommitPanel {
   private render() {
     const frag = document.createDocumentFragment();
     if (!this.data) {
-      this.tree.replaceChildren(h("div", { class: "muted" }, "Open a repository to see its local changes."));
+      this.tree.replaceChildren(h("div", { class: "muted commit-empty" }, this.emptyText));
       this.updateSummary();
       return;
     }

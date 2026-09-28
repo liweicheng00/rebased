@@ -19,6 +19,10 @@ pub struct RepoState {
     pub conflicts: Vec<String>,
     /// Number of changed or untracked files in the working tree.
     pub changed_files: usize,
+    /// The commit where an interactive rebase stopped for editing.
+    pub editing: Option<String>,
+    /// The branch that a rebase in progress rewrites.
+    pub rebasing: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -58,6 +62,8 @@ pub enum ResetMode {
 pub enum Action {
     Pick,
     Reword,
+    /// Stop at this commit, so the user can change it. Only a real `git rebase -i` can stop.
+    Edit,
     Squash,
     Fixup,
     Drop,
@@ -94,6 +100,11 @@ pub struct RangeCommit {
 }
 
 /// Rejects a name or revision that git could read as an option.
+/// Quotes a string for the POSIX shell that git uses to run editors and exec lines.
+fn shell_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
 pub(crate) fn safe(arg: &str) -> Result<&str> {
     if arg.is_empty() || arg.starts_with('-') {
         Err(GitError(format!("invalid name or revision: {arg:?}")))
@@ -246,7 +257,13 @@ impl Repo {
         let status = self.git(&["status", "--porcelain=v1", "-z"])?;
         let changed_files = status.split(|&b| b == 0).filter(|p| p.len() > 3).count();
         let branch = self.git(&["symbolic-ref", "-q", "--short", "HEAD"]).ok().map(|b| String::from_utf8_lossy(&b).trim().to_string());
-        Ok(RepoState { operation, branch, head: self.resolve("HEAD"), conflicts, changed_files })
+        let editing = std::fs::read_to_string(dir.join("rebase-merge").join("amend")).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        let rebasing = ["rebase-merge", "rebase-apply"]
+            .iter()
+            .find_map(|d| std::fs::read_to_string(dir.join(d).join("head-name")).ok())
+            .map(|s| s.trim().trim_start_matches("refs/heads/").to_string())
+            .filter(|s| !s.is_empty() && s != "detached HEAD");
+        Ok(RepoState { operation, branch, head: self.resolve("HEAD"), conflicts, changed_files, editing, rebasing })
     }
 
     pub(crate) fn conflicts(&self) -> Vec<String> {
@@ -470,6 +487,9 @@ impl Repo {
         if plan.iter().find(|e| e.action != Action::Drop).is_some_and(|e| matches!(e.action, Action::Squash | Action::Fixup)) {
             return Err(GitError("A squash or fixup needs a commit before it".into()));
         }
+        if plan.iter().any(|e| e.action == Action::Edit) {
+            return self.rebase_interactive(&range.base, plan, what);
+        }
         let old_head = self.resolve("HEAD").ok_or_else(|| GitError("no HEAD".into()))?;
         let branch = self.state()?.branch.unwrap_or_default();
 
@@ -529,6 +549,65 @@ impl Repo {
             return Err(GitError(format!("The branch was not changed: {e}")));
         }
         Ok(OpResult { ok: true, message: format!("{what} done"), conflicts: Vec::new(), undo_to: Some(old_head), undo_soft: false })
+    }
+
+    /// Runs a real `git rebase -i` with the plan as its todo list, for a plan that stops to edit a commit.
+    /// New messages are set with `exec git commit --amend` lines. Local changes are stashed and restored.
+    fn rebase_interactive(&self, base: &str, plan: &[PlanEntry], what: &str) -> Result<OpResult> {
+        let old_head = self.resolve("HEAD").ok_or_else(|| GitError("no HEAD".into()))?;
+        let dir = self.git_dir().join("rebased-lite");
+        std::fs::create_dir_all(&dir).map_err(|e| GitError(e.to_string()))?;
+        let mut todo = String::new();
+        let mut group_message: Option<&str> = None;
+        for (i, e) in plan.iter().enumerate() {
+            let word = match e.action {
+                Action::Pick | Action::Reword => "pick",
+                Action::Edit => "edit",
+                Action::Squash => "squash",
+                Action::Fixup => "fixup",
+                Action::Drop => "drop",
+            };
+            todo.push_str(&format!("{word} {}\n", e.oid));
+            if e.action == Action::Drop {
+                continue;
+            }
+            if let Some(m) = e.message.as_deref() {
+                group_message = Some(m);
+            }
+            // At the end of a squash group, set the chosen message.
+            let group_ends = !plan[i + 1..].iter().find(|n| n.action != Action::Drop).is_some_and(|n| matches!(n.action, Action::Squash | Action::Fixup));
+            if group_ends {
+                if let Some(m) = group_message.take() {
+                    let file = dir.join(format!("message-{i}.txt"));
+                    std::fs::write(&file, m).map_err(|e| GitError(e.to_string()))?;
+                    todo.push_str(&format!("exec git commit --amend --allow-empty -q -F {}\n", shell_quote(&file.to_string_lossy())));
+                }
+            }
+        }
+        let todo_file = dir.join("rebase-todo.txt");
+        std::fs::write(&todo_file, todo).map_err(|e| GitError(e.to_string()))?;
+        let editor = format!("cp {}", shell_quote(&todo_file.to_string_lossy()));
+        let reflog = format!("rebased-lite: {what}");
+        let env = [("GIT_SEQUENCE_EDITOR", editor.as_str()), ("GIT_REFLOG_ACTION", reflog.as_str())];
+        let result = self.git_write(&["rebase", "-i", "--autostash", base], &env);
+        let state = self.state()?;
+        match result {
+            Ok(_) if state.operation == "rebase" => {
+                let at = state.editing.clone().or(state.head.clone()).unwrap_or_default();
+                Ok(OpResult {
+                    ok: true,
+                    message: format!(
+                        "The rebase stopped at {} for editing. Change the files, amend the commit in the Commit tab, then continue.",
+                        &at[..at.len().min(8)]
+                    ),
+                    conflicts: Vec::new(),
+                    undo_to: None,
+                    undo_soft: false,
+                })
+            }
+            Ok(_) => Ok(OpResult { ok: true, message: format!("{what} done"), conflicts: Vec::new(), undo_to: Some(old_head), undo_soft: false }),
+            Err((_, e)) => Ok(self.stopped("The rebase", e)),
+        }
     }
 
     /// Moves the current branch back after a rewrite, if nothing moved it since.

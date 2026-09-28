@@ -216,3 +216,42 @@ fn file_level_revert_cherry_pick_and_get() {
     assert_eq!(r.conflicts, ["a.txt"]);
     assert!(repo.apply_file_changes(&c2, &c3, &["missing.txt".into()], true).is_err());
 }
+
+#[test]
+fn interactive_rebase_stops_for_edit() {
+    let dir = temp_repo("edit");
+    let repo = Repo::open(&dir).unwrap();
+    let base = commit(&dir, "base.txt", "base\n", "Base");
+    let a = commit(&dir, "a.txt", "a\n", "A");
+    let b = commit(&dir, "b.txt", "b\n", "B");
+    let c = commit(&dir, "c.txt", "c\n", "C");
+    let d = commit(&dir, "d.txt", "d\n", "D");
+    std::fs::write(dir.join("local.txt"), "local\n").unwrap();
+    let plan = vec![
+        entry(&a, Action::Pick),
+        entry(&b, Action::Edit),
+        PlanEntry { oid: c.clone(), action: Action::Reword, message: Some("C reworded".into()) },
+        entry(&d, Action::Squash),
+    ];
+    let r = repo.rewrite(&base, &plan, "Interactive rebase").unwrap();
+    assert!(r.ok, "{}", r.message);
+    assert!(r.message.contains("stopped at"), "{}", r.message);
+    let st = repo.state().unwrap();
+    assert_eq!(st.operation, "rebase");
+    assert_eq!(st.editing.as_deref(), Some(b.as_str()));
+
+    // Change B while the rebase waits, then continue.
+    std::fs::write(dir.join("b.txt"), "b edited\n").unwrap();
+    git(&dir, &["commit", "-q", "--amend", "-am", "B edited"]);
+    let r = repo.continue_or_abort(false).unwrap();
+    assert!(r.ok, "{}", r.message);
+    assert_eq!(repo.state().unwrap().operation, "none");
+    // D is squashed into the reworded C; git joins the two messages.
+    let subjects = subjects(&dir);
+    assert_eq!(subjects[1..], ["B edited", "A", "Base"]);
+    assert!(subjects[0].starts_with("C reworded") || subjects[0] == "C", "{:?}", subjects);
+    assert_eq!(std::fs::read_to_string(dir.join("b.txt")).unwrap(), "b edited\n");
+    assert!(dir.join("d.txt").exists());
+    // The local file came back after the rebase.
+    assert_eq!(std::fs::read_to_string(dir.join("local.txt")).unwrap(), "local\n");
+}

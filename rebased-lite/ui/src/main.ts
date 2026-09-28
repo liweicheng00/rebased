@@ -182,7 +182,9 @@ async function task<T>(label: string, fn: () => Promise<T>): Promise<T | undefin
 
 function updateStatus() {
   if (!view) return;
-  const branch = view.head?.replace("refs/heads/", "") ?? (view.headOid ? `detached at ${view.headOid.slice(0, 8)}` : "no commits");
+  const branch = repoState?.rebasing
+    ? `rebasing ${repoState.rebasing}`
+    : (view.head?.replace("refs/heads/", "") ?? (view.headOid ? `detached at ${view.headOid.slice(0, 8)}` : "no commits"));
   repoLabel.replaceChildren(h("b", {}, view.root.split(/[\\/]/).pop() ?? view.root));
   branchBtn.hidden = false;
   branchBtn.textContent = `⑂ ${branch} ▾`;
@@ -257,9 +259,13 @@ async function loadRefs() {
 
 async function loadLocalChanges() {
   try {
-    commitPanel.set(await api.localChanges());
-  } catch {
-    commitPanel.clear();
+    commitPanel.set(await api.localChanges().catch(async () => {
+      // One retry: the first call can meet a repository that is still opening.
+      await new Promise((r) => setTimeout(r, 400));
+      return api.localChanges();
+    }));
+  } catch (e) {
+    commitPanel.clear(`The local changes could not be loaded: ${String(e).replace(/^Error: /, "")}`);
   }
   const n = commitPanel.changeCount;
   tabCommit.replaceChildren("Commit", n ? h("span", { class: "lp-count" }, String(n)) : "");
@@ -1115,6 +1121,16 @@ sidebar.onContextMenu = (b, e) => {
     { separator: true },
     { label: "Go to Commit", action: () => void jumpToOid(b.oid, true) },
     { label: filterBar.filter.branches.includes(b.name) ? "Remove from Log Filter" : "Show Only This Branch", action: () => filterBar.toggleBranch(b.name) },
+    {
+      label: `Show Commits Not in ${cur ?? "HEAD"}`,
+      disabled: isCurrent || !view?.headOid,
+      action: () => filterBar.set({ ...filterBar.filter, branches: [b.name, `^${cur ?? "HEAD"}`] }, true),
+    },
+    {
+      label: `Show Commits of ${cur ?? "HEAD"} Not in ${b.name}`,
+      disabled: isCurrent || !view?.headOid,
+      action: () => filterBar.set({ ...filterBar.filter, branches: [cur ?? "HEAD", `^${b.name}`] }, true),
+    },
     { separator: true },
     { label: "Rename…", disabled: b.kind !== "local", action: () => void renameBranch(b) },
     { label: b.kind === "tag" ? "Delete Tag…" : "Delete…", disabled: b.kind === "remote" || isCurrent, action: () => void deleteBranch(b) },

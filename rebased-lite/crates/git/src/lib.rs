@@ -335,7 +335,8 @@ pub struct BranchInfo {
 #[derive(Clone, Debug, Default, serde::Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LogFilter {
-    /// Branch, remote or tag names. Empty means all refs.
+    /// Branch, remote or tag names. Empty means all refs. A name with a leading `^` excludes the commits
+    /// of that ref, so `["feature", "^main"]` shows the commits of feature that are not in main.
     pub branches: Vec<String>,
     pub author: String,
     pub text: String,
@@ -347,7 +348,8 @@ pub struct LogFilter {
 impl LogFilter {
     /// A filter that git must evaluate (the branch filter alone is computed from the graph).
     pub fn needs_git(&self) -> bool {
-        !(self.author.trim().is_empty() && self.text.trim().is_empty() && self.path.trim().is_empty() && self.since.trim().is_empty())
+        self.branches.iter().any(|b| b.starts_with('^'))
+            || !(self.author.trim().is_empty() && self.text.trim().is_empty() && self.path.trim().is_empty() && self.since.trim().is_empty())
     }
 
     pub fn is_empty(&self) -> bool {
@@ -423,7 +425,7 @@ impl Repo {
                 args.push("HEAD".into());
             }
         } else {
-            args.extend(revs.iter().cloned());
+            args.extend(revs.iter().filter(|r| !r.starts_with('-')).cloned());
         }
         if !filter.author.trim().is_empty() {
             args.push(format!("--author={}", filter.author.trim()));

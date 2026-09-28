@@ -252,6 +252,7 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .rebase-author { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .rebase-row.action-drop .rebase-subject, .rebase-row.action-drop .rebase-hash { text-decoration: line-through; opacity: 0.55; }
 .rebase-row.action-squash, .rebase-row.action-fixup { background: var(--panel); }
+.rebase-row.action-edit .rebase-subject::after { content: "  ⏸ stops here"; color: var(--tag); font-size: 11px; }
 .rebase-row.action-squash .rebase-subject::before, .rebase-row.action-fixup .rebase-subject::before { content: "↳ "; color: var(--muted); }
 
 /* toasts */

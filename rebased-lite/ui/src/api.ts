@@ -121,6 +121,10 @@ export interface RepoState {
   head: string | null;
   conflicts: string[];
   changedFiles: number;
+  /** The commit where an interactive rebase stopped for editing. */
+  editing: string | null;
+  /** The branch that a rebase in progress rewrites. */
+  rebasing: string | null;
 }
 
 export interface OpResult {
@@ -137,7 +141,7 @@ export interface OpOutcome {
   head: string | null;
 }
 
-export type PlanAction = "pick" | "reword" | "squash" | "fixup" | "drop";
+export type PlanAction = "pick" | "reword" | "edit" | "squash" | "fixup" | "drop";
 
 export interface PlanEntry {
   oid: string;

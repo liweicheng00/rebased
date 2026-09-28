@@ -136,6 +136,7 @@ export async function messageDialog(title: string, message: string, okLabel: str
 const ACTIONS: [PlanAction, string][] = [
   ["pick", "Pick"],
   ["reword", "Reword"],
+  ["edit", "Edit"],
   ["squash", "Squash"],
   ["fixup", "Fixup"],
   ["drop", "Drop"],
@@ -197,7 +198,7 @@ export async function interactiveRebaseDialog(range: RewriteRange): Promise<Plan
   const note = h(
     "p",
     { class: "dialog-note" },
-    "The top row is the newest commit. Squash and Fixup join a commit into the commit below it. The rebase runs in memory: a conflict stops it before anything changes.",
+    "The top row is the newest commit. Squash and Fixup join a commit into the commit below it. Without Edit, the rebase runs in memory: a conflict stops it before anything changes. With Edit, git rebase runs and stops at that commit, so you can change it, amend, and continue.",
   );
   const warn = range.published ? h("p", { class: "dialog-note danger-text" }, "Some of these commits are on a remote branch already. After the rebase you must force-push.") : "";
   for (;;) {

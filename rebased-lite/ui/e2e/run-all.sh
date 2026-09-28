@@ -32,6 +32,7 @@ fresh merge && run merge-tool "$work/merge"
 fresh history && run history "$work/history"
 fresh partial && run partial-commit "$work/partial"
 fresh actions && run file-actions "$work/actions"
+fresh edit && run rebase-edit "$work/edit"
 if [ -n "$large" ]; then
   run large-repo "$large"
   run collapse "$large"

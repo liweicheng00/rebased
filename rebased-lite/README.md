@@ -33,7 +33,9 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 - **Write operations**: check out a branch or a revision, new branch, new tag, rename, delete,
   merge, rebase, cherry-pick, revert, reset (soft, mixed, keep or hard), edit a commit message,
   squash, drop, and interactive rebase. Squash, drop, edit and interactive rebase run in memory:
-  a conflict stops them before a file or a ref changes. A notification after each operation has
+  a conflict stops them before a file or a ref changes. An interactive rebase with an Edit step
+  runs `git rebase -i` instead: it stops at that commit, you change the files, amend in the
+  Commit tab, and continue. A notification after each operation has
   an Undo button. A banner shows a merge, rebase, cherry-pick or revert in progress, with its
   conflicting files and the Mark Resolved, Abort and Continue actions.
 - **Changelists and commit**: the Commit tab (`Ctrl/Cmd+K`) groups the local changes into named
@@ -126,7 +128,7 @@ ui/e2e/run-all.sh /tmp/e2e /path/to/git.git     # also the large-repository scen
 ```
 
 The scenarios are `demo-repo`, `write-ops`, `changelists`, `push-update`, `stash`, `merge-tool`,
-`history`, `partial-commit`, `file-actions`, `large-repo` and `collapse`. Each file says how to run it alone.
+`history`, `partial-commit`, `file-actions`, `rebase-edit`, `large-repo` and `collapse`. Each file says how to run it alone.
 
 Each scenario takes screenshots and fails when the page logs an error.
 

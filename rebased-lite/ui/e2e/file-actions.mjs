@@ -53,6 +53,17 @@ const tree = (await page.textContent(".commit-tree")).replace(/\s+/g, " ");
 console.log("local changes:", tree);
 check("the local changes list the three files", tree.includes("main.rs") && tree.includes("cli.rs") && tree.includes("README.md"));
 await shot("fa2-local-changes");
+
+// Compare branches as commit lists.
+await page.click(".lp-tab:has-text('Branches')");
+await page.click(".branch:has(.branch-name:text-is('feature/cli'))", { button: "right" });
+await page.click(".menu-item:has-text('Show Commits Not in main')");
+await page.waitForTimeout(2000);
+const subjects = await page.$$eval(".log-row .subject-text", (e) => e.map((x) => x.textContent));
+console.log("not in main:", subjects);
+check("feature/cli has two commits that are not in main", subjects.join("|") === "Print arguments one per line|Add a CLI entry point");
+check("the filter button names the range", (await page.textContent(".filter-bar .filter-button")).includes("feature/cli not in main"));
+await shot("fa3-not-in-main");
 console.log("errors:", JSON.stringify(errors));
 await browser.close();
 if (errors.length) process.exit(1);

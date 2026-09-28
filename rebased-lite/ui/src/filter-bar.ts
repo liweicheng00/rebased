@@ -112,7 +112,14 @@ export class FilterBar {
     if (this.path.value.trim() !== f.path) this.path.value = f.path;
     this.since.textContent = `Date: ${DATE_OPTIONS.find(([v]) => v === f.since)?.[1] ?? f.since}`.replace("Any date", "Any");
     this.since.classList.toggle("active", !!f.since);
-    this.branchBtn.textContent = f.branches.length === 0 ? "Branch: All" : `Branch: ${f.branches.length === 1 ? f.branches[0] : `${f.branches.length} selected`}`;
+    const include = f.branches.filter((b) => !b.startsWith("^"));
+    const exclude = f.branches.filter((b) => b.startsWith("^")).map((b) => b.slice(1));
+    this.branchBtn.textContent =
+      f.branches.length === 0
+        ? "Branch: All"
+        : exclude.length
+          ? `${include.join(", ") || "All"} not in ${exclude.join(", ")}`
+          : `Branch: ${f.branches.length === 1 ? f.branches[0] : `${f.branches.length} selected`}`;
     this.branchBtn.classList.toggle("active", f.branches.length > 0);
     this.clear.hidden = !(f.branches.length || f.author || f.text || f.path || f.since);
     if (notify) this.onChange(f);

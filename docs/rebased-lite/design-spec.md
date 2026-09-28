@@ -323,7 +323,7 @@ get_file_pair(left: Rev, right: Rev | "WORKTREE", change: Change): { left?: Blob
 3. **Graph 右側的 commit 表格欄位。** 預設建議 subject、author、date、refs。
 4. **大檔案門檻。** 6.3 節的 5 MB 是暫定值。
 
-## 11. 實作狀態（v0.3，2026-09-28）
+## 11. 實作狀態（v0.4，2026-09-28）
 
 程式碼在 `rebased-lite/`。
 
@@ -342,6 +342,15 @@ get_file_pair(left: Rev, right: Rev | "WORKTREE", change: Change): { left?: Blob
 | 深色模式（v0.3） | 完成。淺色、深色、跟隨系統三種。所有新的對話框、通知、橫幅都支援兩種主題。原生 Linux 視窗會跟隨 GTK 的深色主題。 |
 | Worktree 管理（v0.3） | 完成：列出、新增（新分支或既有分支、指定起點）、開啟、移除（有變更時再確認後強制移除）、prune。 |
 | 近期分支（v0.3） | 完成。從 HEAD reflog 讀出近期切換過的分支，顯示在側欄最上方與工具列的分支切換器。 |
+| Changelist 與 Commit（v0.4） | 完成。Commit 分頁把本機變更分成多個 changelist。新的變更進入 active changelist。可以用右鍵選單或拖放移動檔案。每個 changelist 保留自己的 commit 訊息草稿。勾選的檔案才會進 commit（`git commit --only`），其他檔案的 staged 內容不變，hook 照常執行。merge 進行中時改為 commit 整個 index。也有 Amend、Rollback、Add to Git、刪除未追蹤檔、Undo commit（變更回到本機變更）。changelist 依 worktree 存在 git 目錄裡。 |
+| 部分 commit（v0.4） | 完成。本機檔案的 diff 裡每個變更都有勾選框。取消勾選的變更留在本機。這種 commit 在暫存 index 裡用 `git commit-tree` 建立，所以不會執行 hook。 |
+| Push 與 Update（v0.4） | 完成。Push 對話框列出要推送的 commit，可選 remote、遠端分支、force with lease、tags、設定追蹤分支。被拒絕時提供 Update。Update 先 fetch，再 merge 或 rebase，本機變更自動 stash 後還原。Commit 分頁有 Commit and Push。 |
+| Stash（v0.4） | 完成。Stash 分頁列出 stash，選取後顯示檔案與 diff（含未追蹤檔）。可以 Apply、Pop、連同 staged 狀態 Apply、從 stash 建立分支、Drop。可以 stash 全部、選取的檔案或一個 changelist。 |
+| 衝突與合併視窗（v0.4） | 完成。Conflicts 對話框（Accept Yours、Accept Theirs、Merge…）。三欄合併視窗：你的版本、結果、對方版本，三欄對齊並同步捲動，可逐一套用或忽略每個變更、把第二邊附加到衝突、一次套用所有不衝突的變更。結果可以直接編輯。merge 與 rebase 會顯示正確的兩邊名稱。 |
+| 檔案歷史與 Annotate（v0.4） | 完成。Show History 追蹤改名，顯示每個 commit 對這個檔案的變更。Annotate（git blame）在行號欄顯示日期與作者，依時間上色，點擊可跳到 commit。可用於 commit、本機變更（未 commit 的行會標出）與歷史視窗。 |
+| 檔案層級操作（v0.4） | 完成。變更清單可以多選。對 commit 中的檔案：Revert Selected Changes、Cherry-Pick Selected Changes、Get from Revision。 |
+| 互動式 rebase 的 Edit（v0.4） | 完成。有 Edit 步驟時改用真正的 `git rebase -i`（由程式寫入 todo，訊息用 `exec git commit --amend` 設定），在該 commit 停下。橫幅顯示停在哪個 commit，工具列顯示 rebasing 的分支。修改檔案後在 Commit 分頁 Amend，再按 Continue。本機變更會自動 stash 後還原。 |
+| 分支比較（v0.4） | 完成。分支選單的 Show Commits Not in &lt;目前分支&gt; 與反向，log 只顯示一邊有而另一邊沒有的 commit。 |
 | 8.3 資源量測 | 見下表。 |
 
 資源量測（Linux x86_64、Xvfb、WebKitGTK 軟體繪圖，git/git）：
@@ -354,8 +363,8 @@ get_file_pair(left: Rev, right: Rev | "WORKTREE", change: Change): { left?: Blob
 
 macOS 的 WKWebView 數字會不同，還需要在 macOS 上量測。
 
-v0.3 沒有做的事：
-- 沒有 push 與 pull。Fetch 以外的遠端操作還沒有做。
-- 沒有內建的衝突解決編輯器。衝突要在外部編輯器解決，再按 Mark Resolved。
-- 互動式 rebase 不支援 edit（停在某個 commit 讓使用者修改），因為它需要停在中途的 rebase 流程。
-- v0.3 的寫入操作只在 Linux 上測試過。
+v0.4 沒有做的事：
+- 一個檔案的不同行不能分到不同 changelist（IntelliJ 的 partial changelist）。部分 commit 可以只 commit 一個檔案的部分變更，但這個選擇只存在記憶體中，重新開啟 repo 後就消失。
+- Git 不會跳出密碼提示。需要密碼的 remote 必須設定 credential helper 或 SSH agent。
+- 沒有 TextMate 上色（見 6.3）。
+- 所有功能只在 Linux 上測試過，還沒有在 macOS 上測試。
