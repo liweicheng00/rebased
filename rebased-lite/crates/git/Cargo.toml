@@ -1,0 +1,10 @@
+[package]
+name = "rebased-git"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Reads repository data through the git CLI for Rebased Lite"
+
+[dependencies]
+rebased-graph = { path = "../graph" }
+serde = { version = "1", features = ["derive"] }

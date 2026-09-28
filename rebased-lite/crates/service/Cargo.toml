@@ -1,0 +1,12 @@
+[package]
+name = "rebased-service"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "App state and commands for Rebased Lite, shared by the Tauri app and the dev server"
+
+[dependencies]
+rebased-graph = { path = "../graph" }
+rebased-git = { path = "../git" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

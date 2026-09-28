@@ -322,3 +322,28 @@ get_file_pair(left: Rev, right: Rev | "WORKTREE", change: Change): { left?: Blob
 2. **MVP 要不要支援多個 repo 分頁。** 建議先只支援一個 repo。
 3. **Graph 右側的 commit 表格欄位。** 預設建議 subject、author、date、refs。
 4. **大檔案門檻。** 6.3 節的 5 MB 是暫定值。
+
+## 11. 實作狀態（v0.1，2026-09-28）
+
+程式碼在 `rebased-lite/`。
+
+| 規格章節 | 狀態 |
+|---|---|
+| 3 資料載入 | 完成。commit 細節依可見列分批載入，並快取。 |
+| 4.1–4.8 Graph 演算法 | 完成。IntelliJ 的 golden test 全部通過（graphBuilder、layoutBuilder、edgesInRow、elementGenerator、BEK）。 |
+| 4.9 Graph 寬度 | 完成。 |
+| 5 虛擬捲動 | 完成。git/git（85,787 個 commit）可以捲到任何位置。 |
+| 6 Commit 比較 | 完成：單一 commit 對第一個 parent、兩個 commit、commit 對工作目錄、交換左右、雙欄與行內 diff。 |
+| 6.3 TextMate 上色 | **未完成。** 目前使用 Monaco 內建的 Monarch 語法。改用 TextMate 語法是下一步。 |
+| 8.1 演算法一致性 | 完成（見 4.1–4.8）。 |
+| 8.3 資源量測 | 見下表。 |
+
+資源量測（Linux x86_64、Xvfb、WebKitGTK 軟體繪圖，git/git）：
+
+| 項目 | Rebased 1.1.19 | Rebased Lite 0.1 |
+|---|---|---|
+| 開啟 repo 後的 RSS | 1,250 MB | 478 MB（app 194 + WebKit 網頁 246 + WebKit 網路 50） |
+| 開啟 diff 後的 RSS | 未量測 | 552 MB |
+| graph 計算（layout + IntelliSort） | 未量測 | 54 ms，Rust 核心峰值 38 MB |
+
+macOS 的 WKWebView 數字會不同，還需要在 macOS 上量測。
