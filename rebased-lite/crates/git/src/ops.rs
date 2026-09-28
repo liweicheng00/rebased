@@ -137,6 +137,84 @@ impl Repo {
         }
     }
 
+    /// Runs git with `input` on stdin. It never prompts.
+    pub(crate) fn git_stdin(&self, args: &[&str], input: &[u8]) -> std::result::Result<String, String> {
+        use std::io::Write;
+        let mut child = Command::new("git")
+            .arg("-C")
+            .arg(&self.root)
+            .args(args)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("LC_ALL", "C")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("cannot run git: {e}"))?;
+        let mut stdin = child.stdin.take().unwrap();
+        let data = input.to_vec();
+        // Write on a thread, so a large input cannot block against a full stdout pipe.
+        let writer = std::thread::spawn(move || stdin.write_all(&data));
+        let out = child.wait_with_output().map_err(|e| e.to_string())?;
+        let _ = writer.join();
+        let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        if out.status.success() {
+            Ok(stdout)
+        } else {
+            Err(if stderr.is_empty() { stdout } else { stderr })
+        }
+    }
+
+    /// Applies the change of some files between two commits to the working tree, as IntelliJ's
+    /// Cherry-Pick Selected Changes; with `reverse`, it removes that change, as Revert Selected Changes.
+    /// A change that does not apply cleanly falls back to a three-way merge and can leave conflicts.
+    pub fn apply_file_changes(&self, from: &str, to: &str, paths: &[String], reverse: bool) -> Result<OpResult> {
+        let (from, to) = (safe(from)?, safe(to)?);
+        for p in paths {
+            safe(p)?;
+        }
+        let mut args = vec!["diff", "--binary", "--full-index", "-M", from, to, "--"];
+        args.extend(paths.iter().map(String::as_str));
+        let patch = self.git(&args)?;
+        if patch.is_empty() {
+            return Err(GitError("The selected files have no changes".into()));
+        }
+        let mut apply = vec!["apply", "--3way"];
+        if reverse {
+            apply.push("-R");
+        }
+        let what = if reverse { "Reverted" } else { "Applied" };
+        match self.git_stdin(&apply, &patch) {
+            Ok(_) => Ok(OpResult::ok_msg(format!("{what} the changes of {} file(s)", paths.len()))),
+            Err(e) => {
+                let conflicts = self.conflicts();
+                if conflicts.is_empty() {
+                    Err(GitError(e))
+                } else {
+                    Ok(OpResult {
+                        ok: false,
+                        message: format!("The changes applied with conflicts in {} file(s). Resolve them.", conflicts.len()),
+                        conflicts,
+                        undo_to: None,
+                        undo_soft: false,
+                    })
+                }
+            }
+        }
+    }
+
+    /// Replaces files in the working tree and the index with their version in a revision. A file that
+    /// does not exist in the revision is deleted.
+    pub fn get_from_revision(&self, rev: &str, paths: &[String]) -> Result<OpResult> {
+        let rev = safe(rev)?;
+        let source = format!("--source={rev}");
+        let mut args = vec!["restore", source.as_str(), "--staged", "--worktree", "--"];
+        args.extend(paths.iter().map(String::as_str));
+        self.git_write(&args, &[]).map_err(|(_, e)| GitError(e))?;
+        Ok(OpResult::ok_msg(format!("Got {} file(s) from {}", paths.len(), &rev[..rev.len().min(8)])))
+    }
+
     pub(crate) fn git_dir(&self) -> std::path::PathBuf {
         let raw = self.git(&["rev-parse", "--absolute-git-dir"]).unwrap_or_default();
         std::path::PathBuf::from(String::from_utf8_lossy(&raw).trim())

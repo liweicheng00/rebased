@@ -40,6 +40,10 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   The panel also has Amend, Rollback, Add to Git, delete of unversioned files, and Undo of the last
   commit (the changes become local changes again). The changelists of a worktree are stored in its
   git directory, in `rebased-lite/changelists.json`.
+- **Partial commit**: the diff of a local file has a check box for each change. Unchecked changes
+  stay local; the file check box then shows a partial file. Such a commit is built in a temporary
+  index with `git commit-tree`, so commit hooks do not run for it. With "Ignore whitespace" on,
+  whitespace-only changes have no check box and stay local in a partial file.
 - **File history and annotate**: Show History (from the changes panels or the 🕘 button of the
   diff) lists the commits that changed a file, across renames, with the change of the file in each
   commit. Annotate shows the commit, author and date of each line in the gutter (git blame), with
@@ -119,7 +123,7 @@ ui/e2e/run-all.sh /tmp/e2e /path/to/git.git     # also the large-repository scen
 ```
 
 The scenarios are `demo-repo`, `write-ops`, `changelists`, `push-update`, `stash`, `merge-tool`,
-`history`, `large-repo` and `collapse`. Each file says how to run it alone.
+`history`, `partial-commit`, `large-repo` and `collapse`. Each file says how to run it alone.
 
 Each scenario takes screenshots and fails when the page logs an error.
 

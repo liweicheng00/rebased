@@ -405,6 +405,13 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .blame-age-3 { background: color-mix(in srgb, var(--accent) 28%, transparent); }
 .blame-age-4 { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 
+/* partial commit */
+.hunk-on, .hunk-off { cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.hunk-on::before, .hunk-off::before { content: ""; width: 11px; height: 11px; border-radius: 2px; box-sizing: border-box; }
+.hunk-on::before { background: var(--accent); border: 1px solid var(--accent); box-shadow: inset 0 0 0 2px var(--bg); }
+.hunk-off::before { border: 1px solid var(--muted); background: var(--bg); }
+.hunk-excluded { background: repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--muted) 18%, transparent) 5px 6px) !important; }
+
 /* push dialog */
 .push-route { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .push-remote { padding: 4px 6px; }

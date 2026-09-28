@@ -177,3 +177,40 @@ fn worktrees_and_recent_branches() {
     repo.remove_worktree(wt.to_str().unwrap(), false).unwrap();
     assert_eq!(repo.worktrees().unwrap().len(), 1);
 }
+
+#[test]
+fn file_level_revert_cherry_pick_and_get() {
+    let dir = temp_repo("filelevel");
+    let repo = Repo::open(&dir).unwrap();
+    let c1 = commit(&dir, "a.txt", "one\ntwo\nthree\n", "A");
+    std::fs::write(dir.join("b.txt"), "b\n").unwrap();
+    git(&dir, &["add", "b.txt"]);
+    git(&dir, &["commit", "-q", "-m", "B"]);
+    std::fs::write(dir.join("a.txt"), "one\nTWO\nthree\n").unwrap();
+    std::fs::write(dir.join("b.txt"), "b2\n").unwrap();
+    git(&dir, &["commit", "-q", "-am", "Change both"]);
+    let c3 = git(&dir, &["rev-parse", "HEAD"]);
+    let c2 = git(&dir, &["rev-parse", "HEAD^"]);
+
+    // Revert only a.txt of the last commit.
+    let r = repo.apply_file_changes(&c2, &c3, &["a.txt".into()], true).unwrap();
+    assert!(r.ok, "{}", r.message);
+    assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "one\ntwo\nthree\n");
+    assert_eq!(std::fs::read_to_string(dir.join("b.txt")).unwrap(), "b2\n");
+    // Cherry-pick it back.
+    assert!(repo.apply_file_changes(&c2, &c3, &["a.txt".into()], false).unwrap().ok);
+    assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "one\nTWO\nthree\n");
+    // Get from the first commit: a.txt goes back, b.txt did not exist there and is deleted.
+    repo.get_from_revision(&c1, &["a.txt".into(), "b.txt".into()]).unwrap();
+    assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "one\ntwo\nthree\n");
+    assert!(!dir.join("b.txt").exists());
+    // A conflicting revert leaves a conflict.
+    git(&dir, &["checkout", "-q", "--", "."]);
+    git(&dir, &["reset", "-q", "--hard"]);
+    std::fs::write(dir.join("a.txt"), "one\nLOCAL\nthree\n").unwrap();
+    git(&dir, &["commit", "-q", "-am", "Local"]);
+    let r = repo.apply_file_changes(&c2, &c3, &["a.txt".into()], true).unwrap();
+    assert!(!r.ok);
+    assert_eq!(r.conflicts, ["a.txt"]);
+    assert!(repo.apply_file_changes(&c2, &c3, &["missing.txt".into()], true).is_err());
+}

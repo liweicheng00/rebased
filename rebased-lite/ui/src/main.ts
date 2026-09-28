@@ -391,6 +391,7 @@ async function openFile(i: number) {
     const pair = await api.filePair(left, r, c.path, c.old_path);
     if (req !== request || active !== i) return;
     diff.setSource(c.status === "D" ? { path: c.old_path ?? c.path, rev: left } : { path: c.path, rev: r });
+    diff.setSelectable(null);
     diff.show(c, pair.left, pair.right);
   } catch (e) {
     if (req === request) diff.message(String(e));
@@ -688,6 +689,9 @@ async function showLocalDiff(f: LocalFile) {
     diff.setSource(
       f.change.status === "D" ? (head ? { path: f.change.old_path ?? f.change.path, rev: { commit: head } } : null) : { path: f.change.path, rev: "worktree" },
     );
+    // Changes of a modified file can go into the commit one by one.
+    const canSelect = f.list !== null && !pair.left.missing && !pair.right.missing && !pair.left.binary && !pair.right.binary && f.change.status !== "U";
+    diff.setSelectable(canSelect ? { excluded: commitPanel.excludedFor(f.key), onChange: (ex, content) => commitPanel.setPartial(f.key, ex, content) } : null);
     diff.show(change, pair.left, pair.right);
   } catch (e) {
     if (req === localRequest) diff.message(String(e));
@@ -769,7 +773,17 @@ async function commitFiles(files: LocalFile[], message: string, amend: boolean, 
     if (published && !(await confirmDialog("Commit is pushed", "The last commit is on a remote branch already. After amend you must force-push. Continue?", "Amend", true))) return;
   }
   const unversioned = files.filter((f) => f.list === null).map((f) => f.change.path);
-  const out = await runOp({ op: "commit", paths: localPaths(files), unversioned, message, amend }, amend ? "Amending" : "Committing");
+  const partial: { path: string; content: string }[] = [];
+  const whole: LocalFile[] = [];
+  for (const f of files) {
+    const content = commitPanel.partialContent(f.key);
+    if (content === null) whole.push(f);
+    else partial.push({ path: f.change.path, content });
+  }
+  // A renamed file in part: the old path is removed whole.
+  const paths = [...localPaths(whole), ...files.filter((f) => commitPanel.partialContent(f.key) !== null && f.change.old_path).map((f) => f.change.old_path!)];
+  if (partial.length && repoState?.operation === "merge") return toast("A merge is in progress: commit whole files to finish it.", "error");
+  const out = await runOp({ op: "commit", paths, unversioned, partial, message, amend }, amend ? "Amending" : "Committing");
   if (out?.result.ok) {
     commitPanel.committed(list);
     if (list && !amend) await changeListOp({ op: "saveMessage", id: list, message: "" });

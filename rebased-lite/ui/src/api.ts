@@ -190,7 +190,7 @@ export type Op =
   | { op: "addWorktree"; path: string; branch: string; newBranch: boolean; at: string }
   | { op: "removeWorktree"; path: string; force: boolean }
   | { op: "pruneWorktrees" }
-  | { op: "commit"; paths: string[]; unversioned: string[]; message: string; amend: boolean }
+  | { op: "commit"; paths: string[]; unversioned: string[]; partial?: { path: string; content: string }[]; message: string; amend: boolean }
   | { op: "rollback"; paths: string[] }
   | { op: "addFiles"; paths: string[] }
   | { op: "deleteUnversioned"; paths: string[] }

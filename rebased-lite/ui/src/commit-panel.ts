@@ -26,6 +26,8 @@ export class CommitPanel {
   private data: LocalChanges | null = null;
   private files: LocalFile[] = [];
   private included = new Set<string>();
+  /** Files with unchecked changes: the excluded change ids and the content to commit. */
+  private partial = new Map<string, { excluded: Set<string>; content: string }>();
   private seen = new Set<string>();
   private selection = new Set<string>();
   private anchor: string | null = null;
@@ -136,6 +138,7 @@ export class CommitPanel {
     const keys = new Set(files.map((f) => f.key));
     const active = data.lists.find((l) => l.active)?.id;
     for (const k of [...this.included]) if (!keys.has(k)) this.included.delete(k);
+    for (const k of [...this.partial.keys()]) if (!keys.has(k)) this.partial.delete(k);
     for (const k of [...this.selection]) if (!keys.has(k)) this.selection.delete(k);
     // New changes of the active changelist are checked, as in IntelliJ.
     for (const f of files) {
@@ -160,9 +163,30 @@ export class CommitPanel {
     this.render();
   }
 
+  /** The excluded changes of a file, shared with the diff view. */
+  excludedFor(key: string): Set<string> {
+    return this.partial.get(key)?.excluded ?? new Set();
+  }
+
+  /** Sets the content to commit for a file with unchecked changes; null means the whole file. */
+  setPartial(key: string, excluded: Set<string>, content: string | null) {
+    if (content === null || !excluded.size) this.partial.delete(key);
+    else {
+      this.partial.set(key, { excluded, content });
+      this.included.add(key);
+    }
+    this.render();
+    this.updateTarget();
+  }
+
+  partialContent(key: string): string | null {
+    return this.partial.get(key)?.content ?? null;
+  }
+
   /** Checks only the files of one changelist. */
   includeOnly(listId: string) {
     this.included = new Set(this.files.filter((f) => f.list === listId).map((f) => f.key));
+    for (const k of [...this.partial.keys()]) if (!this.included.has(k)) this.partial.delete(k);
     this.render();
     this.updateTarget();
   }
@@ -253,7 +277,8 @@ export class CommitPanel {
 
   private updateSummary() {
     const n = this.files.filter((f) => this.included.has(f.key)).length;
-    this.summary.textContent = n ? `${n} file${n === 1 ? "" : "s"}` : "";
+    const p = [...this.partial.keys()].filter((k) => this.included.has(k)).length;
+    this.summary.textContent = n ? `${n} file${n === 1 ? "" : "s"}${p ? `, ${p} in part` : ""}` : "";
     const verb = this.amend.checked ? "Amend Commit" : "Commit";
     const name = this.data?.lists.find((l) => l.id === this.target)?.name;
     const multi = (this.data?.lists.length ?? 0) > 1;
@@ -297,6 +322,7 @@ export class CommitPanel {
 
   /** Called by the owner after a successful commit. */
   committed(list: string | null) {
+    this.partial.clear();
     const wasAmend = this.amend.checked;
     this.amend.checked = false;
     this.message.value = wasAmend ? this.draftBeforeAmend : "";
@@ -336,7 +362,11 @@ export class CommitPanel {
     box.indeterminate = n > 0 && n < keys.length;
     box.addEventListener("click", (e) => e.stopPropagation());
     box.addEventListener("change", () => {
-      for (const k of keys) box.checked ? this.included.add(k) : this.included.delete(k);
+      for (const k of keys) {
+        if (box.checked) this.included.add(k);
+        else this.included.delete(k);
+        this.partial.delete(k);
+      }
       this.render();
       this.updateTarget();
     });
@@ -380,12 +410,17 @@ export class CommitPanel {
   private fileRow(f: LocalFile): HTMLElement {
     const c = f.change;
     const slash = c.path.lastIndexOf("/");
-    const box = h("input", { type: "checkbox", class: "cl-check" });
+    const box = h("input", { type: "checkbox", class: "cl-check", title: this.partial.has(f.key) ? "Some changes of this file stay out of the commit" : "" });
     box.checked = this.included.has(f.key);
+    box.indeterminate = this.included.has(f.key) && this.partial.has(f.key);
     box.addEventListener("click", (e) => e.stopPropagation());
     box.addEventListener("change", () => {
       const targets = this.selection.has(f.key) ? this.selectedFiles().map((x) => x.key) : [f.key];
-      for (const k of targets) box.checked ? this.included.add(k) : this.included.delete(k);
+      for (const k of targets) {
+        if (box.checked) this.included.add(k);
+        else this.included.delete(k);
+        this.partial.delete(k);
+      }
       this.render();
       this.updateTarget();
     });

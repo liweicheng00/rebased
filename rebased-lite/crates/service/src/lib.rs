@@ -1,6 +1,6 @@
 //! App state and commands. Every command takes and returns JSON-serializable values.
 
-pub use rebased_git::changelist::{ChangeListOp, LocalChanges};
+pub use rebased_git::changelist::{ChangeListOp, LocalChanges, PartialFile};
 use rebased_git::remote::{PushInfo, UpdateMode};
 use rebased_git::stash::{Stash, StashDetail};
 use rebased_git::merge::{MergeSides, Side};
@@ -220,7 +220,7 @@ pub enum Op {
     AddWorktree { path: String, branch: String, new_branch: bool, at: String },
     RemoveWorktree { path: String, force: bool },
     PruneWorktrees,
-    Commit { paths: Vec<String>, #[serde(default)] unversioned: Vec<String>, message: String, #[serde(default)] amend: bool },
+    Commit { paths: Vec<String>, #[serde(default)] unversioned: Vec<String>, #[serde(default)] partial: Vec<PartialFile>, message: String, #[serde(default)] amend: bool },
     Rollback { paths: Vec<String> },
     AddFiles { paths: Vec<String> },
     DeleteUnversioned { paths: Vec<String> },
@@ -232,6 +232,8 @@ pub enum Op {
     StashBranch { index: usize, branch: String },
     ResolveText { path: String, text: String },
     ResolveSide { paths: Vec<String>, side: Side },
+    ApplyFileChanges { from: String, to: String, paths: Vec<String>, #[serde(default)] reverse: bool },
+    GetFromRevision { rev: String, paths: Vec<String> },
 }
 
 #[derive(Deserialize)]
@@ -581,7 +583,13 @@ impl Service {
                 repo.remove_worktree(&path, force).map(|_| OpResult::ok_msg(format!("Removed worktree {path}")))
             }
             Op::PruneWorktrees => repo.prune_worktrees().map(|_| OpResult::ok_msg("Pruned stale worktrees")),
-            Op::Commit { paths, unversioned, message, amend } => repo.commit_paths(&paths, &unversioned, &message, amend),
+            Op::Commit { paths, unversioned, partial, message, amend } => {
+                if partial.is_empty() {
+                    repo.commit_paths(&paths, &unversioned, &message, amend)
+                } else {
+                    repo.commit_partial(&paths, &unversioned, &partial, &message, amend)
+                }
+            }
             Op::Rollback { paths } => repo.rollback(&paths),
             Op::AddFiles { paths } => repo.add_files(&paths),
             Op::DeleteUnversioned { paths } => repo.delete_unversioned(&paths),
@@ -595,6 +603,8 @@ impl Service {
             Op::StashBranch { index, branch } => repo.stash_branch(index, &branch),
             Op::ResolveText { path, text } => repo.resolve_with_text(&path, &text),
             Op::ResolveSide { paths, side } => repo.resolve_with_side(&paths, side),
+            Op::ApplyFileChanges { from, to, paths, reverse } => repo.apply_file_changes(&from, &to, &paths, reverse),
+            Op::GetFromRevision { rev, paths } => repo.get_from_revision(&rev, &paths),
         };
         let result = match result {
             Ok(r) => r,

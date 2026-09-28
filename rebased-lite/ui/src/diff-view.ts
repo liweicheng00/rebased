@@ -38,6 +38,10 @@ export class DiffView {
   onBlame: (path: string, rev: RevSpec) => Promise<Blame> = () => Promise.reject(new Error("no blame"));
   onBlameClick: (oid: string) => void = () => {};
   onHistory: (path: string) => void = () => {};
+  /** Local changes only: which changes go into the next commit. */
+  private selectable: { excluded: Set<string>; onChange: (excluded: Set<string>, content: string | null) => void } | null = null;
+  private hunkDeco: string[] = [];
+  private hunks: { id: string; glyphLine: number; change: monaco.editor.ILineChange }[] = [];
 
   constructor() {
     const btn = (label: string, title: string, fn: () => void) => {
@@ -102,7 +106,21 @@ export class DiffView {
       fontSize: 12,
     });
     this.applyOptions();
-    this.editor.onDidUpdateDiff(() => this.updateStats());
+    this.editor.onDidUpdateDiff(() => {
+      this.updateStats();
+      this.renderHunks();
+    });
+    this.editor.getModifiedEditor().onMouseDown((ev) => {
+      if (!this.selectable || ev.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) return;
+      const line = ev.target.position?.lineNumber;
+      const hunk = this.hunks.find((x) => x.glyphLine === line);
+      if (!hunk) return;
+      const ex = this.selectable.excluded;
+      if (ex.has(hunk.id)) ex.delete(hunk.id);
+      else ex.add(hunk.id);
+      this.renderHunks();
+      this.selectable.onChange(ex, ex.size ? this.partialContent() : null);
+    });
     for (const e of [this.editor.getModifiedEditor(), this.single]) {
       e.onMouseDown((ev) => {
         if (!this.annotateBox.checked || this.blameEditor !== e || ev.target.type !== monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS) return;
@@ -148,6 +166,76 @@ export class DiffView {
   }
 
   private blameOids: (string | null)[] = [];
+
+  /**
+   * Turns on the check boxes of the changes, for a local file. Unchecked changes stay out of the commit.
+   * Call it before show().
+   */
+  setSelectable(sel: { excluded: Set<string>; onChange: (excluded: Set<string>, content: string | null) => void } | null) {
+    this.selectable = sel;
+    this.editor.getModifiedEditor().updateOptions({ glyphMargin: !!sel });
+    this.renderHunks();
+  }
+
+  private renderHunks() {
+    const ed = this.editor.getModifiedEditor();
+    const changes = this.selectable && this.notice.hidden && this.singleHost.hidden ? this.editor.getLineChanges() ?? [] : [];
+    this.hunks = changes.map((c) => ({
+      id: `${c.originalStartLineNumber}:${c.originalEndLineNumber}:${c.modifiedStartLineNumber}:${c.modifiedEndLineNumber}`,
+      glyphLine: Math.max(1, c.modifiedStartLineNumber),
+      change: c,
+    }));
+    // Drop exclusions of changes that are gone.
+    if (this.selectable && changes.length) {
+      const ids = new Set(this.hunks.map((x) => x.id));
+      let dropped = false;
+      for (const id of [...this.selectable.excluded]) {
+        if (!ids.has(id)) {
+          this.selectable.excluded.delete(id);
+          dropped = true;
+        }
+      }
+      if (dropped) this.selectable.onChange(this.selectable.excluded, this.selectable.excluded.size ? this.partialContent() : null);
+    }
+    const deco: monaco.editor.IModelDeltaDecoration[] = [];
+    for (const x of this.hunks) {
+      const off = this.selectable!.excluded.has(x.id);
+      deco.push({
+        range: new monaco.Range(x.glyphLine, 1, x.glyphLine, 1),
+        options: {
+          glyphMarginClassName: off ? "hunk-off" : "hunk-on",
+          glyphMarginHoverMessage: { value: off ? "This change stays out of the commit. Click to include it." : "This change goes into the commit. Click to leave it out." },
+        },
+      });
+      if (off && x.change.modifiedEndLineNumber > 0) {
+        deco.push({
+          range: new monaco.Range(x.change.modifiedStartLineNumber, 1, x.change.modifiedEndLineNumber, 1),
+          options: { isWholeLine: true, className: "hunk-excluded" },
+        });
+      }
+    }
+    this.hunkDeco = ed.deltaDecorations(this.hunkDeco, deco);
+  }
+
+  /** The file content with only the checked changes applied to the left side. */
+  private partialContent(): string {
+    const model = this.editor.getModel()!;
+    const a = model.original.getLinesContent();
+    const b = model.modified.getLinesContent();
+    const out: string[] = [];
+    let pos = 1;
+    for (const x of this.hunks) {
+      const c = x.change;
+      const oStart = c.originalEndLineNumber === 0 ? c.originalStartLineNumber + 1 : c.originalStartLineNumber;
+      const oEnd = c.originalEndLineNumber === 0 ? c.originalStartLineNumber : c.originalEndLineNumber;
+      out.push(...a.slice(pos - 1, oStart - 1));
+      if (this.selectable!.excluded.has(x.id)) out.push(...a.slice(oStart - 1, oEnd));
+      else if (c.modifiedEndLineNumber > 0) out.push(...b.slice(c.modifiedStartLineNumber - 1, c.modifiedEndLineNumber));
+      pos = oEnd + 1;
+    }
+    out.push(...a.slice(pos - 1));
+    return out.join(model.modified.getEOL());
+  }
 
   /** Sets what Annotate and History use for the file on show. */
   setSource(source: { path: string; rev: RevSpec } | null) {
