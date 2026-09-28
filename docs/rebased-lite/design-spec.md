@@ -323,7 +323,7 @@ get_file_pair(left: Rev, right: Rev | "WORKTREE", change: Change): { left?: Blob
 3. **Graph 右側的 commit 表格欄位。** 預設建議 subject、author、date、refs。
 4. **大檔案門檻。** 6.3 節的 5 MB 是暫定值。
 
-## 11. 實作狀態（v0.1，2026-09-28）
+## 11. 實作狀態（v0.2，2026-09-28）
 
 程式碼在 `rebased-lite/`。
 
@@ -336,6 +336,7 @@ get_file_pair(left: Rev, right: Rev | "WORKTREE", change: Change): { left?: Blob
 | 6 Commit 比較 | 完成：單一 commit 對第一個 parent、兩個 commit、commit 對工作目錄、交換左右、雙欄與行內 diff。 |
 | 6.3 TextMate 上色 | **未完成。** 目前使用 Monaco 內建的 Monarch 語法。改用 TextMate 語法是下一步。 |
 | 8.1 演算法一致性 | 完成（見 4.1–4.8）。 |
+| 完整介面（v0.2） | 完成：歡迎畫面與最近的 repo、分支側欄（ahead/behind）、篩選列（文字、使用者、路徑、日期、分支）、篩選後以虛線連接、hash 跳轉、箭頭跳轉、commit 詳細資料、樹狀或平面的變更清單、diff 工具列、右鍵選單、快捷鍵、Refresh、Fetch、欄位與面板調整、深淺色主題、狀態列。 |
 | 8.3 資源量測 | 見下表。 |
 
 資源量測（Linux x86_64、Xvfb、WebKitGTK 軟體繪圖，git/git）：

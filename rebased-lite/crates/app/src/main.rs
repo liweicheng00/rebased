@@ -1,7 +1,7 @@
 // Hides the console window on Windows release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use rebased_service::{CompareArgs, DetailsArgs, FilePairArgs, OpenArgs, RowsArgs, Service};
+use rebased_service::{CompareArgs, FilePairArgs, FindArgs, OidArgs, OpenArgs, RowsArgs, Service, ViewArgs};
 use serde_json::Value;
 use tauri::State;
 
@@ -21,8 +21,33 @@ fn rows(state: State<'_, Service>, args: RowsArgs) -> Result<Value, String> {
 }
 
 #[tauri::command(async)]
-fn details(state: State<'_, Service>, args: DetailsArgs) -> Result<Value, String> {
-    json(state.details(args))
+fn set_view(state: State<'_, Service>, args: ViewArgs) -> Result<Value, String> {
+    json(state.set_view(args))
+}
+
+#[tauri::command(async)]
+fn refresh(state: State<'_, Service>) -> Result<Value, String> {
+    json(state.refresh())
+}
+
+#[tauri::command(async)]
+fn fetch(state: State<'_, Service>) -> Result<Value, String> {
+    json(state.fetch())
+}
+
+#[tauri::command(async)]
+fn refs(state: State<'_, Service>) -> Result<Value, String> {
+    json(state.refs())
+}
+
+#[tauri::command(async)]
+fn commit(state: State<'_, Service>, args: OidArgs) -> Result<Value, String> {
+    json(state.commit(args))
+}
+
+#[tauri::command(async)]
+fn find(state: State<'_, Service>, args: FindArgs) -> Result<Value, String> {
+    json(state.find(args))
 }
 
 #[tauri::command(async)]
@@ -43,8 +68,9 @@ fn initial_path() -> Option<String> {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(Service::default())
-        .invoke_handler(tauri::generate_handler![initial_path, open, rows, details, compare, file_pair])
+        .invoke_handler(tauri::generate_handler![initial_path, open, set_view, refresh, fetch, refs, rows, commit, find, compare, file_pair])
         .run(tauri::generate_context!())
         .expect("error while running Rebased Lite");
 }

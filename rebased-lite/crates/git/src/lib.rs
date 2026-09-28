@@ -310,6 +310,182 @@ impl Repo {
     }
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct BranchInfo {
+    pub name: String,
+    pub full: String,
+    /// local, remote or tag
+    pub kind: &'static str,
+    pub oid: String,
+    pub current: bool,
+    pub upstream: Option<String>,
+    pub ahead: u32,
+    pub behind: u32,
+    pub subject: String,
+}
+
+#[derive(Clone, Debug, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LogFilter {
+    /// Branch, remote or tag names. Empty means all refs.
+    pub branches: Vec<String>,
+    pub author: String,
+    pub text: String,
+    pub path: String,
+    /// Passed to `git log --since`, for example "2.weeks".
+    pub since: String,
+}
+
+impl LogFilter {
+    /// A filter that git must evaluate (the branch filter alone is computed from the graph).
+    pub fn needs_git(&self) -> bool {
+        !(self.author.trim().is_empty() && self.text.trim().is_empty() && self.path.trim().is_empty() && self.since.trim().is_empty())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.branches.is_empty() && !self.needs_git()
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct CommitFull {
+    pub oid: String,
+    pub parents: Vec<String>,
+    pub subject: String,
+    pub body: String,
+    pub author: String,
+    pub author_email: String,
+    pub author_time: i64,
+    pub committer: String,
+    pub committer_email: String,
+    pub commit_time: i64,
+}
+
+impl Repo {
+    pub fn list_refs(&self) -> Result<Vec<BranchInfo>> {
+        let raw = self.git(&[
+            "for-each-ref",
+            "--format=%(refname)%00%(objectname)%00%(*objectname)%00%(HEAD)%00%(upstream:short)%00%(upstream:track,nobracket)%00%(contents:subject)",
+            "refs/heads",
+            "refs/remotes",
+            "refs/tags",
+        ])?;
+        let mut out = Vec::new();
+        for line in String::from_utf8_lossy(&raw).lines() {
+            let f: Vec<&str> = line.split('\0').collect();
+            if f.len() < 7 || (f[0].starts_with("refs/remotes/") && f[0].ends_with("/HEAD")) {
+                continue;
+            }
+            let (kind, name) = if let Some(n) = f[0].strip_prefix("refs/heads/") {
+                ("local", n)
+            } else if let Some(n) = f[0].strip_prefix("refs/remotes/") {
+                ("remote", n)
+            } else {
+                ("tag", f[0].trim_start_matches("refs/tags/"))
+            };
+            let (mut ahead, mut behind) = (0, 0);
+            for part in f[5].split(", ") {
+                if let Some(n) = part.strip_prefix("ahead ") {
+                    ahead = n.parse().unwrap_or(0);
+                } else if let Some(n) = part.strip_prefix("behind ") {
+                    behind = n.parse().unwrap_or(0);
+                }
+            }
+            out.push(BranchInfo {
+                name: name.to_string(),
+                full: f[0].to_string(),
+                kind,
+                oid: if f[2].is_empty() { f[1] } else { f[2] }.to_string(),
+                current: f[3] == "*",
+                upstream: (!f[4].is_empty()).then(|| f[4].to_string()),
+                ahead,
+                behind,
+                subject: f[6].to_string(),
+            });
+        }
+        Ok(out)
+    }
+
+    /// Commits that match the git-side parts of `filter`, over `revs` (all refs when empty).
+    pub fn matching_commits(&self, filter: &LogFilter, revs: &[String]) -> Result<std::collections::HashSet<[u8; 20]>> {
+        let mut args: Vec<String> = vec!["log".into(), "--format=%H".into(), "--regexp-ignore-case".into()];
+        if revs.is_empty() {
+            args.extend(["--branches", "--remotes", "--tags"].map(String::from));
+            if self.git(&["rev-parse", "-q", "--verify", "HEAD"]).is_ok() {
+                args.push("HEAD".into());
+            }
+        } else {
+            args.extend(revs.iter().cloned());
+        }
+        if !filter.author.trim().is_empty() {
+            args.push(format!("--author={}", filter.author.trim()));
+        }
+        if !filter.text.trim().is_empty() {
+            args.push("--fixed-strings".into());
+            args.push(format!("--grep={}", filter.text.trim()));
+        }
+        if !filter.since.trim().is_empty() {
+            args.push(format!("--since={}", filter.since.trim()));
+        }
+        args.push("--".into());
+        if !filter.path.trim().is_empty() {
+            args.push(filter.path.trim().to_string());
+        }
+        let argv: Vec<&str> = args.iter().map(String::as_str).collect();
+        let raw = self.git(&argv)?;
+        Ok(String::from_utf8_lossy(&raw).lines().filter_map(unhex).collect())
+    }
+
+    pub fn commit_full(&self, oid: &str) -> Result<CommitFull> {
+        let raw = self.git(&["show", "-s", "-z", "--format=%H%x00%P%x00%s%x00%an%x00%ae%x00%at%x00%cn%x00%ce%x00%ct%x00%b", oid])?;
+        let text = String::from_utf8_lossy(&raw);
+        let f: Vec<&str> = text.splitn(10, '\0').collect();
+        if f.len() < 10 {
+            return Err(GitError("unexpected git show output".into()));
+        }
+        Ok(CommitFull {
+            oid: f[0].to_string(),
+            parents: f[1].split_whitespace().map(String::from).collect(),
+            subject: f[2].to_string(),
+            author: f[3].to_string(),
+            author_email: f[4].to_string(),
+            author_time: f[5].parse().unwrap_or(0),
+            committer: f[6].to_string(),
+            committer_email: f[7].to_string(),
+            commit_time: f[8].parse().unwrap_or(0),
+            body: f[9].trim_end_matches('\0').trim_end().to_string(),
+        })
+    }
+
+    /// Resolves a hash prefix, ref name or revision expression to a commit oid.
+    pub fn resolve(&self, query: &str) -> Option<String> {
+        let q = query.trim();
+        if q.is_empty() || q.starts_with('-') {
+            return None;
+        }
+        let raw = self.git(&["rev-parse", "--verify", "--quiet", "--end-of-options", &format!("{q}^{{commit}}")]).ok()?;
+        let s = String::from_utf8_lossy(&raw).trim().to_string();
+        (!s.is_empty()).then_some(s)
+    }
+
+    /// Fetches all remotes. It does not change local branches or the working tree.
+    pub fn fetch(&self) -> Result<String> {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(&self.root)
+            .args(["fetch", "--all", "--prune"])
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .output()
+            .map_err(|e| GitError(format!("cannot run git: {e}")))?;
+        let msg = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        if out.status.success() {
+            Ok(msg)
+        } else {
+            Err(GitError(msg))
+        }
+    }
+}
+
 fn ref_info(full: &str, head: Option<&str>) -> RefInfo {
     if let Some(n) = full.strip_prefix("refs/heads/") {
         let kind = if Some(full) == head {

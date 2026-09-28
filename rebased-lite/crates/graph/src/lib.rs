@@ -4,6 +4,7 @@
 //! so the graph looks the same as in Rebased. See `docs/rebased-lite/design-spec.md`, chapter 4.
 
 pub mod bek;
+pub mod filter;
 pub mod layout;
 pub mod linear;
 pub mod print;
@@ -58,6 +59,8 @@ pub struct Graph {
     /// Color key of the first ref of each head node (name hash), if the head has a ref.
     head_ref_color: std::collections::HashMap<usize, i32>,
     limits: EdgeLimits,
+    /// Edges (child node, parent node) drawn dashed: they skip hidden commits in a filtered view.
+    dotted: std::collections::HashSet<(usize, usize)>,
 }
 
 /// Same as Java `String.hashCode`, so branch colors match Rebased.
@@ -119,6 +122,27 @@ impl Graph {
             sort: Arc::new(sort),
             head_ref_color,
             limits: EdgeLimits::new(options.show_long_edges),
+            dotted: Default::default(),
+        }
+    }
+
+    /// Marks edges (child node, parent node) as dotted.
+    pub fn set_dotted(&mut self, edges: impl IntoIterator<Item = (usize, usize)>) {
+        self.dotted = edges.into_iter().collect();
+    }
+
+    pub fn permanent(&self) -> &PermanentLinearGraph {
+        &self.permanent
+    }
+
+    /// Whether the edge between two visible rows is dashed.
+    pub fn is_edge_dashed(&self, edge: &linear::Edge) -> bool {
+        if Self::is_dashed(edge.ty) {
+            return true;
+        }
+        match edge.as_normal() {
+            Some((up, down)) if !self.dotted.is_empty() => self.dotted.contains(&(self.node_at_row(up), self.node_at_row(down))),
+            _ => false,
         }
     }
 

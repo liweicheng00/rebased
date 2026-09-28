@@ -1,16 +1,21 @@
-// Virtualized commit log: a graph column painted per row, then refs, subject, author and date.
+// Virtualized commit log: a header, then one row per commit with the graph, refs, subject, author, date and hash.
 
 import { api, type Row } from "./api";
+import { dragResize, formatDate, h } from "./dom";
 import { ELEMENT_WIDTH, ROW_HEIGHT, maxPosition, paintRow } from "./graph-paint";
+import { save, settings } from "./settings";
 
 const CHUNK = 200;
-const OVERSCAN = 50;
+const OVERSCAN = 40;
 const MAX_GRAPH_LANES = 40;
 
 export class LogView {
   readonly el: HTMLElement;
+  private header: HTMLElement;
+  private scroller: HTMLElement;
   private spacer: HTMLElement;
   private body: HTMLElement;
+  private empty: HTMLElement;
   private rowCount = 0;
   private chunks = new Map<number, Row[] | Promise<Row[]>>();
   private generation = 0;
@@ -19,33 +24,78 @@ export class LogView {
   private rendered = new Map<number, { div: HTMLElement; selected: boolean }>();
   /** Selected rows in click order. */
   selection: number[] = [];
+  private anchor = -1;
   onSelectionChange: (rows: Row[]) => void = () => {};
+  onContextMenu: (row: Row, e: MouseEvent) => void = () => {};
+  onRowsLoaded: (rows: Row[]) => void = () => {};
 
   constructor() {
-    this.el = document.createElement("div");
-    this.el.className = "log";
-    this.el.tabIndex = 0;
-    this.spacer = document.createElement("div");
-    this.spacer.className = "log-spacer";
-    this.body = document.createElement("div");
-    this.body.className = "log-body";
-    this.spacer.append(this.body);
-    this.el.append(this.spacer);
-    this.el.addEventListener("scroll", () => this.render());
-    new ResizeObserver(() => this.render()).observe(this.el);
-    this.el.addEventListener("keydown", (e) => this.onKey(e));
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.render());
+    this.header = h("div", { class: "log-header" });
+    this.scroller = h("div", { class: "log-scroll", tabIndex: 0 });
+    this.body = h("div", { class: "log-body" });
+    this.spacer = h("div", { class: "log-spacer" }, this.body);
+    this.empty = h("div", { class: "log-empty", hidden: true }, "No commits match the filter.");
+    this.scroller.append(this.spacer);
+    this.el = h("div", { class: "log" }, this.header, this.scroller, this.empty);
+    this.scroller.addEventListener("scroll", () => this.render());
+    new ResizeObserver(() => this.render()).observe(this.scroller);
+    this.scroller.addEventListener("keydown", (e) => this.onKey(e));
+    this.buildHeader();
   }
 
-  reset(rowCount: number, recommendedWidth: number) {
+  focus() {
+    this.scroller.focus();
+  }
+
+  buildHeader() {
+    const col = (cls: string, label: string, key?: "authorWidth" | "dateWidth") => {
+      const c = h("div", { class: `hcol ${cls}` }, label);
+      if (key) {
+        c.style.flexBasis = `${settings[key]}px`;
+        const grip = h("div", { class: "hgrip" });
+        let start = 0;
+        dragResize(grip, "x", () => (start = settings[key]), (d) => {
+          settings[key] = Math.max(60, Math.min(400, start - d));
+          this.applyColumnWidths();
+        }, save);
+        c.prepend(grip);
+      }
+      return c;
+    };
+    this.header.replaceChildren(
+      col("subject", "Subject"),
+      settings.showAuthor ? col("author", "Author", "authorWidth") : "",
+      settings.showDate ? col("date", "Date", "dateWidth") : "",
+      settings.showHash ? col("hash", "Hash") : "",
+    );
+    this.applyColumnWidths();
+    this.paintKey = "";
+    this.render();
+  }
+
+  private applyColumnWidths() {
+    this.el.style.setProperty("--author-w", `${settings.authorWidth}px`);
+    this.el.style.setProperty("--date-w", `${settings.dateWidth}px`);
+    this.header.querySelector<HTMLElement>(".author")?.style.setProperty("flex-basis", `${settings.authorWidth}px`);
+    this.header.querySelector<HTMLElement>(".date")?.style.setProperty("flex-basis", `${settings.dateWidth}px`);
+  }
+
+  reset(rowCount: number, recommendedWidth: number, keepScroll = false) {
     this.generation++;
     this.rowCount = rowCount;
     this.chunks.clear();
     this.selection = [];
+    this.anchor = -1;
     this.graphLanes = Math.max(1, Math.min(recommendedWidth, MAX_GRAPH_LANES));
     this.spacer.style.height = `${rowCount * ROW_HEIGHT}px`;
-    this.el.scrollTop = 0;
+    this.empty.hidden = rowCount > 0;
+    if (!keepScroll) this.scroller.scrollTop = 0;
+    this.paintKey = "";
     this.render();
+  }
+
+  get count() {
+    return this.rowCount;
   }
 
   private chunk(index: number): Row[] | null {
@@ -56,6 +106,7 @@ export class LogView {
       const p = api.rows(index * CHUNK, (index + 1) * CHUNK).then((rows) => {
         if (gen !== this.generation) return rows;
         this.chunks.set(index, rows);
+        this.onRowsLoaded(rows);
         if (this.chunks.size > 60) this.evict(index);
         this.render();
         return rows;
@@ -66,14 +117,20 @@ export class LogView {
   }
 
   private evict(keep: number) {
-    for (const k of [...this.chunks.keys()]) {
-      if (Math.abs(k - keep) > 20) this.chunks.delete(k);
-    }
+    for (const k of [...this.chunks.keys()]) if (Math.abs(k - keep) > 20) this.chunks.delete(k);
   }
 
   row(index: number): Row | null {
     const c = this.chunk(Math.floor(index / CHUNK));
-    return c ? c[index % CHUNK] ?? null : null;
+    return c ? (c[index % CHUNK] ?? null) : null;
+  }
+
+  /** Loads a row even when it is off screen. */
+  async rowAsync(index: number): Promise<Row | null> {
+    const i = Math.floor(index / CHUNK);
+    this.chunk(i);
+    const c = await this.chunks.get(i);
+    return c ? (c[index % CHUNK] ?? null) : null;
   }
 
   private foreground(): string {
@@ -81,8 +138,8 @@ export class LogView {
   }
 
   render() {
-    const top = this.el.scrollTop;
-    const height = this.el.clientHeight;
+    const top = this.scroller.scrollTop;
+    const height = this.scroller.clientHeight;
     const start = Math.max(0, Math.floor(top / ROW_HEIGHT) - OVERSCAN);
     const end = Math.min(this.rowCount, Math.ceil((top + height) / ROW_HEIGHT) + OVERSCAN);
     const rows: Row[] = [];
@@ -94,9 +151,8 @@ export class LogView {
     for (const r of rows) lanes = Math.max(lanes, Math.min(maxPosition(r.elements) + 1, MAX_GRAPH_LANES));
     const fg = this.foreground();
     const dpr = window.devicePixelRatio || 1;
-    const key = `${lanes}|${fg}|${dpr}|${this.generation}`;
+    const key = `${lanes}|${fg}|${dpr}|${this.generation}|${settings.showAuthor}${settings.showDate}${settings.showHash}`;
     if (key !== this.paintKey) {
-      // Graph width, colors or scale changed: rebuild every row.
       this.paintKey = key;
       this.graphLanes = lanes;
       this.rendered.clear();
@@ -123,40 +179,62 @@ export class LogView {
   }
 
   private buildRow(r: Row, graphWidth: number, fg: string, dpr: number, selected: boolean): HTMLElement {
-    const div = document.createElement("div");
-    div.className = "log-row" + (selected ? " selected" : "");
-    div.style.top = `${r.row * ROW_HEIGHT}px`;
-    div.dataset.row = String(r.row);
-    const canvas = document.createElement("canvas");
-    canvas.width = graphWidth * dpr;
-    canvas.height = ROW_HEIGHT * dpr;
+    const canvas = h("canvas", { width: graphWidth * dpr, height: ROW_HEIGHT * dpr });
     canvas.style.width = `${graphWidth}px`;
     canvas.style.height = `${ROW_HEIGHT}px`;
     const g = canvas.getContext("2d")!;
     g.scale(dpr, dpr);
     paintRow(g, r.elements, fg, selected);
-    const subject = document.createElement("span");
-    subject.className = "subject";
-    for (const ref of r.refs) {
-      const label = document.createElement("span");
-      label.className = `ref ref-${ref.kind}`;
-      label.textContent = ref.name;
-      subject.append(label);
+    const arrows = r.elements.filter((e) => e.j !== undefined);
+    if (arrows.length) {
+      canvas.addEventListener("mousedown", (e) => {
+        const lane = Math.floor(e.offsetX / ELEMENT_WIDTH);
+        const hit = arrows.find((a) => a.p === lane || a.o === lane);
+        if (hit && hit.j !== undefined) {
+          e.stopPropagation();
+          this.jumpTo(hit.j, true);
+        }
+      });
+      canvas.title = "Click an arrow to go to the other end of the edge";
     }
-    subject.append(document.createTextNode(r.subject));
-    subject.title = r.subject;
-    const author = document.createElement("span");
-    author.className = "author";
-    author.textContent = r.author;
-    const date = document.createElement("span");
-    date.className = "date";
-    date.textContent = r.authorTime ? formatDate(r.authorTime) : "";
-    const hash = document.createElement("span");
-    hash.className = "hash";
-    hash.textContent = r.oid.slice(0, 8);
-    div.append(canvas, subject, author, date, hash);
-    div.addEventListener("mousedown", (e) => this.onClick(r.row, e));
+    const subject = h("span", { class: "subject", title: r.subject });
+    for (const ref of r.refs) subject.append(h("span", { class: `ref ref-${ref.kind}`, title: ref.name }, ref.name));
+    subject.append(h("span", { class: "subject-text" }, r.subject));
+    const div = h(
+      "div",
+      { class: "log-row" + (selected ? " selected" : "") + (r.isHead ? " head" : ""), "data-row": r.row },
+      canvas,
+      subject,
+      settings.showAuthor ? h("span", { class: "author", title: `${r.author} <${r.authorEmail}>` }, r.author) : "",
+      settings.showDate ? h("span", { class: "date" }, formatDate(r.authorTime)) : "",
+      settings.showHash ? h("span", { class: "hash" }, r.oid.slice(0, 8)) : "",
+    );
+    div.style.top = `${r.row * ROW_HEIGHT}px`;
+    div.addEventListener("mousedown", (e) => e.button === 0 && this.onClick(r.row, e));
+    div.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      if (!this.selection.includes(r.row)) this.select([r.row]);
+      this.onContextMenu(r, e);
+    });
     return div;
+  }
+
+  select(rows: number[], anchor = rows[0] ?? -1) {
+    this.selection = rows;
+    this.anchor = anchor;
+    this.changed();
+  }
+
+  /** Scrolls to a row; with `select`, the row becomes the selection. */
+  jumpTo(row: number, select: boolean) {
+    if (row < 0 || row >= this.rowCount) return;
+    const y = row * ROW_HEIGHT;
+    const view = this.scroller.clientHeight;
+    if (y < this.scroller.scrollTop || y + ROW_HEIGHT > this.scroller.scrollTop + view) {
+      this.scroller.scrollTop = Math.max(0, y - view / 3);
+    }
+    if (select) this.select([row]);
+    this.focus();
   }
 
   private onClick(row: number, e: MouseEvent) {
@@ -164,37 +242,58 @@ export class LogView {
       const i = this.selection.indexOf(row);
       if (i >= 0) this.selection.splice(i, 1);
       else this.selection.push(row);
-    } else if (e.shiftKey && this.selection.length) {
-      const anchor = this.selection[0];
-      this.selection = [anchor, row];
+      this.anchor = row;
+    } else if (e.shiftKey && this.anchor >= 0) {
+      const [a, b] = [Math.min(this.anchor, row), Math.max(this.anchor, row)];
+      this.selection = Array.from({ length: b - a + 1 }, (_, i) => a + i);
     } else {
       this.selection = [row];
+      this.anchor = row;
     }
-    this.el.focus();
+    this.focus();
     this.changed();
   }
 
   private onKey(e: KeyboardEvent) {
-    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-    e.preventDefault();
+    const page = Math.max(1, Math.floor(this.scroller.clientHeight / ROW_HEIGHT) - 1);
     const cur = this.selection[this.selection.length - 1] ?? -1;
-    const next = Math.max(0, Math.min(this.rowCount - 1, cur + (e.key === "ArrowDown" ? 1 : -1)));
-    this.selection = [next];
+    const moves: Record<string, number> = {
+      ArrowDown: cur + 1,
+      ArrowUp: cur - 1,
+      PageDown: cur + page,
+      PageUp: cur - page,
+      Home: 0,
+      End: this.rowCount - 1,
+    };
+    if (!(e.key in moves) || this.rowCount === 0) return;
+    e.preventDefault();
+    const next = Math.max(0, Math.min(this.rowCount - 1, moves[e.key]));
+    if (e.shiftKey && this.anchor >= 0) {
+      const [a, b] = [Math.min(this.anchor, next), Math.max(this.anchor, next)];
+      this.selection = Array.from({ length: b - a + 1 }, (_, i) => a + i);
+      if (this.selection[this.selection.length - 1] !== next) this.selection.reverse();
+      this.changed();
+    } else {
+      this.anchor = next;
+      this.selection = [next];
+      this.changed();
+    }
     const y = next * ROW_HEIGHT;
-    if (y < this.el.scrollTop) this.el.scrollTop = y;
-    else if (y + ROW_HEIGHT > this.el.scrollTop + this.el.clientHeight) this.el.scrollTop = y + ROW_HEIGHT - this.el.clientHeight;
-    this.changed();
+    if (y < this.scroller.scrollTop) this.scroller.scrollTop = y;
+    else if (y + ROW_HEIGHT > this.scroller.scrollTop + this.scroller.clientHeight) {
+      this.scroller.scrollTop = y + ROW_HEIGHT - this.scroller.clientHeight;
+    }
   }
+
+  private selectionTimer = 0;
 
   private changed() {
     this.render();
-    const rows = this.selection.map((i) => this.row(i)).filter((r): r is Row => r !== null);
-    this.onSelectionChange(rows);
+    // Wait a moment so fast keyboard navigation does not start a compare for every row.
+    clearTimeout(this.selectionTimer);
+    this.selectionTimer = window.setTimeout(async () => {
+      const rows = await Promise.all([...this.selection].sort((a, b) => a - b).map((i) => this.rowAsync(i)));
+      this.onSelectionChange(rows.filter((r): r is Row => r !== null));
+    }, 60);
   }
-}
-
-function formatDate(seconds: number): string {
-  const d = new Date(seconds * 1000);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

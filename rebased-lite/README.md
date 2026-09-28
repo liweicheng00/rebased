@@ -7,12 +7,28 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 
 ## Features
 
-- The commit graph of all branches, remotes and tags, with virtual scrolling and no commit limit.
-- The IntelliJ graph rules: long-edge cuts with arrows, IntelliSort, and branch colors.
-- Select one commit to compare it with its first parent. Select two commits (Ctrl or Cmd click)
-  to compare them. The lower commit is the left side, as in IntelliJ.
-- Compare one commit with the working tree.
-- A Monaco diff, side by side or unified.
+- **Open**: a welcome screen, a native folder dialog, recent repositories, and `rebased-lite <path>` on the command line.
+- **Branches panel**: local branches with ahead and behind counts, remote branches by remote, and tags.
+  Click to go to the commit. Double-click, or use the filter button, to show only that branch.
+- **Commit graph**: all branches, remotes and tags, with virtual scrolling and no commit limit.
+  It uses the IntelliJ rules: long-edge cuts with arrows, IntelliSort, and branch colors.
+  Click an arrow to go to the other end of the edge.
+- **Filters**: text in the message, user, path, date and branch. A filtered graph joins the
+  visible commits with dashed edges. Type a hash and press Enter to go to a commit.
+- **Compare**: one commit against its parent, two commits (Ctrl or Cmd click; the lower commit
+  is the left side, as in IntelliJ), a commit against the working tree, or a branch against the
+  current branch.
+- **Changes panel**: a directory tree or a flat list, with added, modified, deleted, renamed and copied files.
+- **Commit details**: the full message, hash, author, committer, parents and refs.
+- **Diff**: Monaco, side by side or unified, previous and next change, previous and next file,
+  ignore whitespace, collapse unchanged regions, and single-side view for added or deleted files.
+- **Other**: context menus, Refresh, Fetch, column choice and resize, resizable panels,
+  light, dark or system theme, and a status bar.
+
+Keyboard: `Ctrl/Cmd+O` open, `Ctrl/Cmd+R` or `F5` refresh, `Ctrl/Cmd+F` filter, `Ctrl/Cmd+1` branches
+panel, arrow keys, Page Up, Page Down, Home and End in the log, `Shift` with arrows to select a range,
+`Ctrl/Cmd+C` copy the hash, `F7` and `Shift+F7` next and previous change, `Alt+Down` and `Alt+Up` next
+and previous file.
 
 ## Layout
 
@@ -52,6 +68,16 @@ npm --prefix ui run typecheck
 ```
 
 `cargo test -p rebased-graph` compares the graph output with the IntelliJ golden files.
+
+UI scenarios run in Chromium against the dev server:
+
+```sh
+ui/e2e/make-demo-repo.sh /tmp/demo
+node ui/e2e/demo-repo.mjs /tmp/demo /tmp/shots        # a small repository with every case
+node ui/e2e/large-repo.mjs /path/to/git.git /tmp/shots  # a large repository, for example git/git
+```
+
+Each scenario takes screenshots and fails when the page logs an error.
 
 ## License
 
