@@ -21,6 +21,7 @@ export class CommitPanel {
   private message: HTMLTextAreaElement;
   private amend: HTMLInputElement;
   private commitBtn: HTMLButtonElement;
+  private pushBtn: HTMLButtonElement;
   private summary: HTMLElement;
   private data: LocalChanges | null = null;
   private files: LocalFile[] = [];
@@ -40,7 +41,7 @@ export class CommitPanel {
   onListMenu: (list: ChangeListView, e: MouseEvent) => void = () => {};
   onUnversionedMenu: (e: MouseEvent) => void = () => {};
   onMove: (paths: string[], to: string) => void = () => {};
-  onCommit: (files: LocalFile[], message: string, amend: boolean, list: string | null) => void = () => {};
+  onCommit: (files: LocalFile[], message: string, amend: boolean, list: string | null, push: boolean) => void = () => {};
   onSaveMessage: (list: string, message: string) => void = () => {};
   onAmendToggle: (on: boolean) => Promise<string> = async () => "";
   onRefresh: () => void = () => {};
@@ -75,13 +76,18 @@ export class CommitPanel {
     this.message.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        this.commit();
+        this.commit(false);
+      } else if (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey) && e.altKey) {
+        e.preventDefault();
+        this.commit(true);
       }
     });
     this.amend = h("input", { type: "checkbox" });
     this.amend.addEventListener("change", () => void this.toggleAmend());
     this.commitBtn = h("button", { class: "primary commit-button", title: "Commit the checked files (Ctrl+Enter)" }, "Commit");
-    this.commitBtn.addEventListener("click", () => this.commit());
+    this.commitBtn.addEventListener("click", () => this.commit(false));
+    this.pushBtn = h("button", { class: "commit-push", title: "Commit and Push (Ctrl+Alt+K)" }, "and Push…");
+    this.pushBtn.addEventListener("click", () => this.commit(true));
     this.summary = h("span", { class: "commit-summary" });
     this.el = h(
       "section",
@@ -99,6 +105,7 @@ export class CommitPanel {
           this.summary,
           h("span", { class: "spacer" }),
           this.commitBtn,
+          this.pushBtn,
         ),
       ),
     );
@@ -248,6 +255,7 @@ export class CommitPanel {
     const multi = (this.data?.lists.length ?? 0) > 1;
     this.commitBtn.textContent = multi && name && n ? `${verb} ${ellipsis(name, 18)}` : verb;
     this.commitBtn.disabled = !this.data || (n === 0 && !this.amend.checked);
+    this.pushBtn.disabled = this.commitBtn.disabled;
   }
 
   private scheduleSave() {
@@ -277,10 +285,10 @@ export class CommitPanel {
     this.updateSummary();
   }
 
-  private commit() {
+  private commit(push: boolean) {
     if (this.commitBtn.disabled) return;
     const files = this.files.filter((f) => this.included.has(f.key));
-    this.onCommit(files, this.message.value, this.amend.checked, this.target);
+    this.onCommit(files, this.message.value, this.amend.checked, this.target, push);
   }
 
   /** Called by the owner after a successful commit. */

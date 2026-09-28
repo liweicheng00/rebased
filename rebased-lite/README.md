@@ -40,11 +40,18 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   The panel also has Amend, Rollback, Add to Git, delete of unversioned files, and Undo of the last
   commit (the changes become local changes again). The changelists of a worktree are stored in its
   git directory, in `rebased-lite/changelists.json`.
+- **Push and Update**: the push dialog lists the outgoing commits and lets you choose the remote,
+  the remote branch, force push with lease, tags, and the tracked branch. A new branch shows
+  "New". A rejected push offers Update. Update fetches the tracked branch and merges or rebases,
+  with the local changes stashed and restored. The Commit tab has "Commit and Push". The branch
+  menu pushes any local branch. Git never prompts, so a remote that needs a password must have a
+  credential helper or an SSH agent.
 - **Worktrees**: list, add (on a new or an existing branch), open, remove and prune.
 - **Other**: context menus, Refresh, Fetch, column choice and resize, resizable panels,
   light, dark or system theme, and a status bar.
 
-Keyboard: `Ctrl/Cmd+O` open, `Ctrl/Cmd+R` or `F5` refresh, `Ctrl/Cmd+F` filter, `Ctrl/Cmd+1` branches
+Keyboard: `Ctrl/Cmd+O` open, `Ctrl/Cmd+K` commit, `Ctrl/Cmd+Shift+K` push, `Ctrl/Cmd+T` update,
+`Ctrl/Cmd+Enter` commit from the message field, `Ctrl/Cmd+Alt+K` commit and push, `Ctrl/Cmd+R` or `F5` refresh, `Ctrl/Cmd+F` filter, `Ctrl/Cmd+1` branches
 panel, arrow keys, Page Up, Page Down, Home and End in the log, `Shift` with arrows to select a range,
 `Ctrl/Cmd+C` copy the hash, `F7` and `Shift+F7` next and previous change, `Alt+Down` and `Alt+Up` next
 and previous file.
@@ -98,6 +105,7 @@ node ui/e2e/collapse.mjs /path/to/git.git /tmp/shots    # collapse linear branch
 ui/e2e/make-demo-repo.sh /tmp/demo2
 node ui/e2e/write-ops.mjs /tmp/demo2 /tmp/shots         # write operations; it changes the repository
 node ui/e2e/changelists.mjs /tmp/demo3 /tmp/shots       # changelists; see the file for the setup
+node ui/e2e/push-update.mjs /tmp/demo4 /tmp/shots       # push, update, commit and push
 ```
 
 Each scenario takes screenshots and fails when the page logs an error.

@@ -325,11 +325,26 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .commit-bottom { display: flex; flex-direction: column; gap: 6px; padding: 6px; border-top: 1px solid var(--border); }
 .commit-message { resize: vertical; min-height: 64px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--fg); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
 .commit-message:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
-.commit-actions { display: flex; align-items: center; gap: 8px; }
+.commit-actions { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; }
+.commit-actions .spacer { flex: 1 0 0; }
 .commit-amend { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .commit-summary { color: var(--muted); font-size: 12px; white-space: nowrap; }
-.commit-button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; padding: 4px 14px; border-radius: 5px; border: 1px solid var(--accent); cursor: pointer; }
+.commit-button { flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; padding: 4px 14px; border-radius: 5px; border: 1px solid var(--accent); cursor: pointer; }
 .commit-button:disabled { opacity: 0.5; cursor: default; }
+
+/* push dialog */
+.push-route { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.push-remote { padding: 4px 6px; }
+.push-target { flex: 1; min-width: 160px; }
+.push-new { padding: 1px 6px; border-radius: 4px; background: var(--added); color: #fff; font-size: 11px; font-weight: 600; }
+.push-new[hidden] { display: none; }
+.push-commits { display: flex; flex-direction: column; max-height: 40vh; min-height: 60px; overflow: auto; border: 1px solid var(--border); border-radius: 5px; }
+.push-commit { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 3px 8px; border-bottom: 1px solid var(--border); }
+.push-commit:last-child { border-bottom: 0; }
+.push-commits > .muted { padding: 10px; }
+.push-options { display: flex; flex-direction: column; gap: 4px; }
+.commit-push { flex: 0 0 auto; padding: 4px 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--fg); cursor: pointer; white-space: nowrap; }
+.commit-push:disabled { opacity: 0.5; cursor: default; }
 
 /* welcome */
 .welcome { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 16px; }
@@ -355,3 +370,5 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
   .filter-author, .filter-path { width: 110px; }
   .diff-sides { display: none; }
 }
+
+.statusbar > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

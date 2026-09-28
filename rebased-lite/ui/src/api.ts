@@ -191,7 +191,27 @@ export type Op =
   | { op: "commit"; paths: string[]; unversioned: string[]; message: string; amend: boolean }
   | { op: "rollback"; paths: string[] }
   | { op: "addFiles"; paths: string[] }
-  | { op: "deleteUnversioned"; paths: string[] };
+  | { op: "deleteUnversioned"; paths: string[] }
+  | { op: "push"; branch: string; remote: string; remoteBranch: string; force: boolean; setUpstream: boolean; tags: boolean }
+  | { op: "update"; mode: "merge" | "rebase" };
+
+export interface OutgoingCommit {
+  oid: string;
+  subject: string;
+  author: string;
+  time: number;
+}
+
+export interface PushInfo {
+  branch: string;
+  remotes: string[];
+  remote: string | null;
+  remoteBranch: string;
+  upstream: string | null;
+  newBranch: boolean;
+  outgoing: OutgoingCommit[];
+  behind: number;
+}
 
 export interface ChangeListView {
   id: string;
@@ -235,6 +255,7 @@ export const api = {
   localChanges: () => call<LocalChanges>("local_changes"),
   changeListOp: (op: ChangeListOp) => call<LocalChanges>("changelist_op", op),
   headMessage: () => call<string>("head_message"),
+  pushInfo: (branch?: string) => call<PushInfo>("push_info", { branch: branch ?? null }),
   compare: (left: RevSpec, right: RevSpec) => call<{ changes: Change[] }>("compare", { left, right }),
   filePair: (left: RevSpec, right: RevSpec, path: string, oldPath: string | null) =>
     call<{ left: FileContent; right: FileContent }>("file_pair", { left, right, path, oldPath }),

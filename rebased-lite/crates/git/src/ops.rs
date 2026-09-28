@@ -94,7 +94,7 @@ pub struct RangeCommit {
 }
 
 /// Rejects a name or revision that git could read as an option.
-fn safe(arg: &str) -> Result<&str> {
+pub(crate) fn safe(arg: &str) -> Result<&str> {
     if arg.is_empty() || arg.starts_with('-') {
         Err(GitError(format!("invalid name or revision: {arg:?}")))
     } else {
@@ -168,7 +168,7 @@ impl Repo {
             .unwrap_or_default()
     }
 
-    fn stopped(&self, what: &str, err: String) -> OpResult {
+    pub(crate) fn stopped(&self, what: &str, err: String) -> OpResult {
         let conflicts = self.conflicts();
         let message = if conflicts.is_empty() {
             err

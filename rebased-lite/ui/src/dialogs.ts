@@ -1,7 +1,7 @@
 // Modal dialogs: forms, confirmations, the reset dialog, the message editor and the interactive rebase editor.
 
-import type { PlanAction, PlanEntry, RewriteRange } from "./api";
-import { h } from "./dom";
+import type { PlanAction, PlanEntry, PushInfo, RewriteRange } from "./api";
+import { formatDate, h } from "./dom";
 
 interface DialogButton {
   label: string;
@@ -211,4 +211,89 @@ export async function interactiveRebaseDialog(range: RewriteRange): Promise<Plan
     }
     return plan.map((l) => ({ oid: l.oid, action: l.action, message: l.action === "reword" ? l.newMessage.trim() : undefined }));
   }
+}
+
+export interface PushChoice {
+  remote: string;
+  remoteBranch: string;
+  force: boolean;
+  setUpstream: boolean;
+  tags: boolean;
+}
+
+/** The push dialog: the outgoing commits, the target, and the push options, as in IntelliJ. */
+export async function pushDialog(info: PushInfo): Promise<PushChoice | null> {
+  const remote = h("select", { class: "dialog-input push-remote" }, ...info.remotes.map((r) => h("option", { value: r, selected: r === info.remote }, r)));
+  const target = h("input", { class: "dialog-input push-target", type: "text", value: info.remoteBranch, spellcheck: false });
+  const badge = h("span", { class: "push-new", hidden: !info.newBranch }, "New");
+  const commits = h(
+    "div",
+    { class: "push-commits" },
+    ...(info.outgoing.length
+      ? info.outgoing.map((c) =>
+          h(
+            "div",
+            { class: "push-commit", title: c.oid },
+            h("code", { class: "rebase-hash" }, c.oid.slice(0, 8)),
+            h("span", { class: "rebase-subject" }, c.subject),
+            h("span", { class: "rebase-author" }, c.author),
+            h("span", { class: "rebase-author" }, formatDate(c.time)),
+          ),
+        )
+      : [h("div", { class: "muted" }, info.newBranch ? "The branch has no commits that are not on the remote. The push creates the remote branch." : "There are no commits to push.")]),
+  );
+  const force = h("input", { type: "checkbox" });
+  const tags = h("input", { type: "checkbox" });
+  const upstream = h("input", { type: "checkbox", checked: !info.upstream });
+  const warn = h(
+    "p",
+    { class: "dialog-note danger-text", hidden: info.behind === 0 },
+    `${info.upstream ?? "The remote branch"} has ${info.behind} commit(s) that are not in ${info.branch}. Update the branch first, or force push.`,
+  );
+  const body = [
+    h(
+      "div",
+      { class: "push-route" },
+      h("b", {}, info.branch),
+      h("span", { class: "muted-inline" }, "→"),
+      remote,
+      h("span", { class: "muted-inline" }, ":"),
+      target,
+      badge,
+    ),
+    commits,
+    h("p", { class: "dialog-note" }, `${info.outgoing.length} commit(s) to push${info.outgoing.length >= 1000 ? " (the first 1000 are shown)" : ""}.`),
+    warn,
+    h(
+      "div",
+      { class: "push-options" },
+      h("label", { class: "dialog-check" }, force, "Force push (with lease: it stops when the remote has commits you did not fetch)"),
+      h("label", { class: "dialog-check" }, tags, "Push tags that point to the pushed commits"),
+      h("label", { class: "dialog-check" }, upstream, "Set the remote branch as the tracked branch"),
+    ),
+  ];
+  const r = await modal(`Push Commits to ${info.remote ?? "remote"}`, body, [{ label: "Push", value: "ok", primary: true }], true);
+  if (r !== "ok" || !remote.value || !target.value.trim()) return null;
+  return { remote: remote.value, remoteBranch: target.value.trim(), force: force.checked, setUpstream: upstream.checked, tags: tags.checked };
+}
+
+/** Asks how Update merges the incoming commits. */
+export async function updateDialog(branch: string, upstream: string | null, mode: "merge" | "rebase"): Promise<"merge" | "rebase" | null> {
+  let chosen = mode;
+  const modes: ["merge" | "rebase", string, string][] = [
+    ["merge", "Merge", "Merge the incoming commits into the local branch."],
+    ["rebase", "Rebase", "Rebase the local commits onto the incoming commits. The history stays linear."],
+  ];
+  const list = h(
+    "div",
+    { class: "dialog-radios" },
+    ...modes.map(([v, label, text]) => {
+      const input = h("input", { type: "radio", name: "update-mode", value: v, checked: v === chosen });
+      input.addEventListener("change", () => (chosen = v));
+      return h("label", { class: "dialog-radio" }, input, h("b", {}, label), h("span", {}, text));
+    }),
+  );
+  const note = h("p", { class: "dialog-note" }, `Git fetches ${upstream ?? "the tracked branch"} first. Local changes are stashed and restored.`);
+  const r = await modal(`Update ${branch}`, [list, note], [{ label: "Update", value: "ok", primary: true }]);
+  return r === "ok" ? chosen : null;
 }

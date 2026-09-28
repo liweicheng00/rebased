@@ -1,6 +1,7 @@
 //! App state and commands. Every command takes and returns JSON-serializable values.
 
 pub use rebased_git::changelist::{ChangeListOp, LocalChanges};
+use rebased_git::remote::{PushInfo, UpdateMode};
 use rebased_git::worktree::{RecentBranch, Worktree};
 use rebased_git::ops::{OpResult, PlanEntry, RepoState, ResetMode, RewriteRange};
 use rebased_git::{BranchInfo, Change, CommitDetails, CommitFull, FileContent, LogFilter, RefLabel, Repo, Rev, Topology};
@@ -220,6 +221,14 @@ pub enum Op {
     Rollback { paths: Vec<String> },
     AddFiles { paths: Vec<String> },
     DeleteUnversioned { paths: Vec<String> },
+    Push { branch: String, remote: String, remote_branch: String, #[serde(default)] force: bool, #[serde(default)] set_upstream: bool, #[serde(default)] tags: bool },
+    Update { mode: UpdateMode },
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+pub struct PushInfoArgs {
+    pub branch: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -475,6 +484,10 @@ impl Service {
         })
     }
 
+    pub fn push_info(&self, args: PushInfoArgs) -> Result<PushInfo> {
+        self.with(|s| s.repo.push_info(args.branch.as_deref()).map_err(err))
+    }
+
     pub fn head_message(&self) -> Result<String> {
         self.with(|s| s.repo.head_message().map_err(err))
     }
@@ -520,6 +533,10 @@ impl Service {
             Op::Rollback { paths } => repo.rollback(&paths),
             Op::AddFiles { paths } => repo.add_files(&paths),
             Op::DeleteUnversioned { paths } => repo.delete_unversioned(&paths),
+            Op::Push { branch, remote, remote_branch, force, set_upstream, tags } => {
+                repo.push(&branch, &remote, &remote_branch, force, set_upstream, tags)
+            }
+            Op::Update { mode } => repo.update(mode),
         };
         let result = match result {
             Ok(r) => r,
@@ -573,6 +590,7 @@ impl Service {
             "collapse" => serde_json::to_string(&self.collapse(parse(body)?)?),
             "local_changes" => serde_json::to_string(&self.local_changes()?),
             "changelist_op" => serde_json::to_string(&self.changelist_op(parse(body)?)?),
+            "push_info" => serde_json::to_string(&self.push_info(parse(body)?)?),
             "head_message" => serde_json::to_string(&self.head_message()?),
             "repo_state" => serde_json::to_string(&self.state()?),
             "worktrees" => serde_json::to_string(&self.worktrees()?),

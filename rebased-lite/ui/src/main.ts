@@ -18,7 +18,7 @@ import {
   type Worktree,
 } from "./api";
 import { showBranchSwitcher } from "./branch-switcher";
-import { confirmDialog, formDialog, interactiveRebaseDialog, messageDialog, resetDialog } from "./dialogs";
+import { confirmDialog, formDialog, interactiveRebaseDialog, messageDialog, pushDialog, resetDialog, updateDialog } from "./dialogs";
 import { toast } from "./notify";
 import { OpBanner } from "./op-banner";
 import { CommitPanel, type LocalFile } from "./commit-panel";
@@ -58,11 +58,13 @@ const authors = new Set<string>();
 const openBtn = h("button", { class: "tb-button", title: `Open a repository (${mod}O)` }, "📂 Open ▾");
 const refreshBtn = h("button", { class: "tb-button", title: `Reload commits and branches (${mod}R)`, disabled: true }, "⟳ Refresh");
 const fetchBtn = h("button", { class: "tb-button", title: "Fetch all remotes", disabled: true }, "⇣ Fetch");
+const updateBtn = h("button", { class: "tb-button", title: `Update the current branch: fetch, then merge or rebase (${mod}T)`, disabled: true }, "↧ Update");
+const pushBtn = h("button", { class: "tb-button", title: `Push the current branch (${mod}⇧K)`, disabled: true }, "↥ Push");
 const repoLabel = h("span", { class: "tb-repo" });
 const branchBtn = h("button", { class: "tb-button tb-branch-button", title: "Switch branch (recent branches first)", hidden: true }, "⑂ ▾");
 const viewBtn = h("button", { class: "tb-button", title: "View options" }, "View ▾");
 const themeBtn = h("button", { class: "tb-button", title: "Theme" }, "◐");
-const toolbar = h("header", { class: "toolbar" }, openBtn, refreshBtn, fetchBtn, repoLabel, branchBtn, h("span", { class: "spacer" }), viewBtn, themeBtn);
+const toolbar = h("header", { class: "toolbar" }, openBtn, refreshBtn, fetchBtn, updateBtn, pushBtn, repoLabel, branchBtn, h("span", { class: "spacer" }), viewBtn, themeBtn);
 
 const statusLeft = h("span", { class: "sb-left" });
 const statusMid = h("span", { class: "sb-mid" });
@@ -208,7 +210,7 @@ async function applyView(r: ViewResult, keepSelection: boolean) {
   const keepOids = keepSelection ? selected.map((s) => s.oid) : [];
   view = r;
   document.title = `${r.root.split(/[\\/]/).pop()} – Rebased Lite`;
-  refreshBtn.disabled = fetchBtn.disabled = false;
+  refreshBtn.disabled = fetchBtn.disabled = updateBtn.disabled = pushBtn.disabled = false;
   updateStatus();
   log.setCollapsed(r.collapsed);
   log.reset(r.rowCount, r.recommendedWidth);
@@ -437,7 +439,7 @@ log.onExpandEdge = (up, down) => void collapse("edge", undefined, up, down);
 // ---- write operations ----
 
 /** Runs a write operation, reloads the log, and reports the result. */
-async function runOp(op: Op, label: string): Promise<OpOutcome | undefined> {
+async function runOp(op: Op, label: string, errorAction?: { label: string; run: () => void }): Promise<OpOutcome | undefined> {
   const outcome = await task(label, () => api.runOp(op));
   if (!outcome) return undefined;
   await applyView(outcome.view, true);
@@ -455,7 +457,7 @@ async function runOp(op: Op, label: string): Promise<OpOutcome | undefined> {
     );
     statusRight.textContent = r.message;
   } else {
-    toast(r.message, "error");
+    toast(r.message, "error", errorAction);
     statusRight.textContent = r.message;
     statusRight.className = "sb-right error";
   }
@@ -739,7 +741,7 @@ async function deleteUnversioned(files: LocalFile[]) {
   await runOp({ op: "deleteUnversioned", paths }, "Deleting files");
 }
 
-async function commitFiles(files: LocalFile[], message: string, amend: boolean, list: string | null) {
+async function commitFiles(files: LocalFile[], message: string, amend: boolean, list: string | null, push = false) {
   if (!message.trim()) {
     toast("Enter a commit message.", "error");
     commitPanel.focusMessage();
@@ -757,6 +759,7 @@ async function commitFiles(files: LocalFile[], message: string, amend: boolean, 
     commitPanel.committed(list);
     if (list && !amend) await changeListOp({ op: "saveMessage", id: list, message: "" });
     if (out.head) void jumpToOid(out.head, true);
+    if (push) await pushBranch();
   }
 }
 
@@ -767,7 +770,50 @@ commitPanel.onNewChangeList = () => void newChangeList();
 commitPanel.onMove = (paths, to) => void changeListOp({ op: "move", paths, to });
 commitPanel.onSaveMessage = (id, message) => void api.changeListOp({ op: "saveMessage", id, message }).catch(() => {});
 commitPanel.onAmendToggle = () => api.headMessage().catch(() => "");
-commitPanel.onCommit = (files, message, amend, list) => void commitFiles(files, message, amend, list);
+commitPanel.onCommit = (files, message, amend, list, push) => void commitFiles(files, message, amend, list, push);
+
+// ---- push and update ----
+
+async function pushBranch(branch?: string) {
+  let info;
+  try {
+    info = await api.pushInfo(branch);
+  } catch (e) {
+    return toast(String(e).replace(/^Error: /, ""), "error");
+  }
+  if (!info.remote) return toast("The repository has no remote.", "error");
+  if (!info.outgoing.length && !info.newBranch) return toast(`Nothing to push: ${info.branch} is up to date with ${info.upstream}.`, "info");
+  const choice = await pushDialog(info);
+  if (!choice) return;
+  if (choice.force && !(await confirmDialog("Force push", `Force push ${info.branch} to ${choice.remote}/${choice.remoteBranch}? Commits on the remote branch that are not in ${info.branch} are removed from it.`, "Force Push", true))) return;
+  const branchName = info.branch;
+  const retry =
+    branchName === currentBranch() ? { label: "Update", run: () => void updateBranch().then((ok) => ok && void pushBranch(branchName)) } : undefined;
+  await runOp({ op: "push", branch: branchName, ...choice }, `Pushing ${branchName}`, retry);
+}
+
+/** Returns true when the update finished without a conflict. */
+async function updateBranch(): Promise<boolean> {
+  const branch = currentBranch();
+  if (!branch) {
+    toast("HEAD is detached. Check out a branch first.", "error");
+    return false;
+  }
+  const upstream = refs.find((b) => b.kind === "local" && b.name === branch)?.upstream ?? null;
+  if (!upstream) {
+    toast(`${branch} has no tracked branch. Push it with a tracked branch first.`, "error");
+    return false;
+  }
+  const mode = await updateDialog(branch, upstream, settings.updateMode);
+  if (!mode) return false;
+  settings.updateMode = mode;
+  save();
+  const out = await runOp({ op: "update", mode }, `Updating ${branch}`);
+  return !!out?.result.ok;
+}
+
+pushBtn.addEventListener("click", () => void pushBranch());
+updateBtn.addEventListener("click", () => void updateBranch());
 commitPanel.onFileMenu = (files, e) => {
   const tracked = files.filter((f) => f.list !== null);
   const untracked = files.filter((f) => f.list === null);
@@ -871,6 +917,9 @@ sidebar.onContextMenu = (b, e) => {
     { label: b.kind === "remote" ? "Check Out as Local Branch" : "Check Out", disabled: isCurrent, action: () => void checkoutBranch(b) },
     { label: "New Branch from Here…", action: () => void newBranch(b.oid, b.name) },
     { label: "New Worktree…", action: () => void addWorktree(b.kind === "local" ? b.name : b.oid, b.name) },
+    { separator: true },
+    { label: "Push…", disabled: b.kind !== "local", action: () => void pushBranch(b.name) },
+    { label: "Update", disabled: !isCurrent || !b.upstream, action: () => void updateBranch() },
     { separator: true },
     { label: `Merge into ${cur ?? "current"}`, disabled: isCurrent || !cur, action: () => void mergeIntoCurrent(b.name, b.name) },
     { label: `Rebase ${cur ?? "current"} onto ${b.name}…`, disabled: isCurrent || !cur, action: () => void rebaseCurrentOnto(b.name, b.name) },
@@ -1026,6 +1075,12 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     if (settings.showSidebar && settings.leftTab !== "branches") showLeftTab("branches");
     else toggleSidebar();
+  } else if (cmd && e.shiftKey && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    if (view) void pushBranch();
+  } else if (cmd && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "t") {
+    e.preventDefault();
+    if (view) void updateBranch();
   } else if (cmd && e.key.toLowerCase() === "k") {
     e.preventDefault();
     showLeftTab("commit");
