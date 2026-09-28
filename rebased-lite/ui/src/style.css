@@ -300,9 +300,9 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .leftpane > [hidden] { display: none !important; }
 .leftpane .sidebar > .pane-title { display: none; }
 .lp-tabs { display: flex; overflow: hidden; border-bottom: 1px solid var(--border); padding: 0 4px; gap: 2px; }
-.lp-tab { white-space: nowrap; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 6px 8px 5px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; }
+.lp-tab { font-size: 12px; white-space: nowrap; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 6px 6px 5px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; }
 .lp-tab:hover { color: var(--fg); }
-.lp-count { margin-left: 4px; padding: 0 5px; border-radius: 8px; background: var(--select); color: var(--fg); font-size: 11px; font-weight: 600; }
+.lp-count { margin-left: 3px; padding: 0 4px; border-radius: 8px; background: var(--select); color: var(--fg); font-size: 11px; font-weight: 600; }
 .lp-tab.on { color: var(--fg); border-bottom-color: var(--accent); }
 
 /* commit panel */

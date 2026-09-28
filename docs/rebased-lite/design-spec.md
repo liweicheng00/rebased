@@ -361,6 +361,15 @@ get_file_pair(left: Rev, right: Rev | "WORKTREE", change: Change): { left?: Blob
 | 開啟 diff 後的 RSS | 未量測 | 552 MB |
 | graph 計算（layout + IntelliSort） | 未量測 | 54 ms，Rust 核心峰值 38 MB |
 
+v0.4 的量測（同一台機器、同樣條件，git/git，開啟後 20 秒）：
+
+| 項目 | v0.2 的前端 | v0.4 的前端 |
+|---|---|---|
+| WebKit 網頁行程 | 603 MB | 598 MB |
+| 總計（app + WebKit 網頁 + WebKit 網路） | 未取得 app 行程的數字 | 865 MB（218 + 598 + 48） |
+
+新功能沒有增加記憶體：兩個前端在同樣條件下差不多。但這次的絕對數字比上表 v0.1 的數字高（網頁行程 598 MB 對 246 MB）。JavaScript heap 只有 16 MB，DOM 約 1,600 個節點，所以差異在 WebKit 本身（繪圖或編譯後的程式碼），不在前端資料。原因還沒有找到。Rebased 1.1.19 這次沒有重新量測，所以不能直接和上表的 1,250 MB 比較。
+
 macOS 的 WKWebView 數字會不同，還需要在 macOS 上量測。
 
 v0.4 沒有做的事：
