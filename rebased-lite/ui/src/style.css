@@ -292,6 +292,45 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .graph-tools .icon-button { padding: 0 4px; line-height: 16px; }
 .graph-tools .icon-button.active { color: var(--accent); }
 
+/* left pane: branches and commit tabs */
+.leftpane { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--panel); border-right: 1px solid var(--border); }
+.leftpane[hidden] { display: none; }
+.leftpane > .sidebar, .leftpane > .commit-panel { flex: 1; min-height: 0; border-right: 0; }
+.leftpane > [hidden] { display: none !important; }
+.leftpane .sidebar > .pane-title { display: none; }
+.lp-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 4px; gap: 2px; }
+.lp-tab { padding: 6px 10px 5px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; }
+.lp-tab:hover { color: var(--fg); }
+.lp-tab.on { color: var(--fg); border-bottom-color: var(--accent); }
+
+/* commit panel */
+.commit-panel { display: flex; flex-direction: column; min-height: 0; }
+.commit-toolbar { display: flex; align-items: center; gap: 2px; padding: 3px 6px; border-bottom: 1px solid var(--border); }
+.commit-tree { flex: 1; min-height: 60px; overflow: auto; outline: none; padding: 2px 0; }
+.cl-header { display: flex; align-items: center; gap: 5px; padding: 3px 6px; white-space: nowrap; cursor: default; user-select: none; }
+.cl-header:hover { background: var(--hover); }
+.cl-header.drop { background: var(--select); outline: 1px dashed var(--accent); }
+.cl-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 3em; }
+.cl-header.active-list .cl-name::after { content: " (active)"; font-weight: normal; color: var(--muted); }
+.cl-header.unversioned .cl-name { color: var(--muted); }
+.cl-count { color: var(--muted); font-size: 11px; flex: 0 0 auto; }
+.cl-comment { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 100 auto; font-style: italic; }
+.cl-check { margin: 0; flex: 0 0 auto; }
+.cl-file { padding-left: 24px; align-items: center; }
+.cl-file.selected { background: var(--select); }
+.commit-tree:focus .cl-file.active { background: var(--select-strong); }
+.status-\? , .status-text-\? { color: var(--muted) !important; }
+.status-U, .status-text-U { color: var(--deleted) !important; font-weight: 700; }
+.commit-empty { padding: 12px; }
+.commit-bottom { display: flex; flex-direction: column; gap: 6px; padding: 6px; border-top: 1px solid var(--border); }
+.commit-message { resize: vertical; min-height: 64px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--fg); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+.commit-message:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+.commit-actions { display: flex; align-items: center; gap: 8px; }
+.commit-amend { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.commit-summary { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.commit-button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; padding: 4px 14px; border-radius: 5px; border: 1px solid var(--accent); cursor: pointer; }
+.commit-button:disabled { opacity: 0.5; cursor: default; }
+
 /* welcome */
 .welcome { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 16px; }
 .welcome-card { width: min(560px, 100%); display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }

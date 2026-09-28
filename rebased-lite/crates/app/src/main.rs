@@ -76,6 +76,21 @@ fn recent_branches(state: State<'_, Service>) -> Result<Value, String> {
 }
 
 #[tauri::command(async)]
+fn local_changes(state: State<'_, Service>) -> Result<Value, String> {
+    json(state.local_changes())
+}
+
+#[tauri::command(async)]
+fn changelist_op(state: State<'_, Service>, args: rebased_service::ChangeListOp) -> Result<Value, String> {
+    json(state.changelist_op(args))
+}
+
+#[tauri::command(async)]
+fn head_message(state: State<'_, Service>) -> Result<Value, String> {
+    json(state.head_message())
+}
+
+#[tauri::command(async)]
 fn repo_state(state: State<'_, Service>) -> Result<Value, String> {
     json(state.state())
 }
@@ -100,7 +115,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Service::default())
-        .invoke_handler(tauri::generate_handler![initial_path, open, set_view, refresh, fetch, refs, rows, commit, find, compare, file_pair, collapse, repo_state, rewrite_range, run_op, worktrees, recent_branches])
+        .invoke_handler(tauri::generate_handler![initial_path, open, set_view, refresh, fetch, refs, rows, commit, find, compare, file_pair, collapse, repo_state, rewrite_range, run_op, worktrees, recent_branches, local_changes, changelist_op, head_message])
         .run(tauri::generate_context!())
         .expect("error while running Rebased Lite");
 }

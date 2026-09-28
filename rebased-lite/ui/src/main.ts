@@ -6,6 +6,7 @@ import {
   pickFolder,
   type BranchInfo,
   type Change,
+  type ChangeListView,
   type Op,
   type OpOutcome,
   type PlanEntry,
@@ -20,6 +21,7 @@ import { showBranchSwitcher } from "./branch-switcher";
 import { confirmDialog, formDialog, interactiveRebaseDialog, messageDialog, resetDialog } from "./dialogs";
 import { toast } from "./notify";
 import { OpBanner } from "./op-banner";
+import { CommitPanel, type LocalFile } from "./commit-panel";
 import { ChangesPanel } from "./changes-panel";
 import { menuBelow, showMenu, type MenuItem } from "./context-menu";
 import { DetailsPanel } from "./details-panel";
@@ -40,6 +42,7 @@ const filterBar = new FilterBar();
 const changes = new ChangesPanel();
 const details = new DetailsPanel();
 const diff = new DiffView();
+const commitPanel = new CommitPanel();
 
 let view: ViewResult | null = null;
 let refs: BranchInfo[] = [];
@@ -72,7 +75,24 @@ const diffGrip = h("div", { class: "hgrip-row" });
 const detailsGrip = h("div", { class: "hgrip-row" });
 const center = h("section", { class: "center" }, banner.el, filterBar.el, log.el);
 const right = h("section", { class: "right" }, changes.el, detailsGrip, details.el);
-const top = h("div", { class: "top" }, sidebar.el, sideGrip, center, rightGrip, right);
+const tabBranches = h("button", { class: "lp-tab", title: `Branches (${mod}1)` }, "Branches");
+const tabCommit = h("button", { class: "lp-tab", title: `Commit (${mod}K)` }, "Commit");
+const leftPane = h("aside", { class: "leftpane" }, h("div", { class: "lp-tabs" }, tabBranches, tabCommit), sidebar.el, commitPanel.el);
+function showLeftTab(tab: "branches" | "commit") {
+  settings.leftTab = tab;
+  save();
+  if (!settings.showSidebar) {
+    settings.showSidebar = true;
+    applyLayout();
+  }
+  tabBranches.classList.toggle("on", tab === "branches");
+  tabCommit.classList.toggle("on", tab === "commit");
+  sidebar.el.hidden = tab !== "branches";
+  commitPanel.el.hidden = tab !== "commit";
+}
+tabBranches.addEventListener("click", () => showLeftTab("branches"));
+tabCommit.addEventListener("click", () => showLeftTab("commit"));
+const top = h("div", { class: "top" }, leftPane, sideGrip, center, rightGrip, right);
 const workspace = h("main", { class: "workspace" }, top, diffGrip, diff.el);
 const welcome = h("main", { class: "welcome" });
 const app = document.getElementById("app")!;
@@ -80,7 +100,7 @@ app.append(toolbar, welcome, workspace, statusBar);
 
 function applyLayout() {
   top.style.gridTemplateColumns = `${settings.showSidebar ? `${settings.sidebarWidth}px 4px` : "0 0"} minmax(300px, 1fr) 4px ${settings.rightWidth}px`;
-  sidebar.el.hidden = !settings.showSidebar;
+  leftPane.hidden = !settings.showSidebar;
   sideGrip.hidden = !settings.showSidebar;
   workspace.style.gridTemplateRows = `${1 - settings.diffRatio}fr 5px ${settings.diffRatio}fr`;
   right.style.gridTemplateRows = `${settings.detailsRatio}fr 5px ${1 - settings.detailsRatio}fr`;
@@ -177,6 +197,7 @@ async function openRepo(path: string) {
   filterBar.set(emptyFilter(), false);
   addRecent(r.root);
   authors.clear();
+  commitPanel.clear();
   showWorkspace(true);
   await applyView(r, false);
   await loadRefs();
@@ -220,7 +241,31 @@ async function loadRefs() {
   banner.update(repoState);
   filterBar.branchNames = refs.filter((b) => b.kind !== "tag").map((b) => b.name);
   updateStatus();
+  await loadLocalChanges();
 }
+
+async function loadLocalChanges() {
+  try {
+    commitPanel.set(await api.localChanges());
+  } catch {
+    commitPanel.clear();
+  }
+  const n = commitPanel.changeCount;
+  tabCommit.textContent = n ? `Commit (${n})` : "Commit";
+}
+
+// Files change outside the app; reload the local changes when the window gets the focus.
+let focusTimer = 0;
+window.addEventListener("focus", () => {
+  if (!view || Date.now() - focusTimer < 1500) return;
+  focusTimer = Date.now();
+  void api.repoState().then((st) => {
+    repoState = st;
+    banner.update(st);
+    updateStatus();
+  }).catch(() => {});
+  void loadLocalChanges();
+});
 
 async function reloadView() {
   const r = await task("Updating the log", () => api.setView(viewSettings()));
@@ -278,6 +323,8 @@ let rightRev: RevSpec = "worktree";
 let changeList: Change[] = [];
 let active = -1;
 let request = 0;
+/** Which panel the diff shows a file of: the changes of the selected commits, or the local changes. */
+let diffSource: "log" | "local" = "log";
 
 function clearCompare() {
   request++;
@@ -333,6 +380,8 @@ async function openFile(i: number) {
 
 function showSelection(rows: Row[]) {
   selected = rows;
+  diffSource = "log";
+  commitPanel.setActiveFile(null);
   void details.show(rows);
   if (rows.length === 0) return clearCompare();
   if (rows.length === 1) {
@@ -358,8 +407,8 @@ changes.onSwap = () => {
   const label = (s: RevSpec) => (typeof s === "object" && "commit" in s ? short(s.commit) : "parent");
   void compare(r, l, `${label(r)} → ${label(l)}`, label(r), label(l));
 };
-diff.onNextFile = () => changes.move(1);
-diff.onPrevFile = () => changes.move(-1);
+diff.onNextFile = () => (diffSource === "local" ? commitPanel.move(1) : changes.move(1));
+diff.onPrevFile = () => (diffSource === "local" ? commitPanel.move(-1) : changes.move(-1));
 details.onJump = (oid) => void jumpToOid(oid, true);
 
 // ---- collapse ----
@@ -401,7 +450,7 @@ async function runOp(op: Op, label: string): Promise<OpOutcome | undefined> {
       r.message,
       "success",
       undoTo && head && undoTo !== head
-        ? { label: "Undo", run: () => void runOp({ op: "undo", to: undoTo, expectedHead: head }, "Undoing") }
+        ? { label: "Undo", run: () => void runOp({ op: "undo", to: undoTo, expectedHead: head, soft: r.undoSoft }, "Undoing") }
         : undefined,
     );
     statusRight.textContent = r.message;
@@ -604,6 +653,163 @@ branchBtn.addEventListener("click", () =>
     menu: (b, e) => sidebar.onContextMenu(b, e),
   }),
 );
+
+// ---- local changes and commit ----
+
+let localRequest = 0;
+async function showLocalDiff(f: LocalFile) {
+  const req = ++localRequest;
+  request++;
+  diffSource = "local";
+  const head = commitPanel.head;
+  const status = f.change.status === "?" ? "A" : f.change.status === "U" ? "M" : f.change.status;
+  const change = { ...f.change, status };
+  diff.setSides(head ? "HEAD" : "empty", "working tree");
+  try {
+    const pair = head
+      ? await api.filePair({ commit: head }, "worktree", change.path, change.old_path)
+      : { left: { text: null, binary: false, size: 0, missing: true }, right: (await api.filePair("worktree", "worktree", change.path, null)).right };
+    if (req !== localRequest || diffSource !== "local") return;
+    if (f.change.status === "?") pair.left = { text: null, binary: false, size: 0, missing: true };
+    diff.show(change, pair.left, pair.right);
+  } catch (e) {
+    if (req === localRequest) diff.message(String(e));
+  }
+}
+
+function localPaths(files: LocalFile[]) {
+  const paths: string[] = [];
+  for (const f of files) {
+    if (f.list === null) continue;
+    paths.push(f.change.path);
+    if (f.change.old_path) paths.push(f.change.old_path);
+  }
+  return paths;
+}
+
+async function changeListOp(op: Parameters<typeof api.changeListOp>[0]) {
+  try {
+    commitPanel.set(await api.changeListOp(op));
+  } catch (e) {
+    toast(String(e).replace(/^Error: /, ""), "error");
+  }
+}
+
+async function newChangeList(paths: string[] = []) {
+  const r = await formDialog("New Changelist", [
+    { key: "name", label: "Name", placeholder: "Feature work" },
+    { key: "comment", label: "Comment (the draft commit message)", type: "textarea" },
+    { key: "active", label: "Set active", type: "checkbox", value: paths.length === 0 },
+  ], "Create", paths.length ? `${paths.length} file(s) move to the new changelist.` : "New changes go to the active changelist.");
+  if (!r || !String(r.name).trim()) return;
+  await changeListOp({ op: "create", name: String(r.name), comment: String(r.comment), makeActive: !!r.active, paths });
+}
+
+async function editChangeList(l: ChangeListView) {
+  const r = await formDialog(`Edit Changelist ${l.name}`, [
+    { key: "name", label: "Name", value: l.name },
+    { key: "comment", label: "Comment (the draft commit message)", type: "textarea", value: l.comment },
+  ], "Save");
+  if (!r || !String(r.name).trim()) return;
+  await changeListOp({ op: "edit", id: l.id, name: String(r.name), comment: String(r.comment) });
+}
+
+async function removeChangeList(l: ChangeListView) {
+  if (commitPanel.lists.length === 1) return toast("The last changelist cannot be removed.", "error");
+  const to = commitPanel.lists.find((x) => x.active && x.id !== l.id)?.name ?? commitPanel.lists.find((x) => x.id !== l.id)?.name;
+  if (l.changes.length && !(await confirmDialog("Remove changelist", `Remove ${l.name}? Its ${l.changes.length} file(s) move to ${to}. The changes stay.`, "Remove"))) return;
+  await changeListOp({ op: "remove", id: l.id });
+}
+
+async function rollback(files: LocalFile[]) {
+  const tracked = files.filter((f) => f.list !== null);
+  if (!tracked.length) return;
+  const added = tracked.filter((f) => f.change.status === "A").length;
+  const text =
+    `Roll back ${tracked.length} file(s) to the HEAD version? The local changes are lost.` +
+    (added ? ` ${added} added file(s) are deleted from the disk.` : "");
+  if (!(await confirmDialog("Rollback", text, "Rollback", true))) return;
+  await runOp({ op: "rollback", paths: localPaths(tracked) }, "Rolling back");
+}
+
+async function deleteUnversioned(files: LocalFile[]) {
+  const paths = files.filter((f) => f.list === null).map((f) => f.change.path);
+  if (!paths.length) return;
+  if (!(await confirmDialog("Delete files", `Delete ${paths.length} unversioned file(s) from the disk? This cannot be undone.`, "Delete", true))) return;
+  await runOp({ op: "deleteUnversioned", paths }, "Deleting files");
+}
+
+async function commitFiles(files: LocalFile[], message: string, amend: boolean, list: string | null) {
+  if (!message.trim()) {
+    toast("Enter a commit message.", "error");
+    commitPanel.focusMessage();
+    return;
+  }
+  const conflicts = files.filter((f) => f.change.status === "U");
+  if (conflicts.length && !(await confirmDialog("Conflicts", `${conflicts.length} file(s) had conflicts. Commit them as they are in the working tree?`, "Commit"))) return;
+  if (amend && view?.headOid) {
+    const published = refs.some((b) => b.kind === "remote" && b.oid === view!.headOid);
+    if (published && !(await confirmDialog("Commit is pushed", "The last commit is on a remote branch already. After amend you must force-push. Continue?", "Amend", true))) return;
+  }
+  const unversioned = files.filter((f) => f.list === null).map((f) => f.change.path);
+  const out = await runOp({ op: "commit", paths: localPaths(files), unversioned, message, amend }, amend ? "Amending" : "Committing");
+  if (out?.result.ok) {
+    commitPanel.committed(list);
+    if (list && !amend) await changeListOp({ op: "saveMessage", id: list, message: "" });
+    if (out.head) void jumpToOid(out.head, true);
+  }
+}
+
+commitPanel.onOpen = (f) => void showLocalDiff(f);
+commitPanel.onRefresh = () => void loadLocalChanges();
+commitPanel.onRollback = (files) => void rollback(files);
+commitPanel.onNewChangeList = () => void newChangeList();
+commitPanel.onMove = (paths, to) => void changeListOp({ op: "move", paths, to });
+commitPanel.onSaveMessage = (id, message) => void api.changeListOp({ op: "saveMessage", id, message }).catch(() => {});
+commitPanel.onAmendToggle = () => api.headMessage().catch(() => "");
+commitPanel.onCommit = (files, message, amend, list) => void commitFiles(files, message, amend, list);
+commitPanel.onFileMenu = (files, e) => {
+  const tracked = files.filter((f) => f.list !== null);
+  const untracked = files.filter((f) => f.list === null);
+  const items: MenuItem[] = [
+    { label: "Show Diff", disabled: files.length !== 1, action: () => void showLocalDiff(files[0]) },
+    { label: "Rollback…", shortcut: `${mod}⌥Z`, disabled: !tracked.length, action: () => void rollback(tracked) },
+  ];
+  if (untracked.length) {
+    items.push(
+      { label: "Add to Git", action: () => void runOp({ op: "addFiles", paths: untracked.map((f) => f.change.path) }, "Adding files") },
+      { label: "Delete…", action: () => void deleteUnversioned(untracked) },
+    );
+  }
+  if (tracked.length) {
+    items.push({ separator: true }, { header: "Move to Changelist" });
+    const paths = tracked.map((f) => f.change.path);
+    const from = new Set(tracked.map((f) => f.list));
+    for (const l of commitPanel.lists) {
+      items.push({ label: l.name + (l.active ? " (active)" : ""), disabled: from.size === 1 && from.has(l.id), action: () => void changeListOp({ op: "move", paths, to: l.id }) });
+    }
+    items.push({ label: "New Changelist…", action: () => void newChangeList(paths) });
+  }
+  items.push({ separator: true }, { label: files.length > 1 ? "Copy Paths" : "Copy Path", action: () => void copyText(files.map((f) => f.change.path).join("\n")) });
+  showMenu(e.clientX, e.clientY, items);
+};
+commitPanel.onListMenu = (l, e) =>
+  showMenu(e.clientX, e.clientY, [
+    { label: "Commit Only This Changelist", disabled: !l.changes.length, action: () => { commitPanel.includeOnly(l.id); commitPanel.focusMessage(); } },
+    { label: "Set Active Changelist", disabled: l.active, action: () => void changeListOp({ op: "setActive", id: l.id }) },
+    { separator: true },
+    { label: "New Changelist…", action: () => void newChangeList() },
+    { label: "Edit Changelist…", action: () => void editChangeList(l) },
+    { label: "Remove Changelist…", disabled: commitPanel.lists.length === 1, action: () => void removeChangeList(l) },
+    { separator: true },
+    { label: "Rollback…", disabled: !l.changes.length, action: () => void rollback(l.changes.map((c) => ({ key: `f:${c.path}`, change: c, list: l.id }))) },
+  ]);
+commitPanel.onUnversionedMenu = (e) => {
+  showMenu(e.clientX, e.clientY, [
+    { label: "Add All to Git", action: () => void api.localChanges().then((lc) => runOp({ op: "addFiles", paths: lc.unversioned }, "Adding files")) },
+    { label: "Delete All…", action: () => void api.localChanges().then((lc) => deleteUnversioned(lc.unversioned.map((p) => ({ key: `u:${p}`, change: { status: "?", path: p, old_path: null }, list: null })))) },
+  ]);
+};
 
 // ---- menus ----
 
@@ -818,13 +1024,20 @@ window.addEventListener("keydown", (e) => {
     filterBar.text.select();
   } else if (cmd && e.key === "1") {
     e.preventDefault();
-    toggleSidebar();
+    if (settings.showSidebar && settings.leftTab !== "branches") showLeftTab("branches");
+    else toggleSidebar();
+  } else if (cmd && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    showLeftTab("commit");
+    commitPanel.focusMessage();
   } else if (e.key === "F7") {
     e.preventDefault();
     diff.goToDiff(e.shiftKey ? "previous" : "next");
   } else if (e.altKey && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
     e.preventDefault();
-    changes.move(e.key === "ArrowDown" ? 1 : -1);
+    const d = e.key === "ArrowDown" ? 1 : -1;
+    if (diffSource === "local") commitPanel.move(d);
+    else changes.move(d);
   } else if (cmd && e.key.toLowerCase() === "c" && !typing && target.closest(".log") && selected.length) {
     e.preventDefault();
     void copyText(selected.map((s) => s.oid).join(" "));
@@ -835,6 +1048,7 @@ window.addEventListener("keydown", (e) => {
 // ---- start ----
 
 applyLayout();
+showLeftTab(settings.leftTab);
 applyTheme();
 showWorkspace(false);
 const initial = new URLSearchParams(location.search).get("repo") ?? (await initialPath());

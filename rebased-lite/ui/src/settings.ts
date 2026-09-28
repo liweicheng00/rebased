@@ -11,6 +11,7 @@ export interface Settings {
   showDate: boolean;
   showHash: boolean;
   showSidebar: boolean;
+  leftTab: "branches" | "commit";
   changesAsTree: boolean;
   sideBySide: boolean;
   ignoreWhitespace: boolean;
@@ -33,6 +34,7 @@ const DEFAULTS: Settings = {
   showDate: true,
   showHash: true,
   showSidebar: true,
+  leftTab: "branches",
   changesAsTree: true,
   sideBySide: true,
   ignoreWhitespace: false,

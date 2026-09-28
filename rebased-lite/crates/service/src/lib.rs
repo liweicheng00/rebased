@@ -1,5 +1,6 @@
 //! App state and commands. Every command takes and returns JSON-serializable values.
 
+pub use rebased_git::changelist::{ChangeListOp, LocalChanges};
 use rebased_git::worktree::{RecentBranch, Worktree};
 use rebased_git::ops::{OpResult, PlanEntry, RepoState, ResetMode, RewriteRange};
 use rebased_git::{BranchInfo, Change, CommitDetails, CommitFull, FileContent, LogFilter, RefLabel, Repo, Rev, Topology};
@@ -211,10 +212,14 @@ pub enum Op {
     Abort,
     MarkResolved { paths: Vec<String> },
     Rewrite { base: String, plan: Vec<PlanEntry>, what: String },
-    Undo { to: String, expected_head: String },
+    Undo { to: String, expected_head: String, #[serde(default)] soft: bool },
     AddWorktree { path: String, branch: String, new_branch: bool, at: String },
     RemoveWorktree { path: String, force: bool },
     PruneWorktrees,
+    Commit { paths: Vec<String>, #[serde(default)] unversioned: Vec<String>, message: String, #[serde(default)] amend: bool },
+    Rollback { paths: Vec<String> },
+    AddFiles { paths: Vec<String> },
+    DeleteUnversioned { paths: Vec<String> },
 }
 
 #[derive(Serialize)]
@@ -458,6 +463,22 @@ impl Service {
         self.with(|s| s.repo.recent_branches(10).map_err(err))
     }
 
+    pub fn local_changes(&self) -> Result<LocalChanges> {
+        self.with(|s| s.repo.local_changes().map_err(err))
+    }
+
+    /// Changes the changelists and returns the new local changes.
+    pub fn changelist_op(&self, op: ChangeListOp) -> Result<LocalChanges> {
+        self.with(|s| {
+            s.repo.changelist_op(op).map_err(err)?;
+            s.repo.local_changes().map_err(err)
+        })
+    }
+
+    pub fn head_message(&self) -> Result<String> {
+        self.with(|s| s.repo.head_message().map_err(err))
+    }
+
     pub fn state(&self) -> Result<RepoState> {
         self.with(|s| s.repo.state().map_err(err))
     }
@@ -487,7 +508,7 @@ impl Service {
             Op::Abort => repo.continue_or_abort(true),
             Op::MarkResolved { paths } => repo.mark_resolved(&paths),
             Op::Rewrite { base, plan, what } => repo.rewrite(&base, &plan, &what),
-            Op::Undo { to, expected_head } => repo.undo(&to, &expected_head),
+            Op::Undo { to, expected_head, soft } => repo.undo(&to, &expected_head, soft),
             Op::AddWorktree { path, branch, new_branch, at } => {
                 repo.add_worktree(&path, &branch, new_branch, &at).map(|_| OpResult::ok_msg(format!("Added worktree {path}")))
             }
@@ -495,10 +516,14 @@ impl Service {
                 repo.remove_worktree(&path, force).map(|_| OpResult::ok_msg(format!("Removed worktree {path}")))
             }
             Op::PruneWorktrees => repo.prune_worktrees().map(|_| OpResult::ok_msg("Pruned stale worktrees")),
+            Op::Commit { paths, unversioned, message, amend } => repo.commit_paths(&paths, &unversioned, &message, amend),
+            Op::Rollback { paths } => repo.rollback(&paths),
+            Op::AddFiles { paths } => repo.add_files(&paths),
+            Op::DeleteUnversioned { paths } => repo.delete_unversioned(&paths),
         };
         let result = match result {
             Ok(r) => r,
-            Err(e) => OpResult { ok: false, message: e.to_string(), conflicts: Vec::new(), undo_to: None },
+            Err(e) => OpResult { ok: false, message: e.to_string(), conflicts: Vec::new(), undo_to: None, undo_soft: false },
         };
         let view = self.refresh()?;
         let head = view.head_oid.clone();
@@ -546,6 +571,9 @@ impl Service {
             "commit" => serde_json::to_string(&self.commit(parse(body)?)?),
             "find" => serde_json::to_string(&self.find(parse(body)?)?),
             "collapse" => serde_json::to_string(&self.collapse(parse(body)?)?),
+            "local_changes" => serde_json::to_string(&self.local_changes()?),
+            "changelist_op" => serde_json::to_string(&self.changelist_op(parse(body)?)?),
+            "head_message" => serde_json::to_string(&self.head_message()?),
             "repo_state" => serde_json::to_string(&self.state()?),
             "worktrees" => serde_json::to_string(&self.worktrees()?),
             "recent_branches" => serde_json::to_string(&self.recent_branches()?),

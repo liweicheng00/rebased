@@ -33,6 +33,13 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   a conflict stops them before a file or a ref changes. A notification after each operation has
   an Undo button. A banner shows a merge, rebase, cherry-pick or revert in progress, with its
   conflicting files and the Mark Resolved, Abort and Continue actions.
+- **Changelists and commit**: the Commit tab (`Ctrl/Cmd+K`) groups the local changes into named
+  changelists, as in IntelliJ. New changes go to the active changelist. Move files with the context
+  menu or with drag and drop. The checked files go into the commit; the other local changes and the
+  staged content of other files stay as they are. Each changelist keeps its draft commit message.
+  The panel also has Amend, Rollback, Add to Git, delete of unversioned files, and Undo of the last
+  commit (the changes become local changes again). The changelists of a worktree are stored in its
+  git directory, in `rebased-lite/changelists.json`.
 - **Worktrees**: list, add (on a new or an existing branch), open, remove and prune.
 - **Other**: context menus, Refresh, Fetch, column choice and resize, resizable panels,
   light, dark or system theme, and a status bar.
@@ -90,6 +97,7 @@ node ui/e2e/large-repo.mjs /path/to/git.git /tmp/shots  # a large repository, fo
 node ui/e2e/collapse.mjs /path/to/git.git /tmp/shots    # collapse linear branches in a large repository
 ui/e2e/make-demo-repo.sh /tmp/demo2
 node ui/e2e/write-ops.mjs /tmp/demo2 /tmp/shots         # write operations; it changes the repository
+node ui/e2e/changelists.mjs /tmp/demo3 /tmp/shots       # changelists; see the file for the setup
 ```
 
 Each scenario takes screenshots and fails when the page logs an error.

@@ -126,6 +126,7 @@ export interface OpResult {
   message: string;
   conflicts: string[];
   undoTo: string | null;
+  undoSoft: boolean;
 }
 
 export interface OpOutcome {
@@ -183,10 +184,37 @@ export type Op =
   | { op: "abort" }
   | { op: "markResolved"; paths: string[] }
   | { op: "rewrite"; base: string; plan: PlanEntry[]; what: string }
-  | { op: "undo"; to: string; expectedHead: string }
+  | { op: "undo"; to: string; expectedHead: string; soft?: boolean }
   | { op: "addWorktree"; path: string; branch: string; newBranch: boolean; at: string }
   | { op: "removeWorktree"; path: string; force: boolean }
-  | { op: "pruneWorktrees" };
+  | { op: "pruneWorktrees" }
+  | { op: "commit"; paths: string[]; unversioned: string[]; message: string; amend: boolean }
+  | { op: "rollback"; paths: string[] }
+  | { op: "addFiles"; paths: string[] }
+  | { op: "deleteUnversioned"; paths: string[] };
+
+export interface ChangeListView {
+  id: string;
+  name: string;
+  comment: string;
+  active: boolean;
+  changes: Change[];
+}
+
+export interface LocalChanges {
+  lists: ChangeListView[];
+  unversioned: string[];
+  conflicts: string[];
+  head: string | null;
+}
+
+export type ChangeListOp =
+  | { op: "create"; name: string; comment?: string; makeActive?: boolean; paths?: string[] }
+  | { op: "edit"; id: string; name: string; comment: string }
+  | { op: "remove"; id: string }
+  | { op: "setActive"; id: string }
+  | { op: "move"; paths: string[]; to: string }
+  | { op: "saveMessage"; id: string; message: string };
 
 export const api = {
   open: (path: string, view: ViewSettings) => call<ViewResult>("open", { path, ...view }),
@@ -204,6 +232,9 @@ export const api = {
   runOp: (op: Op) => call<OpOutcome>("run_op", op),
   worktrees: () => call<Worktree[]>("worktrees"),
   recentBranches: () => call<RecentBranch[]>("recent_branches"),
+  localChanges: () => call<LocalChanges>("local_changes"),
+  changeListOp: (op: ChangeListOp) => call<LocalChanges>("changelist_op", op),
+  headMessage: () => call<string>("head_message"),
   compare: (left: RevSpec, right: RevSpec) => call<{ changes: Change[] }>("compare", { left, right }),
   filePair: (left: RevSpec, right: RevSpec, path: string, oldPath: string | null) =>
     call<{ left: FileContent; right: FileContent }>("file_pair", { left, right, path, oldPath }),

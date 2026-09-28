@@ -63,7 +63,7 @@ fn squash_drop_reword_and_undo() {
 
     // undo
     let new_head = git(&dir, &["rev-parse", "HEAD"]);
-    repo.undo(r.undo_to.as_deref().unwrap(), &new_head).unwrap();
+    repo.undo(r.undo_to.as_deref().unwrap(), &new_head, false).unwrap();
     assert_eq!(git(&dir, &["rev-parse", "HEAD"]), head);
 
     // drop "two": the tree changes, so the working tree is updated with reset --keep

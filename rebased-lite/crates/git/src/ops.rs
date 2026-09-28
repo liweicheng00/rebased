@@ -28,8 +28,10 @@ pub struct OpResult {
     pub message: String,
     /// Files with conflicts when the operation stopped.
     pub conflicts: Vec<String>,
-    /// HEAD before a rewrite, for Undo.
+    /// HEAD before a rewrite or a commit, for Undo.
     pub undo_to: Option<String>,
+    /// Undo keeps the changes of the undone commits as local changes (`git reset --soft`).
+    pub undo_soft: bool,
 }
 
 impl OpResult {
@@ -38,7 +40,7 @@ impl OpResult {
     }
 
     fn ok(message: impl Into<String>) -> OpResult {
-        OpResult { ok: true, message: message.into(), conflicts: Vec::new(), undo_to: None }
+        OpResult { ok: true, message: message.into(), conflicts: Vec::new(), undo_to: None, undo_soft: false }
     }
 }
 
@@ -111,7 +113,7 @@ struct CommitMeta {
 
 impl Repo {
     /// Runs git for a write operation. It never prompts and never opens an editor.
-    fn git_write(&self, args: &[&str], env: &[(&str, &str)]) -> std::result::Result<String, (String, String)> {
+    pub(crate) fn git_write(&self, args: &[&str], env: &[(&str, &str)]) -> std::result::Result<String, (String, String)> {
         let mut cmd = Command::new("git");
         cmd.arg("-C").arg(&self.root).args(args);
         cmd.env("GIT_TERMINAL_PROMPT", "0").env("GIT_EDITOR", "true").env("GIT_SEQUENCE_EDITOR", "true").env("LC_ALL", "C");
@@ -135,7 +137,7 @@ impl Repo {
         }
     }
 
-    fn git_dir(&self) -> std::path::PathBuf {
+    pub(crate) fn git_dir(&self) -> std::path::PathBuf {
         let raw = self.git(&["rev-parse", "--absolute-git-dir"]).unwrap_or_default();
         std::path::PathBuf::from(String::from_utf8_lossy(&raw).trim())
     }
@@ -160,7 +162,7 @@ impl Repo {
         Ok(RepoState { operation, branch, head: self.resolve("HEAD"), conflicts, changed_files })
     }
 
-    fn conflicts(&self) -> Vec<String> {
+    pub(crate) fn conflicts(&self) -> Vec<String> {
         self.git(&["diff", "--name-only", "--diff-filter=U", "-z"])
             .map(|b| b.split(|&c| c == 0).filter(|p| !p.is_empty()).map(|p| String::from_utf8_lossy(p).into_owned()).collect())
             .unwrap_or_default()
@@ -173,7 +175,7 @@ impl Repo {
         } else {
             format!("{what} stopped with conflicts in {} file(s). Resolve them, then continue, or abort.", conflicts.len())
         };
-        OpResult { ok: false, message, conflicts, undo_to: None }
+        OpResult { ok: false, message, conflicts, undo_to: None, undo_soft: false }
     }
 
     // ---- branches and refs ----
@@ -439,13 +441,20 @@ impl Repo {
         if let Err((_, e)) = moved {
             return Err(GitError(format!("The branch was not changed: {e}")));
         }
-        Ok(OpResult { ok: true, message: format!("{what} done"), conflicts: Vec::new(), undo_to: Some(old_head) })
+        Ok(OpResult { ok: true, message: format!("{what} done"), conflicts: Vec::new(), undo_to: Some(old_head), undo_soft: false })
     }
 
     /// Moves the current branch back after a rewrite, if nothing moved it since.
-    pub fn undo(&self, to: &str, expected_head: &str) -> Result<OpResult> {
+    /// With `soft`, the changes of the undone commits stay as local changes, as IntelliJ's Undo Commit does.
+    pub fn undo(&self, to: &str, expected_head: &str, soft: bool) -> Result<OpResult> {
         if self.resolve("HEAD").as_deref() != Some(expected_head) {
             return Err(GitError("HEAD changed since the operation. Undo is not possible".into()));
+        }
+        if soft {
+            return self
+                .git_write(&["reset", "--soft", safe(to)?], &[("GIT_REFLOG_ACTION", "rebased-lite: undo commit")])
+                .map(|_| OpResult::ok("Undone. The changes are local changes again"))
+                .map_err(|(_, e)| GitError(e));
         }
         let old_tree = self.meta(to)?.tree;
         let head_tree = self.meta(expected_head)?.tree;
