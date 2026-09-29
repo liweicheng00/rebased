@@ -172,7 +172,8 @@ export class DiffView {
       h("span", { class: "stat-del" }, `−${del}`),
       h("span", { class: "muted-inline" }, ` · ${changes.length} change${changes.length === 1 ? "" : "s"}`),
     );
-    if (changes.length) this.editor.revealLineInCenter(changes[0].modifiedStartLineNumber || 1);
+    if (changes.length && this.revealFirst) this.editor.revealLineInCenter(changes[0].modifiedStartLineNumber || 1);
+    this.revealFirst = true;
   }
 
   private blameOids: (string | null)[] = [];
@@ -324,6 +325,10 @@ export class DiffView {
   show(change: Change, left: FileContent, right: FileContent) {
     this.clearBlame();
     queueMicrotask(() => void this.annotate());
+    // The same file again (for example after it changed on disk): keep the scroll position.
+    const same = change.path === this.path && this.notice.hidden && this.singleHost.hidden;
+    this.keepView = same ? this.editor.getModifiedEditor().saveViewState() : null;
+    this.revealFirst = !same;
     this.path = change.path;
     this.title.replaceChildren(
       h("span", { class: `status status-${change.status}`, title: statusName(change.status) }, change.status),
@@ -370,6 +375,10 @@ export class DiffView {
     this.setModels("", "", undefined);
   }
 
+  private keepView: monaco.editor.ICodeEditorViewState | null = null;
+  /** Scroll to the first change when the diff is ready; not when the same file is shown again. */
+  private revealFirst = true;
+
   private setModels(a: string, b: string, lang: string | undefined) {
     this.host.hidden = false;
     this.singleHost.hidden = true;
@@ -377,6 +386,10 @@ export class DiffView {
     this.editor.setModel({ original: monaco.editor.createModel(a, lang), modified: monaco.editor.createModel(b, lang) });
     old?.original.dispose();
     old?.modified.dispose();
+    if (this.keepView) {
+      this.editor.getModifiedEditor().restoreViewState(this.keepView);
+      this.keepView = null;
+    }
   }
 }
 

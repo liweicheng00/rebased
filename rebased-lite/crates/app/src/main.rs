@@ -116,6 +116,11 @@ fn blame(state: State<'_, Service>, args: rebased_service::BlameArgs) -> Result<
 }
 
 #[tauri::command(async)]
+fn watch_state(state: State<'_, Service>) -> Result<Value, String> {
+    json(state.watch_state())
+}
+
+#[tauri::command(async)]
 fn head_message(state: State<'_, Service>) -> Result<Value, String> {
     json(state.head_message())
 }
@@ -163,7 +168,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Service::default())
-        .invoke_handler(tauri::generate_handler![initial_path, open, set_view, refresh, fetch, refs, rows, commit, find, compare, file_pair, collapse, repo_state, rewrite_range, run_op, worktrees, recent_branches, local_changes, changelist_op, head_message, push_info, stashes, stash_detail, merge_sides, file_history, blame])
+        .invoke_handler(tauri::generate_handler![initial_path, open, set_view, refresh, fetch, refs, rows, commit, find, compare, file_pair, collapse, repo_state, rewrite_range, run_op, worktrees, recent_branches, local_changes, changelist_op, head_message, push_info, stashes, stash_detail, merge_sides, file_history, blame, watch_state])
         .run(tauri::generate_context!())
         .expect("error while running Rebased Lite");
 }

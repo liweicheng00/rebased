@@ -13,6 +13,7 @@ export interface Settings {
   showSidebar: boolean;
   leftTab: "branches" | "commit" | "stash";
   updateMode: "merge" | "rebase";
+  autoRefresh: boolean;
   changesAsTree: boolean;
   sideBySide: boolean;
   ignoreWhitespace: boolean;
@@ -37,6 +38,7 @@ const DEFAULTS: Settings = {
   showSidebar: true,
   leftTab: "branches",
   updateMode: "merge",
+  autoRefresh: true,
   changesAsTree: true,
   sideBySide: true,
   ignoreWhitespace: false,

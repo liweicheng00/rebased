@@ -210,6 +210,7 @@ async function openRepo(path: string) {
   filterBar.set(emptyFilter(), false);
   addRecent(r.root);
   authors.clear();
+  watchSeen = null;
   commitPanel.clear();
   showWorkspace(true);
   await applyView(r, false);
@@ -276,6 +277,36 @@ async function loadLocalChanges() {
   }
   tabStash.replaceChildren("Stash", stashPanel.count ? h("span", { class: "lp-count" }, String(stashPanel.count)) : "");
 }
+
+// ---- auto refresh ----
+
+/** The watcher counters that the view shows; changes after a write operation of the app are expected. */
+let watchSeen: { repo: number; files: number } | null = null;
+let watchQuietUntil = 0;
+
+async function pollWatch() {
+  if (!view || busy > 0 || document.hidden || !settings.autoRefresh) return;
+  const c = await api.watchState().catch(() => null);
+  if (!c) return;
+  const before = watchSeen;
+  watchSeen = c;
+  if (!before || Date.now() < watchQuietUntil || busy > 0) return;
+  if (c.repo !== before.repo) {
+    const r = await api.refresh().catch(() => null);
+    if (r) {
+      await applyView(r, true);
+      await loadRefs();
+    }
+  } else if (c.files !== before.files) {
+    repoState = await api.repoState().catch(() => repoState);
+    banner.update(repoState);
+    updateStatus();
+    await loadLocalChanges();
+    const f = commitPanel.activeFile();
+    if (diffSource === "local" && f) void showLocalDiff(f);
+  }
+}
+setInterval(() => void pollWatch(), 1000);
 
 // Files change outside the app; reload the local changes when the window gets the focus.
 let focusTimer = 0;
@@ -466,6 +497,8 @@ log.onExpandEdge = (up, down) => void collapse("edge", undefined, up, down);
 /** Runs a write operation, reloads the log, and reports the result. */
 async function runOp(op: Op, label: string, errorAction?: { label: string; run: () => void }): Promise<OpOutcome | undefined> {
   const outcome = await task(label, () => api.runOp(op));
+  // The watcher reports the changes of this operation; the view reloads below anyway.
+  watchQuietUntil = Date.now() + 1500;
   if (!outcome) return undefined;
   await applyView(outcome.view, true);
   await loadRefs();

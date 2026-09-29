@@ -309,6 +309,7 @@ export const api = {
   localChanges: () => call<LocalChanges>("local_changes"),
   changeListOp: (op: ChangeListOp) => call<LocalChanges>("changelist_op", op),
   headMessage: () => call<string>("head_message"),
+  watchState: () => call<{ repo: number; files: number } | null>("watch_state"),
   stashes: () => call<Stash[]>("stashes"),
   fileHistory: (path: string) => call<HistoryEntry[]>("file_history", { path }),
   blame: (path: string, rev: RevSpec) => call<Blame>("blame", { path, rev }),

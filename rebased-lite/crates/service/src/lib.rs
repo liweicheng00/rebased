@@ -1,5 +1,7 @@
 //! App state and commands. Every command takes and returns JSON-serializable values.
 
+pub mod watch;
+
 pub use rebased_git::changelist::{ChangeListOp, LocalChanges, PartialFile};
 use rebased_git::remote::{PushInfo, UpdateMode};
 use rebased_git::stash::{Stash, StashDetail};
@@ -53,6 +55,8 @@ struct Session {
     view: View,
     details: HashMap<usize, CommitDetails>,
     head_node: Option<usize>,
+    /// None when the watcher could not start; the front end then refreshes on focus only.
+    watcher: Option<watch::RepoWatcher>,
 }
 
 #[derive(Default)]
@@ -350,7 +354,14 @@ impl Service {
         let full = build_full(&topo);
         let view = build_view(&repo, &topo, &full, &settings)?;
         let head_node = repo.resolve("HEAD").and_then(|o| topo.node_of(&o));
-        let mut s = Session { repo, topo, full, settings, view, details: HashMap::new(), head_node };
+        // A refresh of the same repository keeps its watcher. The old session stays until the new one
+        // replaces it, so concurrent commands never see "no repository".
+        let kept = match self.session.lock().unwrap().as_mut() {
+            Some(o) if o.repo.root == repo.root => o.watcher.take(),
+            _ => None,
+        };
+        let watcher = kept.or_else(|| watch::RepoWatcher::start(&repo.root, &repo.git_dir(), &repo.common_dir()).ok());
+        let mut s = Session { repo, topo, full, settings, view, details: HashMap::new(), head_node, watcher };
         let result = Self::result(&mut s, t);
         *self.session.lock().unwrap() = Some(s);
         Ok(result)
@@ -542,6 +553,11 @@ impl Service {
         })
     }
 
+    /// Counters that go up when the repository or its files change outside the app.
+    pub fn watch_state(&self) -> Result<Option<watch::WatchCounters>> {
+        self.with(|s| Ok(s.watcher.as_ref().map(|w| w.state.counters())))
+    }
+
     pub fn head_message(&self) -> Result<String> {
         self.with(|s| s.repo.head_message().map_err(err))
     }
@@ -664,6 +680,7 @@ impl Service {
             "merge_sides" => serde_json::to_string(&self.merge_sides(parse(body)?)?),
             "file_history" => serde_json::to_string(&self.file_history(parse(body)?)?),
             "blame" => serde_json::to_string(&self.blame(parse(body)?)?),
+            "watch_state" => serde_json::to_string(&self.watch_state()?),
             "head_message" => serde_json::to_string(&self.head_message()?),
             "repo_state" => serde_json::to_string(&self.state()?),
             "worktrees" => serde_json::to_string(&self.worktrees()?),

@@ -235,7 +235,13 @@ impl Repo {
         Ok(OpResult::ok_msg(format!("Got {} file(s) from {}", paths.len(), &rev[..rev.len().min(8)])))
     }
 
-    pub(crate) fn git_dir(&self) -> std::path::PathBuf {
+    /// The directory with the refs and objects; for a linked worktree it is the main repository's git dir.
+    pub fn common_dir(&self) -> std::path::PathBuf {
+        let raw = self.git(&["rev-parse", "--path-format=absolute", "--git-common-dir"]).unwrap_or_default();
+        std::path::PathBuf::from(String::from_utf8_lossy(&raw).trim())
+    }
+
+    pub fn git_dir(&self) -> std::path::PathBuf {
         let raw = self.git(&["rev-parse", "--absolute-git-dir"]).unwrap_or_default();
         std::path::PathBuf::from(String::from_utf8_lossy(&raw).trim())
     }

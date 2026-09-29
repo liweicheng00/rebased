@@ -39,6 +39,8 @@ fn run_git(dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
         .arg(dir)
         .args(["-c", "core.quotePath=false", "-c", "log.showSignature=false"])
         .args(args)
+        // Reads must not refresh the index: the file watcher would see the write and reload again.
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .output()
         .map_err(|e| GitError(format!("cannot run git: {e}")))?;
     if !out.status.success() {

@@ -215,6 +215,11 @@ export class CommitPanel {
     this.open(next);
   }
 
+  /** The file whose diff is shown. */
+  activeFile(): LocalFile | null {
+    return this.files.find((f) => f.key === this.activeKey) ?? null;
+  }
+
   selectedFiles(): LocalFile[] {
     return this.files.filter((f) => this.selection.has(f.key));
   }
