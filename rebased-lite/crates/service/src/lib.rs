@@ -63,9 +63,23 @@ struct Session {
     history: Arc<history::LocalHistory>,
 }
 
+/// The open repositories, one per tab, and the one that the commands use.
+#[derive(Default)]
+struct Sessions {
+    map: HashMap<std::path::PathBuf, Session>,
+    active: Option<std::path::PathBuf>,
+}
+
+impl Sessions {
+    fn active_mut(&mut self) -> Option<&mut Session> {
+        let root = self.active.as_ref()?;
+        self.map.get_mut(root)
+    }
+}
+
 #[derive(Default)]
 pub struct Service {
-    session: Mutex<Option<Session>>,
+    session: Mutex<Sessions>,
     askpass: Option<std::sync::Arc<askpass::Askpass>>,
     history_limits: Mutex<history::Limits>,
 }
@@ -505,6 +519,32 @@ impl Service {
         self.load(repo, args.view, false)
     }
 
+    /// Makes an open repository the active one, for a tab switch. A repository that is not open yet is
+    /// opened.
+    pub fn activate(&self, args: OpenArgs) -> Result<ViewResult> {
+        let repo = Repo::open(Path::new(&args.path)).map_err(err)?;
+        {
+            let mut sessions = self.session.lock().unwrap();
+            if let Some(s) = sessions.map.get_mut(&repo.root) {
+                let result = Self::result(s, std::time::Instant::now());
+                sessions.active = Some(repo.root);
+                return Ok(result);
+            }
+        }
+        self.load(repo, args.view, false)
+    }
+
+    /// Closes the tab of a repository: its watcher stops and its memory is freed.
+    pub fn close(&self, args: PathArgs) -> Result<()> {
+        let root = Repo::open(Path::new(&args.path)).map(|r| r.root).unwrap_or_else(|_| args.path.into());
+        let mut sessions = self.session.lock().unwrap();
+        sessions.map.remove(&root);
+        if sessions.active.as_ref() == Some(&root) {
+            sessions.active = None;
+        }
+        Ok(())
+    }
+
     /// Loads the repository. A refresh (`keep`) keeps the watcher and Local History of the same
     /// repository. An open starts them again, because the directory can be new at the same path.
     fn load(&self, repo: Repo, settings: ViewArgs, keep: bool) -> Result<ViewResult> {
@@ -515,8 +555,8 @@ impl Service {
         let head_node = repo.resolve("HEAD").and_then(|o| topo.node_of(&o));
         // The old session stays until the new one replaces it, so concurrent commands never see
         // "no repository".
-        let (kept, history) = match self.session.lock().unwrap().as_mut() {
-            Some(o) if keep && o.repo.root == repo.root => (o.watcher.take(), Some(o.history.clone())),
+        let (kept, history) = match self.session.lock().unwrap().map.get_mut(&repo.root) {
+            Some(o) if keep => (o.watcher.take(), Some(o.history.clone())),
             _ => (None, None),
         };
         let history = history
@@ -525,7 +565,12 @@ impl Service {
             kept.or_else(|| watch::RepoWatcher::start(&repo.root, &repo.git_dir(), &repo.common_dir(), Some(history.clone())).ok());
         let mut s = Session { repo, topo, full, settings, view, details: HashMap::new(), head_node, watcher, history };
         let result = Self::result(&mut s, t);
-        *self.session.lock().unwrap() = Some(s);
+        let mut sessions = self.session.lock().unwrap();
+        // A refresh of a tab that is not active any more must not change the active tab.
+        if !keep {
+            sessions.active = Some(s.repo.root.clone());
+        }
+        sessions.map.insert(s.repo.root.clone(), s);
         Ok(result)
     }
 
@@ -546,7 +591,7 @@ impl Service {
 
     fn with<T>(&self, f: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
         let mut guard = self.session.lock().unwrap();
-        let s = guard.as_mut().ok_or("no repository is open")?;
+        let s = guard.active_mut().ok_or("no repository is open")?;
         f(s)
     }
 
@@ -731,7 +776,7 @@ impl Service {
 
     pub fn set_local_history_limits(&self, limits: history::Limits) -> Result<()> {
         *self.history_limits.lock().unwrap() = limits;
-        if let Some(s) = self.session.lock().unwrap().as_ref() {
+        for s in self.session.lock().unwrap().map.values() {
             s.history.set_limits(limits);
         }
         Ok(())
@@ -893,6 +938,8 @@ impl Service {
             "open" => serde_json::to_string(&self.open(parse(body)?)?),
             "set_view" => serde_json::to_string(&self.set_view(parse(body)?)?),
             "refresh" => serde_json::to_string(&self.refresh()?),
+            "activate" => serde_json::to_string(&self.activate(parse(body)?)?),
+            "close" => serde_json::to_string(&self.close(parse(body)?)?),
             "fetch" => serde_json::to_string(&self.fetch()?),
             "refs" => serde_json::to_string(&self.refs()?),
             "rows" => serde_json::to_string(&self.rows(parse(body)?)?),

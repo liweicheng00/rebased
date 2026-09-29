@@ -359,6 +359,7 @@ get_file_pair(left: Rev, right: Rev | "WORKTREE", change: Change): { left?: Blob
 | Submodule（v0.5） | 完成。Branches 分頁列出 submodule 與狀態（未初始化、其他 commit、有本機變更）。可以 Update（init 後 checkout 記錄的 commit）與開啟。diff 顯示 `Subproject commit <hash>`。Rollback 會 checkout 記錄的 commit。checkout、merge、rebase、reset、update 改變記錄的 commit 後，通知提供 Update Submodules。watcher 不監看 submodule 內部。 |
 | Git LFS（v0.5） | 完成。commit 裡的 LFS 檔案，物件已下載時 diff 顯示真實內容，否則顯示 pointer 與說明。部分 commit 用 `git hash-object --path` 執行 clean filter，所以 LFS 檔案存成 pointer（修正前會存成真實內容）。 |
 | 部分 changelist（v0.5） | 完成。同一檔案的不同 hunk 可以在不同 changelist。hunk 來自 `git diff -U0 HEAD`，ID 是刪除行與新增行的雜湊，所以其他 hunk 改變時 ID 不變。在 diff 右鍵「Move Change to Another Changelist」。commit 一個 changelist 時，後端用 HEAD 加上該 changelist 的 hunk 組出內容，再用部分 commit 寫入。Rollback 只還原該 changelist 的 hunk。存在 `changelists.json`，重新開啟後保留。 |
+| 多 repo 分頁（v0.5） | 完成。後端為每個 repo 保留一個 session（graph、watcher、Local History），`activate` 切換使用中的 repo，不重新載入；`close` 釋放它。前端每個分頁保留篩選與選取的 commit。分頁在下次啟動時回來，只有使用中的分頁立即載入。每個開啟的 repo 都占用自己的記憶體（git/git 約 40 MB）。 |
 | 8.3 資源量測 | 見下表。 |
 
 資源量測（Linux x86_64、Xvfb、WebKitGTK 軟體繪圖，git/git）：

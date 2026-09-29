@@ -109,6 +109,11 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   local LFS store. Otherwise it shows the pointer with a note. A partial commit runs the clean
   filters of the path, so an LFS file goes in as its pointer. Git runs the LFS filters for all other
   operations.
+- **Tabs**: several repositories are open at one time, one per tab. Open adds a tab; a repository
+  that is open already shows its tab. Each tab keeps its log filter and its selected commit. Close a
+  tab with its ✕ or a middle click. `Ctrl/Cmd+PageDown` and `Ctrl/Cmd+PageUp` go to the next and
+  previous tab. The tabs come back at the next start; only the active tab loads then, the others
+  load on first use. The tab bar shows when two or more repositories are open.
 - **Worktrees**: list, add (on a new or an existing branch), open, remove and prune.
 - **Other**: context menus, Refresh, Fetch, column choice and resize, resizable panels,
   light, dark or system theme, and a status bar.
@@ -116,7 +121,7 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 Keyboard: `Ctrl/Cmd+O` open, `Ctrl/Cmd+K` commit, `Ctrl/Cmd+Shift+K` push, `Ctrl/Cmd+T` update,
 `Ctrl/Cmd+Enter` commit from the message field, `Ctrl/Cmd+Alt+K` commit and push, `Ctrl/Cmd+R` or `F5` refresh, `Ctrl/Cmd+F` filter, `Ctrl/Cmd+1` branches
 panel, arrow keys, Page Up, Page Down, Home and End in the log, `Shift` with arrows to select a range,
-`Ctrl/Cmd+C` copy the hash, `Ctrl/Cmd+Z` undo the last operation, `F7` and `Shift+F7` next and previous change, `Alt+Down` and `Alt+Up` next
+`Ctrl/Cmd+C` copy the hash, `Ctrl/Cmd+Z` undo the last operation, `Ctrl/Cmd+PageDown` and `Ctrl/Cmd+PageUp` next and previous tab, `F7` and `Shift+F7` next and previous change, `Alt+Down` and `Alt+Up` next
 and previous file.
 
 ## Layout

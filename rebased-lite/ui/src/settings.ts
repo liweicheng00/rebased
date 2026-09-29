@@ -25,6 +25,9 @@ export interface Settings {
   authorWidth: number;
   dateWidth: number;
   recent: string[];
+  /** The repositories open in tabs, and the active one. They open again at the next start. */
+  tabs: string[];
+  activeTab: string | null;
 }
 
 const DEFAULTS: Settings = {
@@ -50,6 +53,8 @@ const DEFAULTS: Settings = {
   authorWidth: 150,
   dateWidth: 125,
   recent: [],
+  tabs: [],
+  activeTab: null,
 };
 
 const KEY = "rebased-lite.settings.v1";

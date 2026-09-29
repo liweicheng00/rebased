@@ -360,6 +360,9 @@ export type ChangeListOp =
 
 export const api = {
   open: (path: string, view: ViewSettings) => call<ViewResult>("open", { path, ...view }),
+  /** Makes an open repository active, for a tab switch; opens it when it is not open. */
+  activate: (path: string, view: ViewSettings) => call<ViewResult>("activate", { path, ...view }),
+  close: (path: string) => call<null>("close", { path }),
   setView: (view: ViewSettings) => call<ViewResult>("set_view", view),
   refresh: () => call<ViewResult>("refresh"),
   fetch: () => call<ViewResult>("fetch"),

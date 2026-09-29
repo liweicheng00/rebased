@@ -9,6 +9,7 @@ import {
   type ChangeListView,
   type Op,
   type OpOutcome,
+  type LogFilter,
   type PlanEntry,
   type Submodule,
   type UndoAction,
@@ -75,6 +76,8 @@ const viewBtn = h("button", { class: "tb-button", title: "View options" }, "View
 const themeBtn = h("button", { class: "tb-button", title: "Theme" }, "◐");
 const toolbar = h("header", { class: "toolbar" }, openBtn, refreshBtn, fetchBtn, updateBtn, pushBtn, localHistoryBtn, repoLabel, branchBtn, h("span", { class: "spacer" }), viewBtn, themeBtn);
 
+const tabBar = h("nav", { class: "tabbar", hidden: true });
+
 const statusLeft = h("span", { class: "sb-left" });
 const statusMid = h("span", { class: "sb-mid" });
 const statusRight = h("span", { class: "sb-right" });
@@ -111,7 +114,7 @@ const top = h("div", { class: "top" }, leftPane, sideGrip, center, rightGrip, ri
 const workspace = h("main", { class: "workspace" }, top, diffGrip, diff.el);
 const welcome = h("main", { class: "welcome" });
 const app = document.getElementById("app")!;
-app.append(toolbar, welcome, workspace, statusBar);
+app.append(toolbar, tabBar, welcome, workspace, statusBar);
 
 function applyLayout() {
   top.style.gridTemplateColumns = `${settings.showSidebar ? `${settings.sidebarWidth}px 4px` : "0 0"} minmax(300px, 1fr) 4px ${settings.rightWidth}px`;
@@ -208,18 +211,107 @@ function viewSettings() {
   return { intelliSort: settings.intelliSort, showLongEdges: settings.showLongEdges, collapseLinear: settings.collapseLinear, filter: filterBar.filter };
 }
 
+// ---- tabs: several repositories ----
+
+/** What a tab keeps while another tab is active. */
+interface TabState {
+  filter: LogFilter;
+  selected: string | null;
+}
+const tabStates = new Map<string, TabState>();
+
+function renderTabs() {
+  tabBar.hidden = settings.tabs.length < 2;
+  tabBar.replaceChildren(
+    ...settings.tabs.map((root) => {
+      const name = root.split(/[\\/]/).pop() ?? root;
+      const close = h("button", { class: "tab-close", title: "Close the tab" }, "✕");
+      close.addEventListener("click", (e) => {
+        e.stopPropagation();
+        void closeTab(root);
+      });
+      const tab = h("div", { class: "tab" + (root === settings.activeTab ? " on" : ""), title: root, role: "tab" }, h("span", { class: "tab-name" }, name), close);
+      tab.addEventListener("mousedown", (e) => {
+        if (e.button === 1) {
+          e.preventDefault();
+          void closeTab(root);
+        } else if (e.button === 0 && root !== settings.activeTab) void switchTab(root);
+      });
+      return tab;
+    }),
+    (() => {
+      const add = h("button", { class: "tab-add", title: `Open a repository in a new tab (${mod}O)` }, "+");
+      add.addEventListener("click", () => void askForRepo());
+      return add;
+    })(),
+  );
+}
+
+function saveTabState() {
+  if (!settings.activeTab || !view) return;
+  tabStates.set(settings.activeTab, { filter: filterBar.filter, selected: selected[0]?.oid ?? null });
+}
+
+/** Opens a repository in a new tab, or shows its tab when it is open already. */
 async function openRepo(path: string) {
+  const known = settings.tabs.find((t) => t === path);
+  if (known && known === settings.activeTab && view) return;
+  saveTabState();
   const r = await task("Opening repository", () => api.open(path, { ...viewSettings(), filter: emptyFilter() }));
   if (!r) return;
-  filterBar.set(emptyFilter(), false);
+  if (!settings.tabs.includes(r.root)) settings.tabs.push(r.root);
+  tabStates.delete(r.root);
+  await showRepo(r, null);
+}
+
+async function switchTab(root: string) {
+  saveTabState();
+  const state = tabStates.get(root) ?? null;
+  const r = await task("Switching repository", () => api.activate(root, { ...viewSettings(), filter: state?.filter ?? emptyFilter() }));
+  if (!r) return;
+  await showRepo(r, state);
+}
+
+async function closeTab(root: string) {
+  await api.close(root).catch(() => {});
+  const i = settings.tabs.indexOf(root);
+  settings.tabs = settings.tabs.filter((t) => t !== root);
+  tabStates.delete(root);
+  if (root !== settings.activeTab) {
+    save();
+    renderTabs();
+    return;
+  }
+  settings.activeTab = null;
+  save();
+  const next = settings.tabs[Math.min(i, settings.tabs.length - 1)];
+  if (next) await switchTab(next);
+  else {
+    view = null;
+    commitPanel.clear();
+    document.title = "Rebased Lite";
+    refreshBtn.disabled = fetchBtn.disabled = updateBtn.disabled = pushBtn.disabled = localHistoryBtn.disabled = true;
+    renderTabs();
+    showWorkspace(false);
+  }
+}
+
+/** Shows the repository of the active tab. `state` restores the filter and the selection of a tab. */
+async function showRepo(r: ViewResult, state: TabState | null) {
+  settings.activeTab = r.root;
+  save();
+  renderTabs();
+  filterBar.set(state?.filter ?? emptyFilter(), false);
   addRecent(r.root);
   authors.clear();
   watchSeen = null;
+  lastUndo = null;
   commitPanel.clear();
   showWorkspace(true);
   await applyView(r, false);
   await loadRefs();
-  if (r.headOid) void jumpToOid(r.headOid, true);
+  const target = state?.selected ?? r.headOid;
+  if (target) void jumpToOid(target, true);
 }
 
 async function applyView(r: ViewResult, keepSelection: boolean) {
@@ -1476,6 +1568,11 @@ window.addEventListener("keydown", (e) => {
   } else if (cmd && !e.shiftKey && e.key.toLowerCase() === "z" && !typing && view) {
     e.preventDefault();
     void undoLast();
+  } else if (cmd && (e.key === "PageDown" || e.key === "PageUp") && settings.tabs.length > 1) {
+    e.preventDefault();
+    const i = settings.tabs.indexOf(settings.activeTab ?? "");
+    const next = settings.tabs[(i + (e.key === "PageDown" ? 1 : -1) + settings.tabs.length) % settings.tabs.length];
+    void switchTab(next);
   } else if (e.key === "F7") {
     e.preventDefault();
     diff.goToDiff(e.shiftKey ? "previous" : "next");
@@ -1497,5 +1594,9 @@ applyLayout();
 showLeftTab(settings.leftTab);
 applyTheme();
 showWorkspace(false);
+// The tabs of the last session come back; only the active one loads now, the others on first use.
 const initial = new URLSearchParams(location.search).get("repo") ?? (await initialPath());
 if (initial) void openRepo(initial);
+else if (settings.activeTab && settings.tabs.includes(settings.activeTab)) void switchTab(settings.activeTab);
+else settings.tabs = [];
+renderTabs();
