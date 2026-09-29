@@ -453,3 +453,4 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 }
 
 .statusbar > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.credential-prompt { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }

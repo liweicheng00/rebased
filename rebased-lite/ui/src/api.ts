@@ -98,6 +98,16 @@ export interface CommitInfo {
 export const inTauri = "__TAURI_INTERNALS__" in window;
 
 async function call<T>(cmd: string, args?: unknown): Promise<T> {
+  // A command that does not answer leaves a part of the window empty; the warning names it.
+  const slow = setTimeout(() => console.warn(`The command ${cmd} has not answered after 10 s`), 10000);
+  try {
+    return await callNow<T>(cmd, args);
+  } finally {
+    clearTimeout(slow);
+  }
+}
+
+async function callNow<T>(cmd: string, args?: unknown): Promise<T> {
   if (inTauri) {
     const { invoke } = await import("@tauri-apps/api/core");
     return invoke<T>(cmd, args === undefined ? {} : { args });
@@ -209,6 +219,13 @@ export type Op =
   | { op: "applyFileChanges"; from: string; to: string; paths: string[]; reverse: boolean }
   | { op: "getFromRevision"; rev: string; paths: string[] };
 
+export interface AskpassPrompt {
+  id: number;
+  text: string;
+  secret: boolean;
+  confirm: boolean;
+}
+
 export interface HistoryEntry {
   oid: string;
   parents: string[];
@@ -309,6 +326,8 @@ export const api = {
   localChanges: () => call<LocalChanges>("local_changes"),
   changeListOp: (op: ChangeListOp) => call<LocalChanges>("changelist_op", op),
   headMessage: () => call<string>("head_message"),
+  askpassPending: () => call<AskpassPrompt[]>("askpass_pending"),
+  askpassAnswer: (id: number, answer: string | null, remember: boolean) => call<null>("askpass_answer", { id, answer, remember }),
   watchState: () => call<{ repo: number; files: number } | null>("watch_state"),
   stashes: () => call<Stash[]>("stashes"),
   fileHistory: (path: string) => call<HistoryEntry[]>("file_history", { path }),

@@ -47,7 +47,7 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   git directory, in `rebased-lite/changelists.json`.
 - **Partial commit**: the diff of a local file has a check box for each change. Unchecked changes
   stay local; the file check box then shows a partial file. Such a commit is built in a temporary
-  index with `git commit-tree`, so commit hooks do not run for it. With "Ignore whitespace" on,
+  index with `git commit-tree`. With "Ignore whitespace" on,
   whitespace-only changes have no check box and stay local in a partial file.
 - **File history and annotate**: Show History (from the changes panels or the 🕘 button of the
   diff) lists the commits that changed a file, across renames, with the change of the file in each
@@ -67,8 +67,16 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   the remote branch, force push with lease, tags, and the tracked branch. A new branch shows
   "New". A rejected push offers Update. Update fetches the tracked branch and merges or rebases,
   with the local changes stashed and restored. The Commit tab has "Commit and Push". The branch
-  menu pushes any local branch. Git never prompts, so a remote that needs a password must have a
-  credential helper or an SSH agent.
+  menu pushes any local branch.
+- **Passwords and passphrases**: when git or ssh needs a user name, a password, an SSH key
+  passphrase or a host key confirmation, a dialog asks for it (the app is the `GIT_ASKPASS` and
+  `SSH_ASKPASS` program). "Remember" keeps the answer until the app closes; a git credential
+  helper or an SSH agent keeps it longer. The SSH prompt needs OpenSSH 8.4 or newer.
+- **Signing and hooks**: commits that the app writes itself (squash, drop, reword, reorder, and
+  partial commits) are signed when `commit.gpgsign` is on, with `user.signingkey` and
+  `gpg.format`. A partial commit runs the pre-commit hook with the content of the commit, the
+  commit-msg hook, and the post-commit hook. The in-memory rewrites run no hooks, like
+  `git rebase`.
 - **Auto refresh**: the app watches the working tree and the git directory. A file edited in
   another program, a commit or a branch made in a terminal, and a fetch show up within about a
   second. The diff of a local file follows the file and keeps its scroll position. Files that git
@@ -133,7 +141,7 @@ ui/e2e/run-all.sh /tmp/e2e /path/to/git.git     # also the large-repository scen
 ```
 
 The scenarios are `demo-repo`, `write-ops`, `changelists`, `push-update`, `stash`, `merge-tool`,
-`history`, `partial-commit`, `file-actions`, `rebase-edit`, `auto-refresh`, `large-repo` and `collapse`. Each file says how to run it alone.
+`history`, `partial-commit`, `file-actions`, `rebase-edit`, `auto-refresh`, `credentials`, `large-repo` and `collapse`. Each file says how to run it alone.
 
 Each scenario takes screenshots and fails when the page logs an error.
 

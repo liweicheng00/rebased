@@ -33,6 +33,17 @@ pub struct Repo {
     pub root: PathBuf,
 }
 
+/// Environment for git commands that can ask for credentials: the askpass program of the app.
+static NETWORK_ENV: std::sync::RwLock<Vec<(String, String)>> = std::sync::RwLock::new(Vec::new());
+
+pub fn set_network_env(vars: Vec<(String, String)>) {
+    *NETWORK_ENV.write().unwrap() = vars;
+}
+
+pub fn network_env() -> Vec<(String, String)> {
+    NETWORK_ENV.read().unwrap().clone()
+}
+
 fn run_git(dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
     let out = Command::new("git")
         .arg("-C")
@@ -487,6 +498,7 @@ impl Repo {
             .arg(&self.root)
             .args(["fetch", "--all", "--prune"])
             .env("GIT_TERMINAL_PROMPT", "0")
+            .envs(network_env())
             .output()
             .map_err(|e| GitError(format!("cannot run git: {e}")))?;
         let msg = String::from_utf8_lossy(&out.stderr).trim().to_string();

@@ -353,3 +353,22 @@ export async function conflictsDialog(files: string[], oursLabel: string, theirs
   if (!paths.length) return null;
   return { action: r as "ours" | "theirs" | "merge", paths: r === "merge" ? paths.slice(0, 1) : paths };
 }
+
+/** Asks for a password, a passphrase, a user name or a host key confirmation that git or ssh needs. */
+export async function credentialDialog(prompt: { text: string; secret: boolean; confirm: boolean }): Promise<{ answer: string; remember: boolean } | null> {
+  const text = h("p", { class: "dialog-text credential-prompt" }, prompt.text.trim());
+  if (prompt.confirm) {
+    const r = await modal("Confirm", [text], [{ label: "No", value: "no" }, { label: "Yes", value: "yes", primary: true }]);
+    return r ? { answer: r, remember: false } : null;
+  }
+  const input = h("input", { class: "dialog-input", type: prompt.secret ? "password" : "text", spellcheck: false, autocomplete: "off" });
+  const remember = h("input", { type: "checkbox" });
+  const body = [
+    text,
+    input,
+    h("label", { class: "dialog-check" }, remember, "Remember until Rebased Lite closes"),
+    h("p", { class: "dialog-note" }, "To keep it longer, set up a git credential helper or an SSH agent."),
+  ];
+  const r = await modal(prompt.secret ? "Password" : "Git needs an answer", body, [{ label: "OK", value: "ok", primary: true }]);
+  return r === "ok" ? { answer: input.value, remember: remember.checked } : null;
+}

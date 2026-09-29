@@ -21,7 +21,7 @@ import {
 import { showBranchSwitcher } from "./branch-switcher";
 import { openMergeTool } from "./merge-view";
 import { openHistory } from "./history-view";
-import { confirmDialog, conflictsDialog, formDialog, interactiveRebaseDialog, messageDialog, pushDialog, resetDialog, updateDialog } from "./dialogs";
+import { confirmDialog, conflictsDialog, credentialDialog, formDialog, interactiveRebaseDialog, messageDialog, pushDialog, resetDialog, updateDialog } from "./dialogs";
 import { toast } from "./notify";
 import { OpBanner } from "./op-banner";
 import { CommitPanel, type LocalFile } from "./commit-panel";
@@ -245,16 +245,21 @@ async function loadRefs() {
     api.worktrees().catch(() => [] as Worktree[]),
     api.repoState().catch(() => null),
   ]);
-  refs = r;
-  recent = rec;
-  worktrees = wt;
-  repoState = st;
-  sidebar.setRefs(refs);
-  sidebar.setRecent(recent);
-  sidebar.setWorktrees(worktrees);
-  banner.update(repoState);
-  filterBar.branchNames = refs.filter((b) => b.kind !== "tag").map((b) => b.name);
-  updateStatus();
+  try {
+    refs = r;
+    recent = rec;
+    worktrees = wt;
+    repoState = st;
+    sidebar.setRefs(refs);
+    sidebar.setRecent(recent);
+    sidebar.setWorktrees(worktrees);
+    banner.update(repoState);
+    filterBar.branchNames = refs.filter((b) => b.kind !== "tag").map((b) => b.name);
+    updateStatus();
+  } catch (e) {
+    // The local changes still load.
+    console.error("Loading the branches failed", e);
+  }
   await loadLocalChanges();
 }
 
@@ -277,6 +282,27 @@ async function loadLocalChanges() {
   }
   tabStash.replaceChildren("Stash", stashPanel.count ? h("span", { class: "lp-count" }, String(stashPanel.count)) : "");
 }
+
+// ---- credential prompts ----
+
+// While an operation runs, git can ask for a password through the askpass program of the app.
+const askpassShown = new Set<number>();
+let askpassBusy = false;
+async function pollAskpass() {
+  if (busy === 0 || askpassBusy) return;
+  const prompts = await api.askpassPending().catch(() => []);
+  const next = prompts.find((p) => !askpassShown.has(p.id));
+  if (!next) return;
+  askpassShown.add(next.id);
+  askpassBusy = true;
+  try {
+    const r = await credentialDialog(next);
+    await api.askpassAnswer(next.id, r?.answer ?? null, r?.remember ?? false);
+  } finally {
+    askpassBusy = false;
+  }
+}
+setInterval(() => void pollAskpass(), 300);
 
 // ---- auto refresh ----
 

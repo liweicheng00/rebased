@@ -121,6 +121,17 @@ fn watch_state(state: State<'_, Service>) -> Result<Value, String> {
 }
 
 #[tauri::command(async)]
+fn askpass_pending(state: State<'_, Service>) -> Result<Value, String> {
+    serde_json::to_value(state.askpass_pending()).map_err(|e| e.to_string())
+}
+
+#[tauri::command(async)]
+fn askpass_answer(state: State<'_, Service>, args: rebased_service::askpass::Answer) -> Result<Value, String> {
+    state.askpass_answer(args);
+    Ok(Value::Null)
+}
+
+#[tauri::command(async)]
 fn head_message(state: State<'_, Service>) -> Result<Value, String> {
     json(state.head_message())
 }
@@ -163,12 +174,13 @@ fn use_software_rendering_without_gpu() {
 }
 
 fn main() {
+    rebased_service::askpass::run_helper_if_requested();
     #[cfg(target_os = "linux")]
     use_software_rendering_without_gpu();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(Service::default())
-        .invoke_handler(tauri::generate_handler![initial_path, open, set_view, refresh, fetch, refs, rows, commit, find, compare, file_pair, collapse, repo_state, rewrite_range, run_op, worktrees, recent_branches, local_changes, changelist_op, head_message, push_info, stashes, stash_detail, merge_sides, file_history, blame, watch_state])
+        .manage(Service::with_askpass(&std::env::current_exe().expect("current executable")))
+        .invoke_handler(tauri::generate_handler![initial_path, open, set_view, refresh, fetch, refs, rows, commit, find, compare, file_pair, collapse, repo_state, rewrite_range, run_op, worktrees, recent_branches, local_changes, changelist_op, head_message, push_info, stashes, stash_detail, merge_sides, file_history, blame, watch_state, askpass_pending, askpass_answer])
         .run(tauri::generate_context!())
         .expect("error while running Rebased Lite");
 }

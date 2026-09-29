@@ -10,7 +10,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 mkdir -p "$work/shots"
 failed=()
 fresh() {
-  rm -rf "$work/$1" "$work/$1-origin" "$work/$1-wt"
+  rm -rf "$work/$1" "$work/$1-origin" "$work/$1-wt" "$work/$1-secure.git"
   "$here/make-demo-repo.sh" "$work/$1" >/dev/null
 }
 run() {
@@ -34,6 +34,7 @@ fresh partial && run partial-commit "$work/partial"
 fresh actions && run file-actions "$work/actions"
 fresh edit && run rebase-edit "$work/edit"
 fresh watch && run auto-refresh "$work/watch"
+fresh cred && run credentials "$work/cred"
 if [ -n "$large" ]; then
   run large-repo "$large"
   run collapse "$large"

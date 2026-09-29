@@ -107,6 +107,20 @@ impl Store {
     }
 }
 
+/// Runs a hook of the repository with `git hook run`; a missing hook is fine. A failing hook stops the
+/// commit with its output.
+fn run_hook(repo: &Repo, name: &str, args: &[&str], env: &[(&str, &str)]) -> Result<()> {
+    let mut argv = vec!["hook", "run", "--ignore-missing", name];
+    if !args.is_empty() {
+        argv.push("--");
+        argv.extend(args);
+    }
+    repo.git_write(&argv, env).map(|_| ()).map_err(|(out, e)| {
+        let text = [out.trim(), e.trim()].iter().filter(|t| !t.is_empty()).copied().collect::<Vec<_>>().join("\n");
+        GitError(format!("The {name} hook stopped the commit: {text}"))
+    })
+}
+
 /// Rejects a path that leaves the repository.
 fn inside(root: &Path, path: &str) -> Result<PathBuf> {
     let p = Path::new(path);
@@ -317,7 +331,8 @@ impl Repo {
     /// Commits some files whole and some files in part, as IntelliJ does when you uncheck changes in the
     /// diff. `partial` gives the content to commit for each partly committed file. The commit is built in a
     /// temporary index, so the working tree and the other staged changes stay as they are; the index
-    /// entries of the committed files are set to the new commit. Commit hooks do not run.
+    /// entries of the committed files are set to the new commit. The pre-commit and commit-msg hooks run with
+    /// the temporary index, and the commit is signed when `commit.gpgsign` is on.
     pub fn commit_partial(&self, paths: &[String], unversioned: &[String], partial: &[PartialFile], message: &str, amend: bool) -> Result<OpResult> {
         if message.trim().is_empty() {
             return Err(GitError("The commit message is empty".into()));
@@ -356,6 +371,13 @@ impl Repo {
                     .unwrap_or_else(|| "100644".into());
                 run(&["update-index", "--add", "--cacheinfo", &format!("{mode},{blob},{}", f.path)])?;
             }
+            // The hooks of git commit, with the index of this commit: a pre-commit hook checks what goes in.
+            run_hook(self, "pre-commit", &[], &env)?;
+            let msg_file = self.git_dir().join("rebased-lite").join("COMMIT_EDITMSG");
+            // Like git commit, the message file ends with a line break.
+            std::fs::write(&msg_file, format!("{}\n", message.trim_end())).map_err(|e| GitError(e.to_string()))?;
+            run_hook(self, "commit-msg", &[&msg_file.to_string_lossy()], &env)?;
+            let message = std::fs::read_to_string(&msg_file).map_err(|e| GitError(e.to_string()))?;
             let tree = run(&["write-tree"])?;
             let mut parents: Vec<String> = Vec::new();
             let mut author_env: Vec<(&str, String)> = Vec::new();
@@ -371,6 +393,9 @@ impl Repo {
             for p in &parents {
                 args.extend(["-p".to_string(), p.clone()]);
             }
+            if self.signs_commits() {
+                args.push("-S".into());
+            }
             let argv: Vec<&str> = args.iter().map(String::as_str).collect();
             let envs: Vec<(&str, &str)> = author_env.iter().map(|(k, v)| (*k, v.as_str())).collect();
             let commit = self.git_write(&argv, &envs).map_err(|(_, e)| GitError(e))?;
@@ -385,6 +410,7 @@ impl Repo {
         })();
         let _ = std::fs::remove_file(&tmp);
         let commit = result?;
+        let _ = run_hook(self, "post-commit", &[], &[]);
         // The real index gets the committed content of these files; the rest of the index stays.
         let mut all: Vec<&str> = paths.iter().chain(unversioned).map(String::as_str).collect();
         all.extend(partial.iter().map(|f| f.path.as_str()));

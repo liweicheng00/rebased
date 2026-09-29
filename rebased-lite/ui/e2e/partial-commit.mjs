@@ -19,7 +19,11 @@ const browser = await chromium.launch(process.env.CHROMIUM ? { executablePath: p
 const page = await (await browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 1.5 })).newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push("pageerror: " + e));
-page.on("console", (m) => m.type() === "error" && errors.push("console: " + m.text()));
+const logs = [];
+page.on("console", (m) => {
+  logs.push(`${m.type()}: ${m.text()}`);
+  if (m.type() === "error") errors.push("console: " + m.text());
+});
 const shot = async (name) => { await page.waitForTimeout(700); await page.screenshot({ path: `${outDir}/${name}.png` }); console.log("shot", name); };
 const check = (what, ok) => { console.log(ok ? "ok  " : "FAIL", what); if (!ok) errors.push("check: " + what); };
 
@@ -28,6 +32,8 @@ await page.waitForSelector(".log-row", { timeout: 30000 });
 await page.click(".lp-tab:has-text('Commit')");
 await page.waitForSelector(".cl-file:has-text('calc.txt')").catch(async (e) => {
   console.log("commit panel:", await page.textContent(".commit-tree"));
+  console.log("status bar:", await page.textContent(".statusbar"));
+  console.log("console:", JSON.stringify(logs), "errors:", JSON.stringify(errors));
   throw e;
 });
 // Only calc.txt goes into the commit.

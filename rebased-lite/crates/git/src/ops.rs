@@ -128,6 +128,7 @@ impl Repo {
         let mut cmd = Command::new("git");
         cmd.arg("-C").arg(&self.root).args(args);
         cmd.env("GIT_TERMINAL_PROMPT", "0").env("GIT_EDITOR", "true").env("GIT_SEQUENCE_EDITOR", "true").env("LC_ALL", "C");
+        cmd.envs(crate::network_env());
         for (k, v) in env {
             cmd.env(k, v);
         }
@@ -672,6 +673,15 @@ impl Repo {
         if !parent.is_empty() {
             args.extend(["-p", parent]);
         }
+        if self.signs_commits() {
+            args.push("-S");
+        }
         self.git_write(&args, &env).map_err(|(_, e)| GitError(e))
+    }
+
+    /// `commit.gpgsign` is on. git commit signs by itself, but git commit-tree signs only with `-S`; it then
+    /// uses `user.signingkey` and `gpg.format` like git commit.
+    pub(crate) fn signs_commits(&self) -> bool {
+        self.git(&["config", "--type=bool", "commit.gpgsign"]).is_ok_and(|b| String::from_utf8_lossy(&b).trim() == "true")
     }
 }

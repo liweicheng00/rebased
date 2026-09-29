@@ -1,5 +1,6 @@
 //! App state and commands. Every command takes and returns JSON-serializable values.
 
+pub mod askpass;
 pub mod watch;
 
 pub use rebased_git::changelist::{ChangeListOp, LocalChanges, PartialFile};
@@ -62,6 +63,7 @@ struct Session {
 #[derive(Default)]
 pub struct Service {
     session: Mutex<Option<Session>>,
+    askpass: Option<std::sync::Arc<askpass::Askpass>>,
 }
 
 #[derive(Deserialize, Clone, Default)]
@@ -343,6 +345,22 @@ fn build_view(repo: &Repo, topo: &Topology, full: &PermanentLinearGraph, args: &
 }
 
 impl Service {
+    /// A service whose git commands ask for credentials through `helper`, the executable of the app. The
+    /// executable must call [`askpass::run_helper_if_requested`] first in `main`.
+    pub fn with_askpass(helper: &Path) -> Service {
+        Service { session: Mutex::default(), askpass: askpass::Askpass::start(helper).ok() }
+    }
+
+    pub fn askpass_pending(&self) -> Vec<askpass::Prompt> {
+        self.askpass.as_ref().map(|a| a.pending()).unwrap_or_default()
+    }
+
+    pub fn askpass_answer(&self, a: askpass::Answer) {
+        if let Some(p) = &self.askpass {
+            p.answer(a);
+        }
+    }
+
     pub fn open(&self, args: OpenArgs) -> Result<ViewResult> {
         let repo = Repo::open(Path::new(&args.path)).map_err(err)?;
         self.load(repo, args.view)
@@ -681,6 +699,11 @@ impl Service {
             "file_history" => serde_json::to_string(&self.file_history(parse(body)?)?),
             "blame" => serde_json::to_string(&self.blame(parse(body)?)?),
             "watch_state" => serde_json::to_string(&self.watch_state()?),
+            "askpass_pending" => serde_json::to_string(&self.askpass_pending()),
+            "askpass_answer" => {
+                self.askpass_answer(parse(body)?);
+                Ok("null".to_string())
+            }
             "head_message" => serde_json::to_string(&self.head_message()?),
             "repo_state" => serde_json::to_string(&self.state()?),
             "worktrees" => serde_json::to_string(&self.worktrees()?),
