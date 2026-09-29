@@ -401,6 +401,9 @@ Rust 核心（dev server 開啟 git/git）只用 41.6 MB。
 |---|---|---|
 | 優化前 | 968 MB | 767 MB |
 | 優化後 | 541 MB | 386 MB |
+| Rebased 1.1.19（同一天、同樣環境，開啟 5 分鐘後） | 1,479 MB（GC 後 1,305 MB） | 單一 JVM 行程，RSS 約等於 PSS |
+
+Rebased 的 1,479 MB 裡，Java heap、metaspace 和 native malloc 占 830 MB，jar 檔映射占 269 MB，native 函式庫占 98 MB。它用 Java2D 軟體繪圖，不受上面 WebKit 合成問題的影響。
 
 macOS 的 WKWebView 數字會不同，還需要在 macOS 上量測。
 
