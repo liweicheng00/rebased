@@ -25,6 +25,18 @@ export interface Settings {
   authorWidth: number;
   dateWidth: number;
   recent: string[];
+  /** The git program; empty means git from PATH. */
+  gitPath: string;
+  /** Fetch all remotes of the active repository every this many minutes; 0 turns it off. */
+  autoFetchMinutes: number;
+  diffFontSize: number;
+  /** Empty means the default monospace font. */
+  diffFontFamily: string;
+  /** Local History keeps versions this many days, and at most this many MB. */
+  historyDays: number;
+  historyMaxMb: number;
+  /** The keys of the actions that the user changed, by action id. */
+  keymap: Record<string, string[]>;
   /** The repositories open in tabs, and the active one. They open again at the next start. */
   tabs: string[];
   activeTab: string | null;
@@ -55,6 +67,13 @@ const DEFAULTS: Settings = {
   recent: [],
   tabs: [],
   activeTab: null,
+  gitPath: "",
+  autoFetchMinutes: 0,
+  diffFontSize: 12,
+  diffFontFamily: "",
+  historyDays: 5,
+  historyMaxMb: 200,
+  keymap: {},
 };
 
 const KEY = "rebased-lite.settings.v1";

@@ -8,7 +8,7 @@ use crate::history::{LocalHistory, MAX_BULK_FILES};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
@@ -212,7 +212,7 @@ impl Worker {
             return files;
         }
         let rel: Vec<String> = files.iter().filter_map(|p| p.strip_prefix(&self.root).ok()).map(|p| p.to_string_lossy().into_owned()).collect();
-        let Ok(mut child) = Command::new("git")
+        let Ok(mut child) = rebased_git::git_command()
             .arg("-C")
             .arg(&self.root)
             .args(["check-ignore", "-z", "--stdin"])

@@ -363,6 +363,8 @@ export const api = {
   /** Makes an open repository active, for a tab switch; opens it when it is not open. */
   activate: (path: string, view: ViewSettings) => call<ViewResult>("activate", { path, ...view }),
   close: (path: string) => call<null>("close", { path }),
+  /** Sets the git program and returns its version. Empty means git from PATH. */
+  setGitProgram: (path: string) => call<string>("set_git_program", { path }),
   setView: (view: ViewSettings) => call<ViewResult>("set_view", view),
   refresh: () => call<ViewResult>("refresh"),
   fetch: () => call<ViewResult>("fetch"),
@@ -405,6 +407,16 @@ export async function initialPath(): Promise<string | null> {
 }
 
 /** Asks for a folder with the native dialog. Returns null in a browser, where the caller shows a text field. */
+/** Asks for a file with the native dialog. Returns null in a browser. */
+export async function pickFile(title: string): Promise<string | null> {
+  if (inTauri) {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const r = await open({ directory: false, multiple: false, title });
+    return typeof r === "string" ? r : null;
+  }
+  return null;
+}
+
 export async function pickFolder(title = "Open Git Repository"): Promise<string | null> {
   if (inTauri) {
     const { open } = await import("@tauri-apps/plugin-dialog");

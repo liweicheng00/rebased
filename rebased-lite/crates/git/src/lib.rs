@@ -46,8 +46,28 @@ pub fn network_env() -> Vec<(String, String)> {
     NETWORK_ENV.read().unwrap().clone()
 }
 
+/// The git program. Empty means `git` from PATH.
+static GIT_PROGRAM: std::sync::RwLock<String> = std::sync::RwLock::new(String::new());
+
+/// A command for the git program that the settings choose.
+pub fn git_command() -> Command {
+    let p = GIT_PROGRAM.read().unwrap();
+    Command::new(if p.is_empty() { "git" } else { p.as_str() })
+}
+
+/// Sets the git program. Empty means `git` from PATH. Returns its version, for example "2.45.1". The
+/// program must answer `--version` like git, else the setting does not change.
+pub fn set_git_program(program: &str) -> Result<String> {
+    let candidate = if program.trim().is_empty() { "git" } else { program.trim() };
+    let out = Command::new(candidate).arg("--version").output().map_err(|e| GitError(format!("cannot run {candidate}: {e}")))?;
+    let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let version = text.strip_prefix("git version ").ok_or_else(|| GitError(format!("{candidate} is not git: {text}")))?.to_string();
+    *GIT_PROGRAM.write().unwrap() = program.trim().to_string();
+    Ok(version)
+}
+
 fn run_git(dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
-    let out = Command::new("git")
+    let out = git_command()
         .arg("-C")
         .arg(dir)
         .args(["-c", "core.quotePath=false", "-c", "log.showSignature=false"])
@@ -279,7 +299,7 @@ impl Repo {
     }
 
     pub(crate) fn empty_tree(&self) -> Result<String> {
-        let out = Command::new("git")
+        let out = git_command()
             .arg("-C")
             .arg(&self.root)
             .args(["hash-object", "-t", "tree", "--stdin"])
@@ -513,7 +533,7 @@ impl Repo {
 
     /// Fetches all remotes. It does not change local branches or the working tree.
     pub fn fetch(&self) -> Result<String> {
-        let out = Command::new("git")
+        let out = git_command()
             .arg("-C")
             .arg(&self.root)
             .args(["fetch", "--all", "--prune"])

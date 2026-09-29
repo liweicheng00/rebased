@@ -3,6 +3,7 @@
 // non-conflicting changes at once. The result stays editable.
 
 import * as monaco from "./monaco";
+import { editorFont } from "./diff-view";
 import { languageFor } from "./diff-view";
 import { merge3, splitLines, type Chunk } from "./diff3";
 import { h } from "./dom";
@@ -117,7 +118,7 @@ class MergeWindow {
       folding: false,
       renderLineHighlight: "none",
       lineNumbersMinChars: 3,
-      fontSize: 12,
+      ...editorFont(),
       overviewRulerLanes: 0,
     };
     const model = (text: string) => {

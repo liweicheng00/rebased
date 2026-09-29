@@ -254,3 +254,15 @@ fn interactive_rebase_stops_for_edit() {
     // The local file came back after the rebase.
     assert_eq!(std::fs::read_to_string(dir.join("local.txt")).unwrap(), "local\n");
 }
+
+#[test]
+fn git_program_setting() {
+    // A program that is not git is refused, and the setting stays.
+    assert!(rebased_git::set_git_program("/bin/true").is_err());
+    assert!(rebased_git::set_git_program("/no/such/git").is_err());
+    let version = rebased_git::set_git_program("").unwrap();
+    assert!(version.chars().next().unwrap().is_ascii_digit(), "{version}");
+    let path = String::from_utf8(Command::new("sh").args(["-c", "command -v git"]).output().unwrap().stdout).unwrap();
+    assert_eq!(rebased_git::set_git_program(path.trim()).unwrap(), version);
+    rebased_git::set_git_program("").unwrap();
+}

@@ -519,6 +519,11 @@ impl Service {
         self.load(repo, args.view, false)
     }
 
+    /// Sets the git program for all repositories and returns its version. Empty means `git` from PATH.
+    pub fn set_git_program(&self, args: PathArgs) -> Result<String> {
+        rebased_git::set_git_program(&args.path).map_err(err)
+    }
+
     /// Makes an open repository the active one, for a tab switch. A repository that is not open yet is
     /// opened.
     pub fn activate(&self, args: OpenArgs) -> Result<ViewResult> {
@@ -938,6 +943,7 @@ impl Service {
             "open" => serde_json::to_string(&self.open(parse(body)?)?),
             "set_view" => serde_json::to_string(&self.set_view(parse(body)?)?),
             "refresh" => serde_json::to_string(&self.refresh()?),
+            "set_git_program" => serde_json::to_string(&self.set_git_program(parse(body)?)?),
             "activate" => serde_json::to_string(&self.activate(parse(body)?)?),
             "close" => serde_json::to_string(&self.close(parse(body)?)?),
             "fetch" => serde_json::to_string(&self.fetch()?),

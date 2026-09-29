@@ -528,7 +528,7 @@ impl Repo {
     /// LFS file becomes its pointer, and the line endings follow `core.autocrlf` and `.gitattributes`.
     fn hash_object(&self, path: &str, content: &str) -> Result<String> {
         use std::io::Write;
-        let mut child = std::process::Command::new("git")
+        let mut child = crate::git_command()
             .arg("-C")
             .arg(&self.root)
             .args(["hash-object", "-w", "--stdin", "--path", path])

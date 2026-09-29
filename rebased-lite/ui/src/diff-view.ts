@@ -14,6 +14,18 @@ export function setMonacoTheme(dark: boolean) {
   monaco.editor.setTheme(dark ? "vs-dark" : "vs");
 }
 
+/** The editor font of the diff and merge views, from the settings. */
+export function editorFont(): { fontSize: number; fontFamily?: string } {
+  return { fontSize: settings.diffFontSize, ...(settings.diffFontFamily.trim() ? { fontFamily: settings.diffFontFamily.trim() } : {}) };
+}
+
+const views = new Set<DiffView>();
+
+/** Applies the diff settings (font, layout options) to every diff view. */
+export function applyDiffSettings() {
+  for (const v of views) v.applySettings();
+}
+
 export class DiffView {
   readonly el: HTMLElement;
   private title: HTMLElement;
@@ -58,7 +70,7 @@ export class DiffView {
       return b;
     };
     const toggle = (label: string, key: "sideBySide" | "ignoreWhitespace" | "collapseUnchanged", title: string) => {
-      const input = h("input", { type: "checkbox", checked: settings[key] });
+      const input = h("input", { type: "checkbox", checked: settings[key], "data-key": key });
       input.addEventListener("change", () => {
         settings[key] = input.checked;
         save();
@@ -104,8 +116,9 @@ export class DiffView {
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       renderOverviewRuler: true,
-      fontSize: 12,
+      ...editorFont(),
     });
+    views.add(this);
     this.applyOptions();
     this.editor.onDidUpdateDiff(() => {
       this.updateStats();
@@ -157,11 +170,18 @@ export class DiffView {
         automaticLayout: true,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
-        fontSize: 12,
+        ...editorFont(),
       });
       this.listenForBlameClicks(this.singleEditor);
     }
     return this.singleEditor;
+  }
+
+  applySettings() {
+    this.applyOptions();
+    this.editor.updateOptions(editorFont());
+    this.singleEditor?.updateOptions(editorFont());
+    for (const box of this.el.querySelectorAll<HTMLInputElement>(".diff-option input[data-key]")) box.checked = !!settings[box.dataset.key as "sideBySide"];
   }
 
   private applyOptions() {

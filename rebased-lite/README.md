@@ -115,10 +115,16 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   previous tab. The tabs come back at the next start; only the active tab loads then, the others
   load on first use. The tab bar shows when two or more repositories are open.
 - **Worktrees**: list, add (on a new or an existing branch), open, remove and prune.
+- **Settings** (⚙, or `Ctrl+Alt+S`; `Cmd+,` on macOS): theme, the default Update mode, auto
+  refresh, auto fetch every N minutes, the git executable (with a Test button that shows its
+  version), the diff font size and family, the diff options, the Local History limits, and the
+  keymap. In the keymap, click a key and press the new one; an action can have several keys. A key
+  that two actions use is marked red. The settings are stored in the browser storage of the app.
+  The keys in the commit message field and in dialogs stay fixed.
 - **Other**: context menus, Refresh, Fetch, column choice and resize, resizable panels,
   light, dark or system theme, and a status bar.
 
-Keyboard: `Ctrl/Cmd+O` open, `Ctrl/Cmd+K` commit, `Ctrl/Cmd+Shift+K` push, `Ctrl/Cmd+T` update,
+Keyboard (the defaults; change them in Settings → Keymap): `Ctrl/Cmd+O` open, `Ctrl/Cmd+K` commit, `Ctrl/Cmd+Shift+K` push, `Ctrl/Cmd+T` update,
 `Ctrl/Cmd+Enter` commit from the message field, `Ctrl/Cmd+Alt+K` commit and push, `Ctrl/Cmd+R` or `F5` refresh, `Ctrl/Cmd+F` filter, `Ctrl/Cmd+1` branches
 panel, arrow keys, Page Up, Page Down, Home and End in the log, `Shift` with arrows to select a range,
 `Ctrl/Cmd+C` copy the hash, `Ctrl/Cmd+Z` undo the last operation, `Ctrl/Cmd+PageDown` and `Ctrl/Cmd+PageUp` next and previous tab, `F7` and `Shift+F7` next and previous change, `Alt+Down` and `Alt+Up` next

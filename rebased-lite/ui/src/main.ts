@@ -3,6 +3,7 @@ import {
   api,
   initialPath,
   inTauri,
+  pickFile,
   pickFolder,
   type BranchInfo,
   type Change,
@@ -24,6 +25,8 @@ import {
 import { showBranchSwitcher } from "./branch-switcher";
 import { openMergeTool } from "./merge-view";
 import { openLocalHistory } from "./local-history-view";
+import { isMac, Keymap, type KeyAction } from "./keymap";
+import { openSettingsDialog } from "./settings-dialog";
 import { openHistory } from "./history-view";
 import { confirmDialog, conflictsDialog, credentialDialog, formDialog, interactiveRebaseDialog, messageDialog, pushDialog, resetDialog, updateDialog } from "./dialogs";
 import { toast } from "./notify";
@@ -33,7 +36,7 @@ import { StashPanel } from "./stash-panel";
 import { ChangesPanel } from "./changes-panel";
 import { menuBelow, showMenu, type MenuItem } from "./context-menu";
 import { DetailsPanel } from "./details-panel";
-import { DiffView, setMonacoTheme } from "./diff-view";
+import { applyDiffSettings, DiffView, setMonacoTheme } from "./diff-view";
 import { copyText, dragResize, h } from "./dom";
 import { FilterBar, emptyFilter } from "./filter-bar";
 import { LogView } from "./log-view";
@@ -74,7 +77,9 @@ const repoLabel = h("span", { class: "tb-repo" });
 const branchBtn = h("button", { class: "tb-button tb-branch-button", title: "Switch branch (recent branches first)", hidden: true }, "⑂ ▾");
 const viewBtn = h("button", { class: "tb-button", title: "View options" }, "View ▾");
 const themeBtn = h("button", { class: "tb-button", title: "Theme" }, "◐");
-const toolbar = h("header", { class: "toolbar" }, openBtn, refreshBtn, fetchBtn, updateBtn, pushBtn, localHistoryBtn, repoLabel, branchBtn, h("span", { class: "spacer" }), viewBtn, themeBtn);
+const settingsBtn = h("button", { class: "tb-button", title: "Settings" }, "⚙");
+settingsBtn.addEventListener("click", () => void openSettings());
+const toolbar = h("header", { class: "toolbar" }, openBtn, refreshBtn, fetchBtn, updateBtn, pushBtn, localHistoryBtn, repoLabel, branchBtn, h("span", { class: "spacer" }), viewBtn, themeBtn, settingsBtn);
 
 const tabBar = h("nav", { class: "tabbar", hidden: true });
 
@@ -1304,7 +1309,7 @@ async function rowMenu(r: Row, e: MouseEvent) {
   const multi = selected.length > 1;
   const cur = currentBranch();
   const items: MenuItem[] = [
-    { label: multi ? "Copy Revision Numbers" : "Copy Revision Number", shortcut: `${mod}C`, action: () => void copyText(multi ? selected.map((s) => s.oid).join(" ") : r.oid) },
+    { label: multi ? "Copy Revision Numbers" : "Copy Revision Number", shortcut: keymap.shortcut("copyHash"), action: () => void copyText(multi ? selected.map((s) => s.oid).join(" ") : r.oid) },
     { label: "Copy Subject", action: () => void copyText(r.subject) },
     { separator: true },
     { label: "Compare with Parent", action: () => log.select([r.row]) },
@@ -1457,7 +1462,7 @@ function showPathDialog() {
 
 openBtn.addEventListener("click", () =>
   menuBelow(openBtn, [
-    { label: "Open Repository…", shortcut: `${mod}O`, action: () => void askForRepo() },
+    { label: "Open Repository…", shortcut: keymap.shortcut("open"), action: () => void askForRepo() },
     ...(settings.recent.length ? [{ separator: true } as MenuItem, { header: "Recent" } as MenuItem] : []),
     ...settings.recent.map((p) => ({ label: p, action: () => void openRepo(p) })),
   ]),
@@ -1486,8 +1491,10 @@ viewBtn.addEventListener("click", () => {
     { label: "Date", checked: settings.showDate, action: col("showDate") },
     { label: "Hash", checked: settings.showHash, action: col("showHash") },
     { separator: true },
-    { label: "Branches Panel", checked: settings.showSidebar, shortcut: `${mod}1`, action: toggleSidebar },
+    { label: "Branches Panel", checked: settings.showSidebar, shortcut: keymap.shortcut("branches"), action: toggleSidebar },
     { label: "Go to HEAD", disabled: !view?.headOid, action: () => view?.headOid && void jumpToOid(view.headOid, true) },
+    { separator: true },
+    { label: "Settings…", shortcut: keymap.shortcut("settings"), action: () => void openSettings() },
   ]);
 });
 
@@ -1537,55 +1544,110 @@ function renderWelcome() {
 
 // ---- keyboard ----
 
-window.addEventListener("keydown", (e) => {
-  const cmd = e.metaKey || e.ctrlKey;
-  const target = e.target as HTMLElement;
-  const typing = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.closest(".monaco-editor");
-  if (cmd && e.key.toLowerCase() === "o") {
-    e.preventDefault();
-    void askForRepo();
-  } else if ((cmd && e.key.toLowerCase() === "r") || e.key === "F5") {
-    e.preventDefault();
-    void refresh();
-  } else if (cmd && e.key.toLowerCase() === "f" && !target.closest(".monaco-editor")) {
-    e.preventDefault();
-    filterBar.text.focus();
-    filterBar.text.select();
-  } else if (cmd && e.key === "1") {
-    e.preventDefault();
-    if (settings.showSidebar && settings.leftTab !== "branches") showLeftTab("branches");
-    else toggleSidebar();
-  } else if (cmd && e.shiftKey && e.key.toLowerCase() === "k") {
-    e.preventDefault();
-    if (view) void pushBranch();
-  } else if (cmd && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "t") {
-    e.preventDefault();
-    if (view) void updateBranch();
-  } else if (cmd && e.key.toLowerCase() === "k") {
-    e.preventDefault();
-    showLeftTab("commit");
-    commitPanel.focusMessage();
-  } else if (cmd && !e.shiftKey && e.key.toLowerCase() === "z" && !typing && view) {
-    e.preventDefault();
-    void undoLast();
-  } else if (cmd && (e.key === "PageDown" || e.key === "PageUp") && settings.tabs.length > 1) {
-    e.preventDefault();
-    const i = settings.tabs.indexOf(settings.activeTab ?? "");
-    const next = settings.tabs[(i + (e.key === "PageDown" ? 1 : -1) + settings.tabs.length) % settings.tabs.length];
-    void switchTab(next);
-  } else if (e.key === "F7") {
-    e.preventDefault();
-    diff.goToDiff(e.shiftKey ? "previous" : "next");
-  } else if (e.altKey && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-    e.preventDefault();
-    const d = e.key === "ArrowDown" ? 1 : -1;
-    if (diffSource === "local") commitPanel.move(d);
-    else changes.move(d);
-  } else if (cmd && e.key.toLowerCase() === "c" && !typing && target.closest(".log") && selected.length) {
-    e.preventDefault();
-    void copyText(selected.map((s) => s.oid).join(" "));
-    statusRight.textContent = "Copied the revision number";
+const keymap = new Keymap();
+const typing = (t: HTMLElement) => t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || !!t.closest(".monaco-editor");
+const nextTab = (d: number) => {
+  if (settings.tabs.length < 2) return;
+  const i = settings.tabs.indexOf(settings.activeTab ?? "");
+  void switchTab(settings.tabs[(i + d + settings.tabs.length) % settings.tabs.length]);
+};
+for (const a of [
+  { id: "open", label: "Open Repository", defaults: ["Mod+O"], run: () => void askForRepo() },
+  { id: "refresh", label: "Refresh", defaults: ["Mod+R", "F5"], run: () => void refresh() },
+  { id: "fetch", label: "Fetch", defaults: [], run: () => view && void fetchAll() },
+  { id: "update", label: "Update the Current Branch", defaults: ["Mod+T"], run: () => view && void updateBranch() },
+  { id: "push", label: "Push", defaults: ["Mod+Shift+K"], run: () => view && void pushBranch() },
+  {
+    id: "commit",
+    label: "Commit (show the Commit tab)",
+    defaults: ["Mod+K"],
+    run: () => {
+      showLeftTab("commit");
+      commitPanel.focusMessage();
+    },
+  },
+  { id: "undo", label: "Undo the Last Operation", defaults: ["Mod+Z"], run: () => view && void undoLast(), when: (t: HTMLElement) => !typing(t) },
+  { id: "filter", label: "Find in the Log (filter)", defaults: ["Mod+F"], run: () => { filterBar.text.focus(); filterBar.text.select(); }, when: (t: HTMLElement) => !t.closest(".monaco-editor") },
+  {
+    id: "branches",
+    label: "Branches Panel",
+    defaults: ["Mod+1"],
+    run: () => {
+      if (settings.showSidebar && settings.leftTab !== "branches") showLeftTab("branches");
+      else toggleSidebar();
+    },
+  },
+  { id: "localHistory", label: "Local History", defaults: [], run: () => view && showLocalHistory("") },
+  { id: "nextTab", label: "Next Tab", defaults: ["Mod+PageDown"], run: () => nextTab(1) },
+  { id: "previousTab", label: "Previous Tab", defaults: ["Mod+PageUp"], run: () => nextTab(-1) },
+  { id: "nextChange", label: "Next Change in the Diff", defaults: ["F7"], run: () => diff.goToDiff("next") },
+  { id: "previousChange", label: "Previous Change in the Diff", defaults: ["Shift+F7"], run: () => diff.goToDiff("previous") },
+  { id: "nextFile", label: "Next File", defaults: ["Alt+ArrowDown"], run: () => (diffSource === "local" ? commitPanel.move(1) : changes.move(1)) },
+  { id: "previousFile", label: "Previous File", defaults: ["Alt+ArrowUp"], run: () => (diffSource === "local" ? commitPanel.move(-1) : changes.move(-1)) },
+  {
+    id: "copyHash",
+    label: "Copy the Revision Number",
+    defaults: ["Mod+C"],
+    run: () => {
+      void copyText(selected.map((s) => s.oid).join(" "));
+      statusRight.textContent = "Copied the revision number";
+    },
+    when: (t: HTMLElement) => !typing(t) && !!t.closest(".log") && selected.length > 0,
+  },
+  { id: "settings", label: "Settings", defaults: [isMac ? "Mod+Comma" : "Mod+Alt+S"], run: () => void openSettings() },
+] as KeyAction[]) keymap.add(a);
+
+// ---- settings ----
+
+let autoFetchTimer = 0;
+function scheduleAutoFetch() {
+  clearInterval(autoFetchTimer);
+  if (settings.autoFetchMinutes > 0) {
+    autoFetchTimer = window.setInterval(() => {
+      if (view && busy === 0 && !document.hidden) void fetchAll();
+    }, settings.autoFetchMinutes * 60_000);
   }
+}
+
+/** Applies the settings that live outside the front end: the git program and the Local History limits. */
+async function applyBackendSettings() {
+  if (settings.gitPath) {
+    try {
+      await api.setGitProgram(settings.gitPath);
+    } catch (e) {
+      toast(`The git program in the settings does not work; git from PATH runs instead. ${String(e).replace(/^Error: /, "")}`, "error");
+    }
+  }
+  await api.setLocalHistoryLimits(settings.historyDays, settings.historyMaxMb).catch(() => {});
+}
+
+async function openSettings() {
+  const next = await openSettingsDialog({ keymap, testGit: (p) => api.setGitProgram(p).finally(() => api.setGitProgram(settings.gitPath).catch(() => {})), pickFile: () => pickFile("Git executable") });
+  if (!next) return;
+  const gitChanged = next.gitPath !== settings.gitPath;
+  const historyChanged = next.historyDays !== settings.historyDays || next.historyMaxMb !== settings.historyMaxMb;
+  if (gitChanged) {
+    try {
+      const version = await api.setGitProgram(next.gitPath);
+      statusRight.textContent = `git ${version}`;
+    } catch (e) {
+      toast(String(e).replace(/^Error: /, ""), "error");
+      next.gitPath = settings.gitPath;
+    }
+  }
+  Object.assign(settings, next);
+  save();
+  applyTheme();
+  applyDiffSettings();
+  scheduleAutoFetch();
+  if (historyChanged) await api.setLocalHistoryLimits(settings.historyDays, settings.historyMaxMb).catch(() => {});
+  if (gitChanged && view) void refresh();
+}
+
+window.addEventListener("keydown", (e) => {
+  // An open dialog handles its own keys.
+  if (document.querySelector(".overlay, .merge-overlay")) return;
+  keymap.handle(e);
 });
 
 // ---- start ----
@@ -1594,6 +1656,8 @@ applyLayout();
 showLeftTab(settings.leftTab);
 applyTheme();
 showWorkspace(false);
+await applyBackendSettings();
+scheduleAutoFetch();
 // The tabs of the last session come back; only the active one loads now, the others on first use.
 const initial = new URLSearchParams(location.search).get("repo") ?? (await initialPath());
 if (initial) void openRepo(initial);

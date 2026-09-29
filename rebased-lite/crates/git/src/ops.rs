@@ -7,7 +7,6 @@
 
 use crate::{GitError, Repo, Result};
 use serde::{Deserialize, Serialize};
-use std::process::Command;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -151,7 +150,7 @@ pub(crate) struct CommitMeta {
 impl Repo {
     /// Runs git for a write operation. It never prompts and never opens an editor.
     pub(crate) fn git_write(&self, args: &[&str], env: &[(&str, &str)]) -> std::result::Result<String, (String, String)> {
-        let mut cmd = Command::new("git");
+        let mut cmd = crate::git_command();
         cmd.arg("-C").arg(&self.root).args(args);
         cmd.env("GIT_TERMINAL_PROMPT", "0").env("GIT_EDITOR", "true").env("GIT_SEQUENCE_EDITOR", "true").env("LC_ALL", "C");
         cmd.envs(crate::network_env());
@@ -178,7 +177,7 @@ impl Repo {
     /// Runs git with `input` on stdin. It never prompts.
     pub(crate) fn git_stdin(&self, args: &[&str], input: &[u8]) -> std::result::Result<String, String> {
         use std::io::Write;
-        let mut child = Command::new("git")
+        let mut child = crate::git_command()
             .arg("-C")
             .arg(&self.root)
             .args(args)

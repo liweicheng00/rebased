@@ -147,6 +147,11 @@ fn set_local_history_limits(state: State<'_, Service>, args: rebased_service::hi
 }
 
 #[tauri::command(async)]
+fn set_git_program(state: State<'_, Service>, args: rebased_service::PathArgs) -> Result<Value, String> {
+    json(state.set_git_program(args))
+}
+
+#[tauri::command(async)]
 fn activate(state: State<'_, Service>, args: OpenArgs) -> Result<Value, String> {
     json(state.activate(args))
 }
@@ -210,7 +215,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Service::with_askpass(&std::env::current_exe().expect("current executable")))
-        .invoke_handler(tauri::generate_handler![initial_path, open, set_view, refresh, fetch, refs, rows, commit, find, compare, file_pair, collapse, repo_state, rewrite_range, run_op, worktrees, recent_branches, local_changes, changelist_op, head_message, push_info, stashes, stash_detail, merge_sides, file_history, blame, watch_state, askpass_pending, askpass_answer, local_history, local_history_content, set_local_history_limits, submodules, activate, close])
+        .invoke_handler(tauri::generate_handler![initial_path, open, set_view, refresh, fetch, refs, rows, commit, find, compare, file_pair, collapse, repo_state, rewrite_range, run_op, worktrees, recent_branches, local_changes, changelist_op, head_message, push_info, stashes, stash_detail, merge_sides, file_history, blame, watch_state, askpass_pending, askpass_answer, local_history, local_history_content, set_local_history_limits, submodules, activate, close, set_git_program])
         .run(tauri::generate_context!())
         .expect("error while running Rebased Lite");
 }
