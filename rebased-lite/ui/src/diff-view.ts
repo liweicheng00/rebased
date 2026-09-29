@@ -1,6 +1,6 @@
 // Monaco diff of one file, with a toolbar for navigation and diff options.
 
-import * as monaco from "monaco-editor/esm/vs/editor/edcore.main";
+import * as monaco from "./monaco";
 import "monaco-editor/esm/vs/basic-languages/monaco.contribution";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import type { Blame, Change, FileContent, RevSpec } from "./api";
@@ -23,7 +23,8 @@ export class DiffView {
   private host: HTMLElement;
   private editor: monaco.editor.IStandaloneDiffEditor;
   /** Shows an added or deleted file: one side has no content. */
-  private single: monaco.editor.IStandaloneCodeEditor;
+  /** Created on first use: most files are shown in the diff editor. */
+  private singleEditor: monaco.editor.IStandaloneCodeEditor | null = null;
   private singleHost: HTMLElement;
   private path = "";
   /** The file and revision that Annotate shows: the right side, or the left side of a deleted file. */
@@ -98,13 +99,6 @@ export class DiffView {
       renderOverviewRuler: true,
       fontSize: 12,
     });
-    this.single = monaco.editor.create(this.singleHost, {
-      readOnly: true,
-      automaticLayout: true,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      fontSize: 12,
-    });
     this.applyOptions();
     this.editor.onDidUpdateDiff(() => {
       this.updateStats();
@@ -121,14 +115,30 @@ export class DiffView {
       this.renderHunks();
       this.selectable.onChange(ex, ex.size ? this.partialContent() : null);
     });
-    for (const e of [this.editor.getModifiedEditor(), this.single]) {
-      e.onMouseDown((ev) => {
-        if (!this.annotateBox.checked || this.blameEditor !== e || ev.target.type !== monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS) return;
-        const oid = this.blameOids[(ev.target.position?.lineNumber ?? 0) - 1];
-        if (oid) this.onBlameClick(oid);
-      });
-    }
+    this.listenForBlameClicks(this.editor.getModifiedEditor());
     this.message("Select a file to see the diff.");
+  }
+
+  private listenForBlameClicks(e: monaco.editor.IStandaloneCodeEditor | monaco.editor.ICodeEditor) {
+    e.onMouseDown((ev) => {
+      if (!this.annotateBox.checked || this.blameEditor !== e || ev.target.type !== monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS) return;
+      const oid = this.blameOids[(ev.target.position?.lineNumber ?? 0) - 1];
+      if (oid) this.onBlameClick(oid);
+    });
+  }
+
+  private get single(): monaco.editor.IStandaloneCodeEditor {
+    if (!this.singleEditor) {
+      this.singleEditor = monaco.editor.create(this.singleHost, {
+        readOnly: true,
+        automaticLayout: true,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        fontSize: 12,
+      });
+      this.listenForBlameClicks(this.singleEditor);
+    }
+    return this.singleEditor;
   }
 
   private applyOptions() {

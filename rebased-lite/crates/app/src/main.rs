@@ -141,7 +141,25 @@ fn initial_path() -> Option<String> {
     std::env::args().nth(1).filter(|a| !a.starts_with('-'))
 }
 
+/// WebKitGTK draws with OpenGL. Without a GPU render node, Mesa runs OpenGL on the CPU (llvmpipe), and the
+/// GL buffers live in normal memory: about 280 MB more on git/git, and more CPU time. The software path of
+/// WebKit is cheaper then. A user setting of the variable wins.
+#[cfg(target_os = "linux")]
+fn use_software_rendering_without_gpu() {
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_some() {
+        return;
+    }
+    let has_gpu = std::fs::read_dir("/dev/dri")
+        .map(|d| d.flatten().any(|e| e.file_name().to_string_lossy().starts_with("renderD")))
+        .unwrap_or(false);
+    if !has_gpu {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+}
+
 fn main() {
+    #[cfg(target_os = "linux")]
+    use_software_rendering_without_gpu();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Service::default())

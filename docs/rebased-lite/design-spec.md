@@ -370,6 +370,38 @@ v0.4 的量測（同一台機器、同樣條件，git/git，開啟後 20 秒）�
 
 新功能沒有增加記憶體：兩個前端在同樣條件下差不多。但這次的絕對數字比上表 v0.1 的數字高（網頁行程 598 MB 對 246 MB）。JavaScript heap 只有 16 MB，DOM 約 1,600 個節點，所以差異在 WebKit 本身（繪圖或編譯後的程式碼），不在前端資料。原因還沒有找到。Rebased 1.1.19 這次沒有重新量測，所以不能直接和上表的 1,250 MB 比較。
 
+### 記憶體瓶頸分析（v0.4.1）
+
+量測方法：Linux x86_64、Xvfb（沒有 GPU），git/git，開啟後 20 秒，量三個行程（app、WebKit 網頁、WebKit 網路）的 RSS。RSS 會把共用函式庫在每個行程各算一次，所以另外列出 PSS（共用頁面依行程數平分），PSS 的總和才是實際占用。
+
+| 實驗 | 總 RSS | 網頁行程 RSS |
+|---|---|---|
+| 優化前的預設 | 850 MB | 582 MB |
+| 關閉 WebKit 的 DMABUF renderer | 552 MB | 311 MB |
+| 再關閉 JavaScriptCore 的 JIT（只為量測） | 485 MB | 245 MB |
+| 只保留 baseline JIT（關閉 DFG、FTL） | 532 MB | 289 MB |
+| 沒有 Monaco（只為量測） | 424 MB | 186 MB |
+| 載入精簡的 Monaco，但不建立編輯器（只為量測） | 463 MB | 219 MB |
+| 精簡的 Monaco | 529 MB | 287 MB |
+| 延後建立單一編輯器 | 549 MB | 306 MB |
+| 不用 diff worker（只為量測） | 535 MB | 292 MB |
+
+Rust 核心（dev server 開啟 git/git）只用 41.6 MB。
+
+瓶頸依大小排列：
+
+1. **沒有 GPU 時的 WebKit 合成（約 280 MB）。** WebKitGTK 用 OpenGL 合成畫面。沒有 GPU 時，Mesa 用 CPU 模擬 OpenGL（llvmpipe），GL 緩衝區放在一般記憶體裡，兩個行程還各載入約 50 MB 的 libLLVM。這也是 v0.1 量到 478 MB、之後量到 865 MB 的原因：量測環境不同，不是新功能造成的。**已修正：** app 在 Linux 上找不到 GPU（`/dev/dri/renderD*`）時，設定 `WEBKIT_DISABLE_DMABUF_RENDERER=1`，改用 WebKit 的軟體繪圖路徑。使用者自己設定的值優先。有 GPU 的機器維持原樣。macOS 的 WKWebView 用 GPU 行程，不受影響。
+2. **Monaco（約 100–125 MB）。** 其中約 33 MB 是載入程式碼。其餘是 JavaScriptCore 為執行過的程式產生的 bytecode 和 JIT 程式碼，以及編輯器實例。**已修正一部分：** 只載入用到的 Monaco 功能（bundle 從 3.36 MB 降到 2.87 MB，開啟時約 −24 MB），單一編輯器（新增或刪除的檔案）在第一次使用時才建立（約 −5 MB）。更大的節省需要換掉 Monaco，這會改變編輯器的體驗，需要先決定。
+3. **WebKit 與 GTK 的固定成本。** app 行程約 190 MB RSS（PSS 約 125 MB），其中 Rust 核心只有 41.6 MB，其餘是 GTK 和 WebKit 的 UI 端。網路行程固定約 48 MB。這部分只能靠換掉 WebView 才能降低。
+4. **JIT。** 關閉 DFG 和 FTL 可以再省約 22 MB，但 JavaScript 會變慢，所以沒有採用。
+
+使用 2 分鐘後（點選 12 個 commit、開啟 diff）：
+
+| 版本 | 總 RSS | 總 PSS |
+|---|---|---|
+| 優化前 | 968 MB | 767 MB |
+| 優化後 | 541 MB | 386 MB |
+
 macOS 的 WKWebView 數字會不同，還需要在 macOS 上量測。
 
 v0.4 沒有做的事：

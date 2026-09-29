@@ -2,7 +2,7 @@
 // The result starts as the base version. Apply (» or «) or ignore (✕) each change, or apply all
 // non-conflicting changes at once. The result stays editable.
 
-import * as monaco from "monaco-editor/esm/vs/editor/edcore.main";
+import * as monaco from "./monaco";
 import { languageFor } from "./diff-view";
 import { merge3, splitLines, type Chunk } from "./diff3";
 import { h } from "./dom";
