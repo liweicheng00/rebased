@@ -74,11 +74,34 @@ export interface Change {
   rightRev?: RevSpec;
 }
 
+/** A version of a file in Local History. */
+export interface LocalRevision {
+  time: number;
+  path: string;
+  /** Null when the file did not exist at this time. */
+  blob: string | null;
+  /** Why the version was made, for example "Before Rollback". Empty for a change on disk. */
+  label: string;
+}
+
 export interface FileContent {
   text: string | null;
   binary: boolean;
   size: number;
   missing: boolean;
+  /** Why the content is special, for example a submodule or a Git LFS object that is not downloaded. */
+  note?: string;
+}
+
+export interface Submodule {
+  path: string;
+  /** The commit that the repository records. */
+  recorded: string;
+  /** The checked-out commit. Null when the submodule is not initialized. */
+  current: string | null;
+  state: "uninitialized" | "clean" | "otherCommit" | "conflict";
+  dirty: boolean;
+  url: string | null;
 }
 
 export interface CommitInfo {
@@ -141,14 +164,24 @@ export interface OpResult {
   ok: boolean;
   message: string;
   conflicts: string[];
-  undoTo: string | null;
-  undoSoft: boolean;
+  /** The steps that undo the operation. Empty when it cannot be undone. */
+  undo: UndoAction[];
 }
+
+export type UndoAction =
+  | { kind: "reset"; to: string; expectedHead: string; mode: "keep" | "soft" | "mixed" }
+  | { kind: "checkout"; target: string; detach: boolean; expectedHead: string }
+  | { kind: "createRef"; name: string; oid: string }
+  | { kind: "deleteRef"; name: string; expected: string }
+  | { kind: "renameBranch"; from: string; to: string }
+  | { kind: "stashStore"; oid: string; message: string };
 
 export interface OpOutcome {
   result: OpResult;
   view: ViewResult;
   head: string | null;
+  /** Submodules that are not at the recorded commit after the operation moved HEAD. */
+  staleSubmodules: string[];
 }
 
 export type PlanAction = "pick" | "reword" | "edit" | "squash" | "fixup" | "drop";
@@ -200,7 +233,9 @@ export type Op =
   | { op: "abort" }
   | { op: "markResolved"; paths: string[] }
   | { op: "rewrite"; base: string; plan: PlanEntry[]; what: string }
-  | { op: "undo"; to: string; expectedHead: string; soft?: boolean }
+  | { op: "undo"; actions: UndoAction[] }
+  | { op: "updateSubmodules"; paths: string[] }
+  | { op: "revertLocalHistory"; path: string; blob: string | null }
   | { op: "addWorktree"; path: string; branch: string; newBranch: boolean; at: string }
   | { op: "removeWorktree"; path: string; force: boolean }
   | { op: "pruneWorktrees" }
@@ -330,6 +365,10 @@ export const api = {
   askpassAnswer: (id: number, answer: string | null, remember: boolean) => call<null>("askpass_answer", { id, answer, remember }),
   watchState: () => call<{ repo: number; files: number } | null>("watch_state"),
   stashes: () => call<Stash[]>("stashes"),
+  localHistory: (path: string) => call<LocalRevision[]>("local_history", { path }),
+  localHistoryContent: (blob: string | null) => call<Omit<FileContent, "size">>("local_history_content", { blob }),
+  setLocalHistoryLimits: (days: number, maxMb: number) => call<null>("set_local_history_limits", { days, maxMb }),
+  submodules: () => call<Submodule[]>("submodules"),
   fileHistory: (path: string) => call<HistoryEntry[]>("file_history", { path }),
   blame: (path: string, rev: RevSpec) => call<Blame>("blame", { path, rev }),
   mergeSides: (path: string) => call<MergeSides>("merge_sides", { path }),

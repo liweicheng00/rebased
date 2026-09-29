@@ -351,6 +351,13 @@ get_file_pair(left: Rev, right: Rev | "WORKTREE", change: Change): { left?: Blob
 | 檔案層級操作（v0.4） | 完成。變更清單可以多選。對 commit 中的檔案：Revert Selected Changes、Cherry-Pick Selected Changes、Get from Revision。 |
 | 互動式 rebase 的 Edit（v0.4） | 完成。有 Edit 步驟時改用真正的 `git rebase -i`（由程式寫入 todo，訊息用 `exec git commit --amend` 設定），在該 commit 停下。橫幅顯示停在哪個 commit，工具列顯示 rebasing 的分支。修改檔案後在 Commit 分頁 Amend，再按 Continue。本機變更會自動 stash 後還原。 |
 | 分支比較（v0.4） | 完成。分支選單的 Show Commits Not in &lt;目前分支&gt; 與反向，log 只顯示一邊有而另一邊沒有的 commit。 |
+| 自動重新整理（v0.5） | 完成。監看工作目錄與 git 目錄。外部編輯的檔案、終端機裡的 commit 與分支、fetch 在約一秒內出現。git 忽略的檔案不觸發重新整理。讀取時設定 `GIT_OPTIONAL_LOCKS=0`，所以 app 自己的讀取不會改寫 index。 |
+| 密碼與 passphrase（v0.5） | 完成。app 本身是 `GIT_ASKPASS` 與 `SSH_ASKPASS` 程式，透過 Unix socket 把提示送回 app，由對話框回答。可以記住答案到 app 關閉。 |
+| 簽章與 hook（v0.5） | 完成。app 自己寫的 commit（squash、drop、reword、部分 commit）在 `commit.gpgsign` 開啟時簽章。部分 commit 執行 pre-commit、commit-msg、post-commit hook。 |
+| Undo（v0.5） | 完成。每個操作回傳一串 Undo 步驟（reset、checkout、建立或刪除 ref、改名、還原 stash）。支援 checkout、新增分支與 tag、改名、刪除分支與 tag、merge、rebase、cherry-pick、revert、update、reset、改寫、commit、drop stash。HEAD 在操作後移動過時拒絕 Undo。`Ctrl/Cmd+Z` 復原上一個操作。 |
+| Local History（v0.5） | 完成。watcher 在檔案變更時保存版本；Rollback、刪除未追蹤檔、Get from Revision、Apply Changes、hard reset、stash、resolve 之前也保存。存在 git 目錄的 `rebased-lite/local-history`（`index.jsonl` 與 gzip 壓縮的 blob）。保留 5 天、最多 200 MB。視窗顯示版本與目前檔案的 diff，可以 Revert。 |
+| Submodule（v0.5） | 完成。Branches 分頁列出 submodule 與狀態（未初始化、其他 commit、有本機變更）。可以 Update（init 後 checkout 記錄的 commit）與開啟。diff 顯示 `Subproject commit <hash>`。Rollback 會 checkout 記錄的 commit。checkout、merge、rebase、reset、update 改變記錄的 commit 後，通知提供 Update Submodules。watcher 不監看 submodule 內部。 |
+| Git LFS（v0.5） | 完成。commit 裡的 LFS 檔案，物件已下載時 diff 顯示真實內容，否則顯示 pointer 與說明。部分 commit 用 `git hash-object --path` 執行 clean filter，所以 LFS 檔案存成 pointer（修正前會存成真實內容）。 |
 | 8.3 資源量測 | 見下表。 |
 
 資源量測（Linux x86_64、Xvfb、WebKitGTK 軟體繪圖，git/git）：
@@ -409,6 +416,5 @@ macOS 的 WKWebView 數字會不同，還需要在 macOS 上量測。
 
 v0.4 沒有做的事：
 - 一個檔案的不同行不能分到不同 changelist（IntelliJ 的 partial changelist）。部分 commit 可以只 commit 一個檔案的部分變更，但這個選擇只存在記憶體中，重新開啟 repo 後就消失。
-- Git 不會跳出密碼提示。需要密碼的 remote 必須設定 credential helper 或 SSH agent。
 - 沒有 TextMate 上色（見 6.3）。
 - 所有功能只在 Linux 上測試過，還沒有在 macOS 上測試。

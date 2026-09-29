@@ -1,6 +1,7 @@
 //! App state and commands. Every command takes and returns JSON-serializable values.
 
 pub mod askpass;
+pub mod history;
 pub mod watch;
 
 pub use rebased_git::changelist::{ChangeListOp, LocalChanges, PartialFile};
@@ -9,7 +10,7 @@ use rebased_git::stash::{Stash, StashDetail};
 use rebased_git::merge::{MergeSides, Side};
 use rebased_git::history::{Blame, HistoryEntry};
 use rebased_git::worktree::{RecentBranch, Worktree};
-use rebased_git::ops::{OpResult, PlanEntry, RepoState, ResetMode, RewriteRange};
+use rebased_git::ops::{OpResult, PlanEntry, RepoState, ResetMode, RewriteRange, UndoAction, UndoMode};
 use rebased_git::{BranchInfo, Change, CommitDetails, CommitFull, FileContent, LogFilter, RefLabel, Repo, Rev, Topology};
 use rebased_graph::linear::{GraphCommit, PermanentLinearGraph};
 use rebased_graph::print::{Direction, PrintElement};
@@ -17,7 +18,8 @@ use rebased_graph::{filter, Graph, GraphOptions, Printer};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Mutex;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -58,12 +60,14 @@ struct Session {
     head_node: Option<usize>,
     /// None when the watcher could not start; the front end then refreshes on focus only.
     watcher: Option<watch::RepoWatcher>,
+    history: Arc<history::LocalHistory>,
 }
 
 #[derive(Default)]
 pub struct Service {
     session: Mutex<Option<Session>>,
     askpass: Option<std::sync::Arc<askpass::Askpass>>,
+    history_limits: Mutex<history::Limits>,
 }
 
 #[derive(Deserialize, Clone, Default)]
@@ -222,7 +226,7 @@ pub enum Op {
     Abort,
     MarkResolved { paths: Vec<String> },
     Rewrite { base: String, plan: Vec<PlanEntry>, what: String },
-    Undo { to: String, expected_head: String, #[serde(default)] soft: bool },
+    Undo { actions: Vec<UndoAction> },
     AddWorktree { path: String, branch: String, new_branch: bool, at: String },
     RemoveWorktree { path: String, force: bool },
     PruneWorktrees,
@@ -240,11 +244,122 @@ pub enum Op {
     ResolveSide { paths: Vec<String>, side: Side },
     ApplyFileChanges { from: String, to: String, paths: Vec<String>, #[serde(default)] reverse: bool },
     GetFromRevision { rev: String, paths: Vec<String> },
+    /// Initializes the submodules and checks out their recorded commits. No paths means all submodules.
+    UpdateSubmodules { #[serde(default)] paths: Vec<String> },
+    /// Writes a Local History version back to the working tree. No blob deletes the file.
+    RevertLocalHistory { path: String, blob: Option<String> },
+}
+
+/// The files whose local changes an operation can lose, and the Local History label for them.
+fn at_risk(repo: &Repo, op: &Op) -> Option<(&'static str, Vec<PathBuf>)> {
+    let files = |paths: &[String]| paths.iter().map(PathBuf::from).collect::<Vec<_>>();
+    let (label, paths) = match op {
+        Op::Rollback { paths } => ("Before Rollback", files(paths)),
+        Op::DeleteUnversioned { paths } => ("Before Delete", files(paths)),
+        Op::GetFromRevision { paths, .. } => ("Before Get from Revision", files(paths)),
+        Op::ApplyFileChanges { paths, .. } => ("Before Apply Changes", files(paths)),
+        Op::ResolveText { path, .. } => ("Before Resolve", files(std::slice::from_ref(path))),
+        Op::ResolveSide { paths, .. } => ("Before Resolve", files(paths)),
+        Op::StashPush { paths, .. } if !paths.is_empty() => ("Before Stash", files(paths)),
+        Op::StashPush { .. } | Op::Reset { mode: ResetMode::Hard, .. } => {
+            let label = if matches!(op, Op::StashPush { .. }) { "Before Stash" } else { "Before Hard Reset" };
+            let out = repo.git(&["diff", "--name-only", "-z", "HEAD"]).ok()?;
+            let changed: Vec<PathBuf> =
+                out.split(|&b| b == 0).filter(|p| !p.is_empty()).map(|p| PathBuf::from(String::from_utf8_lossy(p).into_owned())).collect();
+            (label, changed)
+        }
+        _ => return None,
+    };
+    (!paths.is_empty() && paths.len() <= history::MAX_BULK_FILES * 5).then_some((label, paths))
+}
+
+/// What Undo must do for an operation, from the state before it.
+enum UndoPlan {
+    None,
+    /// Move the branch back to the HEAD before the operation.
+    MoveBack(UndoMode),
+    /// Go back to the branch or commit before; `created` is a local branch that the checkout created.
+    Checkout { created: Option<String> },
+    CreatedBranch { name: String, checkout: bool },
+    CreatedTag { name: String },
+    Renamed { from: String, to: String },
+    DeletedRef { name: String, oid: String },
+    DroppedStash { oid: String, message: String },
+}
+
+fn raw_ref(repo: &Repo, name: &str) -> Option<String> {
+    repo.git(&["rev-parse", "-q", "--verify", name]).ok().map(|b| String::from_utf8_lossy(&b).trim().to_string()).filter(|s| !s.is_empty())
+}
+
+impl UndoPlan {
+    fn before(repo: &Repo, op: &Op) -> UndoPlan {
+        match op {
+            Op::Checkout { target, kind } => {
+                let local = target.split_once('/').map_or(target.as_str(), |(_, b)| b);
+                let created = (kind == "remote" && raw_ref(repo, &format!("refs/heads/{local}")).is_none()).then(|| local.to_string());
+                UndoPlan::Checkout { created }
+            }
+            Op::CreateBranch { name, checkout, .. } => UndoPlan::CreatedBranch { name: name.clone(), checkout: *checkout },
+            Op::CreateTag { name, .. } => UndoPlan::CreatedTag { name: name.clone() },
+            Op::RenameBranch { from, to } => UndoPlan::Renamed { from: from.clone(), to: to.clone() },
+            Op::DeleteBranch { name, .. } | Op::DeleteTag { name } => {
+                let full = if matches!(op, Op::DeleteTag { .. }) { format!("refs/tags/{name}") } else { format!("refs/heads/{name}") };
+                // A tag keeps its tag object, so an annotated tag comes back with its message.
+                raw_ref(repo, &full).map_or(UndoPlan::None, |oid| UndoPlan::DeletedRef { name: full, oid })
+            }
+            Op::Merge { .. } | Op::Rebase { .. } | Op::CherryPick { .. } | Op::Revert { .. } | Op::Update { .. } | Op::Continue => {
+                UndoPlan::MoveBack(UndoMode::Keep)
+            }
+            Op::Reset { mode, .. } => UndoPlan::MoveBack(match mode {
+                ResetMode::Soft | ResetMode::Mixed => UndoMode::Mixed,
+                ResetMode::Hard | ResetMode::Keep => UndoMode::Keep,
+            }),
+            Op::StashDrop { index } => repo
+                .stashes()
+                .ok()
+                .and_then(|l| l.into_iter().find(|s| s.index == *index))
+                .map_or(UndoPlan::None, |s| UndoPlan::DroppedStash { oid: s.oid, message: s.message }),
+            _ => UndoPlan::None,
+        }
+    }
+
+    fn actions(self, repo: &Repo, pre_head: Option<String>, pre_branch: Option<String>) -> Vec<UndoAction> {
+        let post = repo.resolve("HEAD").unwrap_or_default();
+        let back = || match (&pre_branch, &pre_head) {
+            (Some(b), _) => Some(UndoAction::Checkout { target: b.clone(), detach: false, expected_head: post.clone() }),
+            (None, Some(h)) => Some(UndoAction::Checkout { target: h.clone(), detach: true, expected_head: post.clone() }),
+            _ => None,
+        };
+        let delete = |full: String| raw_ref(repo, &full).map(|expected| UndoAction::DeleteRef { name: full, expected });
+        match self {
+            UndoPlan::None => Vec::new(),
+            UndoPlan::MoveBack(mode) => match pre_head {
+                Some(h) if h != post && !post.is_empty() => vec![UndoAction::Reset { to: h, expected_head: post, mode }],
+                _ => Vec::new(),
+            },
+            UndoPlan::Checkout { created } => {
+                back().into_iter().chain(created.and_then(|c| delete(format!("refs/heads/{c}")))).collect()
+            }
+            UndoPlan::CreatedBranch { name, checkout } => {
+                let first = if checkout { back() } else { None };
+                first.into_iter().chain(delete(format!("refs/heads/{name}"))).collect()
+            }
+            UndoPlan::CreatedTag { name } => delete(format!("refs/tags/{name}")).into_iter().collect(),
+            UndoPlan::Renamed { from, to } => vec![UndoAction::RenameBranch { from: to, to: from }],
+            UndoPlan::DeletedRef { name, oid } => vec![UndoAction::CreateRef { name, oid }],
+            UndoPlan::DroppedStash { oid, message } => vec![UndoAction::StashStore { oid, message }],
+        }
+    }
 }
 
 #[derive(Deserialize)]
 pub struct PathArgs {
     pub path: String,
+}
+
+#[derive(Deserialize)]
+pub struct BlobArgs {
+    pub blob: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -269,6 +384,9 @@ pub struct OpOutcome {
     pub result: OpResult,
     pub view: ViewResult,
     pub head: Option<String>,
+    /// Submodules whose checked-out commit is not the recorded commit after an operation that moved HEAD.
+    #[serde(rename = "staleSubmodules")]
+    pub stale_submodules: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -348,7 +466,7 @@ impl Service {
     /// A service whose git commands ask for credentials through `helper`, the executable of the app. The
     /// executable must call [`askpass::run_helper_if_requested`] first in `main`.
     pub fn with_askpass(helper: &Path) -> Service {
-        Service { session: Mutex::default(), askpass: askpass::Askpass::start(helper).ok() }
+        Service { askpass: askpass::Askpass::start(helper).ok(), ..Service::default() }
     }
 
     pub fn askpass_pending(&self) -> Vec<askpass::Prompt> {
@@ -363,23 +481,28 @@ impl Service {
 
     pub fn open(&self, args: OpenArgs) -> Result<ViewResult> {
         let repo = Repo::open(Path::new(&args.path)).map_err(err)?;
-        self.load(repo, args.view)
+        self.load(repo, args.view, false)
     }
 
-    fn load(&self, repo: Repo, settings: ViewArgs) -> Result<ViewResult> {
+    /// Loads the repository. A refresh (`keep`) keeps the watcher and Local History of the same
+    /// repository. An open starts them again, because the directory can be new at the same path.
+    fn load(&self, repo: Repo, settings: ViewArgs, keep: bool) -> Result<ViewResult> {
         let t = std::time::Instant::now();
         let topo = repo.load_topology().map_err(err)?;
         let full = build_full(&topo);
         let view = build_view(&repo, &topo, &full, &settings)?;
         let head_node = repo.resolve("HEAD").and_then(|o| topo.node_of(&o));
-        // A refresh of the same repository keeps its watcher. The old session stays until the new one
-        // replaces it, so concurrent commands never see "no repository".
-        let kept = match self.session.lock().unwrap().as_mut() {
-            Some(o) if o.repo.root == repo.root => o.watcher.take(),
-            _ => None,
+        // The old session stays until the new one replaces it, so concurrent commands never see
+        // "no repository".
+        let (kept, history) = match self.session.lock().unwrap().as_mut() {
+            Some(o) if keep && o.repo.root == repo.root => (o.watcher.take(), Some(o.history.clone())),
+            _ => (None, None),
         };
-        let watcher = kept.or_else(|| watch::RepoWatcher::start(&repo.root, &repo.git_dir(), &repo.common_dir()).ok());
-        let mut s = Session { repo, topo, full, settings, view, details: HashMap::new(), head_node, watcher };
+        let history = history
+            .unwrap_or_else(|| Arc::new(history::LocalHistory::open(&repo.root, &repo.git_dir(), *self.history_limits.lock().unwrap())));
+        let watcher =
+            kept.or_else(|| watch::RepoWatcher::start(&repo.root, &repo.git_dir(), &repo.common_dir(), Some(history.clone())).ok());
+        let mut s = Session { repo, topo, full, settings, view, details: HashMap::new(), head_node, watcher, history };
         let result = Self::result(&mut s, t);
         *self.session.lock().unwrap() = Some(s);
         Ok(result)
@@ -419,7 +542,7 @@ impl Service {
     /// Reloads commits and refs from disk and keeps the current view settings.
     pub fn refresh(&self) -> Result<ViewResult> {
         let (root, settings) = self.with(|s| Ok((s.repo.root.clone(), s.settings.clone())))?;
-        self.load(Repo::open(&root).map_err(err)?, settings)
+        self.load(Repo::open(&root).map_err(err)?, settings, true)
     }
 
     pub fn fetch(&self) -> Result<ViewResult> {
@@ -576,6 +699,27 @@ impl Service {
         self.with(|s| Ok(s.watcher.as_ref().map(|w| w.state.counters())))
     }
 
+    /// The Local History versions of a file or a directory, or of all files when the path is empty.
+    pub fn local_history(&self, args: PathArgs) -> Result<Vec<history::Revision>> {
+        self.with(|s| Ok(s.history.revisions(Some(args.path.as_str()).filter(|p| !p.is_empty()), 2000)))
+    }
+
+    pub fn local_history_content(&self, args: BlobArgs) -> Result<history::Content> {
+        self.with(|s| Ok(s.history.content(args.blob.as_deref())))
+    }
+
+    pub fn set_local_history_limits(&self, limits: history::Limits) -> Result<()> {
+        *self.history_limits.lock().unwrap() = limits;
+        if let Some(s) = self.session.lock().unwrap().as_ref() {
+            s.history.set_limits(limits);
+        }
+        Ok(())
+    }
+
+    pub fn submodules(&self) -> Result<Vec<rebased_git::submodule::Submodule>> {
+        self.with(|s| s.repo.submodules().map_err(err))
+    }
+
     pub fn head_message(&self) -> Result<String> {
         self.with(|s| s.repo.head_message().map_err(err))
     }
@@ -591,8 +735,29 @@ impl Service {
     /// Runs a write operation, then reloads commits and refs. A failed operation still reloads,
     /// because git can stop halfway (for example at a conflict).
     pub fn run_op(&self, op: Op) -> Result<OpOutcome> {
-        let root = self.with(|s| Ok(s.repo.root.clone()))?;
+        let (root, history) = self.with(|s| Ok((s.repo.root.clone(), s.history.clone())))?;
         let repo = Repo::open(&root).map_err(err)?;
+        if let Some((label, paths)) = at_risk(&repo, &op) {
+            history.record(&paths, label);
+        }
+        let plan = UndoPlan::before(&repo, &op);
+        let pre_head = repo.resolve("HEAD");
+        let pre_branch = repo.state().ok().and_then(|s| s.branch);
+        // Operations that can change the recorded commit of a submodule without checking it out.
+        let moves_head = matches!(
+            op,
+            Op::Checkout { .. }
+                | Op::CreateBranch { checkout: true, .. }
+                | Op::Merge { .. }
+                | Op::Rebase { .. }
+                | Op::CherryPick { .. }
+                | Op::Revert { .. }
+                | Op::Reset { .. }
+                | Op::Continue
+                | Op::Abort
+                | Op::Undo { .. }
+                | Op::Update { .. }
+        );
         let result = match op {
             Op::Checkout { target, kind } => repo.checkout(&target, &kind),
             Op::CreateBranch { name, at, checkout } => repo.create_branch(&name, &at, checkout),
@@ -609,7 +774,7 @@ impl Service {
             Op::Abort => repo.continue_or_abort(true),
             Op::MarkResolved { paths } => repo.mark_resolved(&paths),
             Op::Rewrite { base, plan, what } => repo.rewrite(&base, &plan, &what),
-            Op::Undo { to, expected_head, soft } => repo.undo(&to, &expected_head, soft),
+            Op::Undo { actions } => repo.apply_undo(&actions),
             Op::AddWorktree { path, branch, new_branch, at } => {
                 repo.add_worktree(&path, &branch, new_branch, &at).map(|_| OpResult::ok_msg(format!("Added worktree {path}")))
             }
@@ -639,14 +804,32 @@ impl Service {
             Op::ResolveSide { paths, side } => repo.resolve_with_side(&paths, side),
             Op::ApplyFileChanges { from, to, paths, reverse } => repo.apply_file_changes(&from, &to, &paths, reverse),
             Op::GetFromRevision { rev, paths } => repo.get_from_revision(&rev, &paths),
+            Op::UpdateSubmodules { paths } => repo.update_submodules(&paths),
+            Op::RevertLocalHistory { path, blob } => history
+                .revert(&path, blob.as_deref())
+                .map(|_| OpResult::ok_msg(format!("Reverted {path} to the Local History version")))
+                .map_err(rebased_git::GitError),
         };
-        let result = match result {
+        let mut result = match result {
             Ok(r) => r,
-            Err(e) => OpResult { ok: false, message: e.to_string(), conflicts: Vec::new(), undo_to: None, undo_soft: false },
+            Err(e) => OpResult { ok: false, message: e.to_string(), conflicts: Vec::new(), undo: Vec::new() },
         };
+        if result.ok && result.undo.is_empty() {
+            result.undo = plan.actions(&repo, pre_head.clone(), pre_branch);
+        }
         let view = self.refresh()?;
         let head = view.head_oid.clone();
-        Ok(OpOutcome { result, view, head })
+        let stale_submodules = if moves_head && head != pre_head {
+            repo.submodules()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|s| s.state == rebased_git::submodule::SubmoduleState::OtherCommit && !s.dirty)
+                .map(|s| s.path)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        Ok(OpOutcome { result, view, head, stale_submodules })
     }
 
     fn rev(repo: &Repo, spec: &RevSpec) -> Result<Rev> {
@@ -705,6 +888,10 @@ impl Service {
                 Ok("null".to_string())
             }
             "head_message" => serde_json::to_string(&self.head_message()?),
+            "submodules" => serde_json::to_string(&self.submodules()?),
+            "local_history" => serde_json::to_string(&self.local_history(parse(body)?)?),
+            "local_history_content" => serde_json::to_string(&self.local_history_content(parse(body)?)?),
+            "set_local_history_limits" => serde_json::to_string(&self.set_local_history_limits(parse(body)?)?),
             "repo_state" => serde_json::to_string(&self.state()?),
             "worktrees" => serde_json::to_string(&self.worktrees()?),
             "recent_branches" => serde_json::to_string(&self.recent_branches()?),

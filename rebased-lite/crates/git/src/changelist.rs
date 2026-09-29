@@ -5,7 +5,7 @@
 //! worktree has its own changelists. A changed file that is in no changelist goes to the active changelist
 //! the first time it is seen. A file that is not changed any more leaves its changelist.
 
-use crate::ops::OpResult;
+use crate::ops::{OpResult, UndoAction, UndoMode};
 use crate::{parse_name_status, Change, GitError, Repo, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -323,8 +323,7 @@ impl Repo {
             message: format!("{what} {} ({files} file{})", &head[..head.len().min(8)], if files == 1 { "" } else { "s" }),
             conflicts: Vec::new(),
             // A commit on an unborn branch has nothing to go back to.
-            undo_to: old_head,
-            undo_soft: true,
+            undo: old_head.map(|h| vec![UndoAction::Reset { to: h, expected_head: head.clone(), mode: UndoMode::Soft }]).unwrap_or_default(),
         })
     }
 
@@ -362,7 +361,7 @@ impl Repo {
                 run(&args)?;
             }
             for f in partial {
-                let blob = self.hash_object(&f.content)?;
+                let blob = self.hash_object(&f.path, &f.content)?;
                 let mode = old_head
                     .as_ref()
                     .and_then(|h| self.git(&["ls-tree", h, "--", &f.path]).ok())
@@ -428,17 +427,18 @@ impl Repo {
                 partial.len()
             ),
             conflicts: Vec::new(),
-            undo_to: old_head,
-            undo_soft: true,
+            undo: old_head.map(|h| vec![UndoAction::Reset { to: h, expected_head: commit.clone(), mode: UndoMode::Soft }]).unwrap_or_default(),
         })
     }
 
-    fn hash_object(&self, content: &str) -> Result<String> {
+    /// Writes `content` as the blob of `path`. The clean filters of the path run, as in `git add`: a Git
+    /// LFS file becomes its pointer, and the line endings follow `core.autocrlf` and `.gitattributes`.
+    fn hash_object(&self, path: &str, content: &str) -> Result<String> {
         use std::io::Write;
         let mut child = std::process::Command::new("git")
             .arg("-C")
             .arg(&self.root)
-            .args(["hash-object", "-w", "--stdin"])
+            .args(["hash-object", "-w", "--stdin", "--path", path])
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -469,6 +469,11 @@ impl Repo {
             let mut args = vec!["restore", "--source=HEAD", "--staged", "--worktree", "--"];
             args.extend(paths.iter().map(String::as_str));
             self.git_write(&args, &[]).map_err(|(_, e)| GitError(e))?;
+            // Restore does not move a submodule: check out its recorded commit.
+            let subs: Vec<String> = paths.iter().filter(|p| self.gitlink(Some("HEAD"), p).is_some()).cloned().collect();
+            if !subs.is_empty() {
+                self.update_submodules(&subs)?;
+            }
         }
         Ok(OpResult::ok_msg(format!("Rolled back {} file{}", paths.len(), if paths.len() == 1 { "" } else { "s" })))
     }

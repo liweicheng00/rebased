@@ -14,10 +14,14 @@ export interface HistoryCallbacks {
 
 let diff: DiffView | null = null;
 
-export async function openHistory(path: string, cb: HistoryCallbacks) {
-  // One diff view for all history windows: Monaco editors are expensive.
+/** One diff view for all history windows: Monaco editors are expensive. */
+export function sharedDiff(): DiffView {
   diff ??= new DiffView();
-  const d = diff;
+  return diff;
+}
+
+export async function openHistory(path: string, cb: HistoryCallbacks) {
+  const d = sharedDiff();
   const list = h("div", { class: "history-list", tabIndex: 0 });
   const count = h("span", { class: "muted-inline" }, "Loading…");
   let entries: HistoryEntry[] = [];

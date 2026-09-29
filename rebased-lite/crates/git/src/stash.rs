@@ -134,8 +134,7 @@ impl Repo {
                             if pop { " The stash was kept." } else { "" }
                         ),
                         conflicts,
-                        undo_to: None,
-                        undo_soft: false,
+                        undo: Vec::new(),
                     })
                 }
             }

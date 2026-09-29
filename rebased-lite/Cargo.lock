@@ -2576,12 +2576,14 @@ dependencies = [
 name = "rebased-service"
 version = "0.1.0"
 dependencies = [
+ "flate2",
  "ignore",
  "notify",
  "rebased-git",
  "rebased-graph",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]

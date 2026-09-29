@@ -143,8 +143,7 @@ impl Repo {
                     ok: false,
                     message: format!("Push of {branch} was rejected: {remote}/{remote_branch} has commits that are not in {branch}. Update the branch, then push again."),
                     conflicts: Vec::new(),
-                    undo_to: None,
-                    undo_soft: false,
+                    undo: Vec::new(),
                 })
             }
             Err((_, e)) => Err(GitError(e)),
@@ -174,7 +173,7 @@ impl Repo {
                     };
                     format!("Updated {branch} from {remote}/{remote_branch}: {n} new commit{}", if n == 1 { "" } else { "s" })
                 };
-                Ok(OpResult { ok: true, message, conflicts: Vec::new(), undo_to: None, undo_soft: false })
+                Ok(OpResult { ok: true, message, conflicts: Vec::new(), undo: Vec::new() })
             }
             Err((_, e)) => Ok(self.stopped(what, e)),
         }

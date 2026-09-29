@@ -10,6 +10,8 @@ import {
   type Op,
   type OpOutcome,
   type PlanEntry,
+  type Submodule,
+  type UndoAction,
   type RecentBranch,
   type RepoState,
   type RevSpec,
@@ -20,6 +22,7 @@ import {
 } from "./api";
 import { showBranchSwitcher } from "./branch-switcher";
 import { openMergeTool } from "./merge-view";
+import { openLocalHistory } from "./local-history-view";
 import { openHistory } from "./history-view";
 import { confirmDialog, conflictsDialog, credentialDialog, formDialog, interactiveRebaseDialog, messageDialog, pushDialog, resetDialog, updateDialog } from "./dialogs";
 import { toast } from "./notify";
@@ -65,11 +68,12 @@ const refreshBtn = h("button", { class: "tb-button", title: `Reload commits and 
 const fetchBtn = h("button", { class: "tb-button", title: "Fetch all remotes", disabled: true }, "⇣ Fetch");
 const updateBtn = h("button", { class: "tb-button", title: `Update the current branch: fetch, then merge or rebase (${mod}T)`, disabled: true }, "↧ Update");
 const pushBtn = h("button", { class: "tb-button", title: `Push the current branch (${mod}⇧K)`, disabled: true }, "↥ Push");
+const localHistoryBtn = h("button", { class: "tb-button", title: "Local History: the recent versions of changed files", disabled: true }, "🕘 Local History");
 const repoLabel = h("span", { class: "tb-repo" });
 const branchBtn = h("button", { class: "tb-button tb-branch-button", title: "Switch branch (recent branches first)", hidden: true }, "⑂ ▾");
 const viewBtn = h("button", { class: "tb-button", title: "View options" }, "View ▾");
 const themeBtn = h("button", { class: "tb-button", title: "Theme" }, "◐");
-const toolbar = h("header", { class: "toolbar" }, openBtn, refreshBtn, fetchBtn, updateBtn, pushBtn, repoLabel, branchBtn, h("span", { class: "spacer" }), viewBtn, themeBtn);
+const toolbar = h("header", { class: "toolbar" }, openBtn, refreshBtn, fetchBtn, updateBtn, pushBtn, localHistoryBtn, repoLabel, branchBtn, h("span", { class: "spacer" }), viewBtn, themeBtn);
 
 const statusLeft = h("span", { class: "sb-left" });
 const statusMid = h("span", { class: "sb-mid" });
@@ -222,7 +226,7 @@ async function applyView(r: ViewResult, keepSelection: boolean) {
   const keepOids = keepSelection ? selected.map((s) => s.oid) : [];
   view = r;
   document.title = `${r.root.split(/[\\/]/).pop()} – Rebased Lite`;
-  refreshBtn.disabled = fetchBtn.disabled = updateBtn.disabled = pushBtn.disabled = false;
+  refreshBtn.disabled = fetchBtn.disabled = updateBtn.disabled = pushBtn.disabled = localHistoryBtn.disabled = false;
   updateStatus();
   log.setCollapsed(r.collapsed);
   log.reset(r.rowCount, r.recommendedWidth);
@@ -239,11 +243,12 @@ async function applyView(r: ViewResult, keepSelection: boolean) {
 }
 
 async function loadRefs() {
-  const [r, rec, wt, st] = await Promise.all([
+  const [r, rec, wt, st, subs] = await Promise.all([
     api.refs().catch(() => [] as BranchInfo[]),
     api.recentBranches().catch(() => [] as RecentBranch[]),
     api.worktrees().catch(() => [] as Worktree[]),
     api.repoState().catch(() => null),
+    api.submodules().catch(() => [] as Submodule[]),
   ]);
   try {
     refs = r;
@@ -253,6 +258,7 @@ async function loadRefs() {
     sidebar.setRefs(refs);
     sidebar.setRecent(recent);
     sidebar.setWorktrees(worktrees);
+    sidebar.setSubmodules(subs);
     banner.update(repoState);
     filterBar.branchNames = refs.filter((b) => b.kind !== "tag").map((b) => b.name);
     updateStatus();
@@ -530,15 +536,13 @@ async function runOp(op: Op, label: string, errorAction?: { label: string; run: 
   await loadRefs();
   const r = outcome.result;
   if (r.ok) {
-    const undoTo = r.undoTo;
-    const head = outcome.head;
-    toast(
-      r.message,
-      "success",
-      undoTo && head && undoTo !== head
-        ? { label: "Undo", run: () => void runOp({ op: "undo", to: undoTo, expectedHead: head, soft: r.undoSoft }, "Undoing") }
-        : undefined,
-    );
+    lastUndo = r.undo.length ? { actions: r.undo, message: r.message } : null;
+    toast(r.message, "success", r.undo.length ? { label: "Undo", run: () => void undoLast() } : undefined);
+    const stale = outcome.staleSubmodules;
+    if (stale.length) {
+      const what = stale.length === 1 ? `Submodule ${stale[0]} is` : `${stale.length} submodules are`;
+      toast(`${what} not at the commit that this revision records.`, "info", { label: "Update Submodules", run: () => updateSubmodules(stale) });
+    }
     statusRight.textContent = r.message;
   } else {
     toast(r.message, "error", errorAction);
@@ -546,6 +550,19 @@ async function runOp(op: Op, label: string, errorAction?: { label: string; run: 
     statusRight.className = "sb-right error";
   }
   return outcome;
+}
+
+/** The undo steps of the last operation, for the toast and for Ctrl+Z. */
+let lastUndo: { actions: UndoAction[]; message: string } | null = null;
+
+async function undoLast() {
+  const u = lastUndo;
+  if (!u) {
+    statusRight.textContent = "There is nothing to undo";
+    return;
+  }
+  lastUndo = null;
+  await runOp({ op: "undo", actions: u.actions }, `Undoing: ${u.message}`);
 }
 
 const currentBranch = () => repoState?.branch ?? view?.head?.replace("refs/heads/", "") ?? null;
@@ -716,6 +733,18 @@ banner.onShowFile = (path) => void mergeFile(path);
 sidebar.onCheckout = (b) => void checkoutBranch(b);
 sidebar.onAddWorktree = () => void addWorktree();
 sidebar.onOpenWorktree = (w) => void openRepo(w.path);
+const updateSubmodules = (paths: string[]) => void runOp({ op: "updateSubmodules", paths }, "Updating submodules");
+const submodulePath = (s: Submodule) => `${view?.root ?? ""}/${s.path}`;
+sidebar.onUpdateSubmodules = () => updateSubmodules([]);
+sidebar.onOpenSubmodule = (s) => void openRepo(submodulePath(s));
+sidebar.onSubmoduleMenu = (s, e) =>
+  showMenu(e.clientX, e.clientY, [
+    { label: "Open as Repository", disabled: s.state === "uninitialized", action: () => void openRepo(submodulePath(s)) },
+    { label: s.state === "uninitialized" ? "Initialize and Update" : "Update to the Recorded Commit", action: () => updateSubmodules([s.path]) },
+    { separator: true },
+    { label: "Copy Path", action: () => void copyText(s.path) },
+    { label: "Copy URL", disabled: !s.url, action: () => s.url && void copyText(s.url) },
+  ]);
 sidebar.onWorktreeMenu = (w, e) =>
   showMenu(e.clientX, e.clientY, [
     { label: "Open", disabled: w.current || w.prunable, action: () => void openRepo(w.path) },
@@ -755,7 +784,7 @@ async function showLocalDiff(f: LocalFile) {
       f.change.status === "D" ? (head ? { path: f.change.old_path ?? f.change.path, rev: { commit: head } } : null) : { path: f.change.path, rev: "worktree" },
     );
     // Changes of a modified file can go into the commit one by one.
-    const canSelect = f.list !== null && !pair.left.missing && !pair.right.missing && !pair.left.binary && !pair.right.binary && f.change.status !== "U";
+    const canSelect = f.list !== null && !pair.left.missing && !pair.right.missing && !pair.left.binary && !pair.right.binary && f.change.status !== "U" && !pair.left.note && !pair.right.note;
     diff.setSelectable(canSelect ? { excluded: commitPanel.excludedFor(f.key), onChange: (ex, content) => commitPanel.setPartial(f.key, ex, content) } : null);
     diff.show(change, pair.left, pair.right);
   } catch (e) {
@@ -923,6 +952,7 @@ commitPanel.onFileMenu = (files, e) => {
       : []),
     { label: "Show Diff", disabled: files.length !== 1, action: () => void showLocalDiff(files[0]) },
     { label: "Show History", disabled: files.length !== 1 || files[0].list === null || files[0].change.status === "A", action: () => showHistory(files[0].change.old_path ?? files[0].change.path) },
+    { label: "Show Local History", disabled: files.length !== 1, action: () => showLocalHistory(files[0].change.path) },
     { label: "Rollback…", shortcut: `${mod}⌥Z`, disabled: !tracked.length, action: () => void rollback(tracked) },
   ];
   if (untracked.length) {
@@ -1050,6 +1080,23 @@ function showHistory(path: string) {
     showInLog: (oid) => void jumpToOid(oid, true),
   });
 }
+
+function showLocalHistory(path: string) {
+  void openLocalHistory(path, {
+    load: api.localHistory,
+    content: api.localHistoryContent,
+    current: async (p) => (await api.filePair("worktree", "worktree", p, null)).right,
+    revert: async (r) => {
+      const what = r.blob ? `Write the version of ${formatLocalTime(r.time)} back to ${r.path}?` : `Delete ${r.path}? It did not exist at ${formatLocalTime(r.time)}.`;
+      if (!(await confirmDialog("Revert to a Local History version", `${what} Local History keeps the current content first.`, "Revert"))) return false;
+      const out = await runOp({ op: "revertLocalHistory", path: r.path, blob: r.blob }, `Reverting ${r.path}`);
+      if (out?.result.ok) void loadLocalChanges();
+      return !!out?.result.ok;
+    },
+  });
+}
+const formatLocalTime = (ms: number) => new Date(ms).toLocaleString();
+localHistoryBtn.addEventListener("click", () => showLocalHistory(""));
 
 diff.onBlame = api.blame;
 diff.onBlameClick = (oid) => void jumpToOid(oid, true);
@@ -1375,6 +1422,9 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     showLeftTab("commit");
     commitPanel.focusMessage();
+  } else if (cmd && !e.shiftKey && e.key.toLowerCase() === "z" && !typing && view) {
+    e.preventDefault();
+    void undoLast();
   } else if (e.key === "F7") {
     e.preventDefault();
     diff.goToDiff(e.shiftKey ? "previous" : "next");

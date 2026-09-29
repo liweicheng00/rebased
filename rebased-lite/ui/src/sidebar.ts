@@ -1,6 +1,6 @@
 // Branches panel: local branches, remote branches grouped by remote, and tags.
 
-import type { BranchInfo, RecentBranch, Worktree } from "./api";
+import type { BranchInfo, RecentBranch, Submodule, Worktree } from "./api";
 import { h } from "./dom";
 
 export class Sidebar {
@@ -10,6 +10,7 @@ export class Sidebar {
   private refs: BranchInfo[] = [];
   private recent: RecentBranch[] = [];
   private worktrees: Worktree[] = [];
+  private submodules: Submodule[] = [];
   private collapsed = new Set<string>(["Tags"]);
   private filterSet = new Set<string>();
   onNavigate: (b: BranchInfo) => void = () => {};
@@ -19,6 +20,9 @@ export class Sidebar {
   onOpenWorktree: (w: Worktree) => void = () => {};
   onWorktreeMenu: (w: Worktree, e: MouseEvent) => void = () => {};
   onAddWorktree: () => void = () => {};
+  onOpenSubmodule: (s: Submodule) => void = () => {};
+  onSubmoduleMenu: (s: Submodule, e: MouseEvent) => void = () => {};
+  onUpdateSubmodules: () => void = () => {};
 
   constructor() {
     this.search = h("input", { class: "sidebar-search", placeholder: "Search branches and tags", spellcheck: false });
@@ -39,6 +43,11 @@ export class Sidebar {
 
   setWorktrees(w: Worktree[]) {
     this.worktrees = w;
+    this.render();
+  }
+
+  setSubmodules(s: Submodule[]) {
+    this.submodules = s;
     this.render();
   }
 
@@ -93,6 +102,7 @@ export class Sidebar {
       for (const b of items) frag.append(this.item(b, title.startsWith("Remote") ? b.name.slice(b.name.indexOf("/") + 1) : b.name));
     }
     this.renderWorktrees(frag);
+    this.renderSubmodules(frag);
     this.list.replaceChildren(frag);
   }
 
@@ -134,6 +144,60 @@ export class Sidebar {
       el.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         this.onWorktreeMenu(w, e);
+      });
+      frag.append(el);
+    }
+  }
+
+  /** The submodules, with their state. The section shows only when the repository has submodules. */
+  private renderSubmodules(frag: DocumentFragment) {
+    if (!this.submodules.length) return;
+    const title = "Submodules";
+    const open = !this.collapsed.has(title);
+    const update = h("button", { class: "icon-button group-action", title: "Update all submodules: init, and check out the recorded commits" }, "⟳");
+    update.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.onUpdateSubmodules();
+    });
+    const header = h(
+      "div",
+      { class: "group-header" },
+      h("span", { class: "twisty" }, open ? "▾" : "▸"),
+      h("span", {}, title),
+      h("span", { class: "group-count" }, String(this.submodules.length)),
+      update,
+    );
+    header.addEventListener("click", () => {
+      if (this.collapsed.has(title)) this.collapsed.delete(title);
+      else this.collapsed.add(title);
+      this.render();
+    });
+    frag.append(header);
+    if (!open) return;
+    const stateText: Record<Submodule["state"], string> = {
+      uninitialized: "not initialized",
+      clean: "",
+      otherCommit: "other commit",
+      conflict: "conflict",
+    };
+    for (const s of this.submodules) {
+      const commit = (s.current ?? s.recorded).slice(0, 8);
+      const detail = [stateText[s.state], s.dirty ? "modified" : ""].filter(Boolean).join(", ");
+      const el = h(
+        "div",
+        {
+          class: "branch submodule",
+          title: `${s.path}\nrecorded ${s.recorded}${s.current ? `\nchecked out ${s.current}` : ""}${s.url ? `\n${s.url}` : ""}`,
+        },
+        h("span", { class: "branch-icon" }, "⧉"),
+        h("span", { class: "branch-name" }, s.path),
+        h("span", { class: "worktree-branch" }, commit),
+        detail ? h("span", { class: s.state === "clean" ? "muted-inline" : "behind" }, detail) : "",
+      );
+      el.addEventListener("dblclick", () => s.state !== "uninitialized" && this.onOpenSubmodule(s));
+      el.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        this.onSubmoduleMenu(s, e);
       });
       frag.append(el);
     }

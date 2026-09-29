@@ -4,6 +4,7 @@
 //! On Linux, inotify needs one watch per directory, and the number of watches is limited. So the watcher
 //! adds a watch for each directory that git does not ignore. Elsewhere it watches the root recursively.
 
+use crate::history::{LocalHistory, MAX_BULK_FILES};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -20,8 +21,6 @@ pub struct WatchState {
     pub repo: AtomicU64,
     /// Files in the working tree or the index changed.
     pub files: AtomicU64,
-    /// The paths of changed working-tree files since the last take, for Local History.
-    pub changed: Mutex<Vec<PathBuf>>,
 }
 
 #[derive(Serialize, Clone, Copy)]
@@ -54,7 +53,8 @@ fn is_repo_file(rel: &Path) -> bool {
 }
 
 impl RepoWatcher {
-    pub fn start(root: &Path, git_dir: &Path, common_dir: &Path) -> notify::Result<RepoWatcher> {
+    /// Starts to watch. When `history` is set, each changed file gets a version in Local History.
+    pub fn start(root: &Path, git_dir: &Path, common_dir: &Path, history: Option<Arc<LocalHistory>>) -> notify::Result<RepoWatcher> {
         let state = Arc::new(WatchState::default());
         let (tx, rx) = channel::<notify::Result<Event>>();
         let watcher = Arc::new(Mutex::new(notify::recommended_watcher(tx)?));
@@ -82,19 +82,22 @@ impl RepoWatcher {
             common_dir: common_dir.to_path_buf(),
             state: state.clone(),
             watcher: Arc::downgrade(&watcher),
+            history,
         };
         std::thread::spawn(move || worker.run(rx));
         Ok(RepoWatcher { state, _watcher: watcher })
     }
 }
 
-/// The directories of the working tree that git does not ignore, without the git dir.
+/// The directories of the working tree that git does not ignore, without the git dir and without
+/// submodules. A submodule is a repository of its own; git status reports it as one entry.
 fn worktree_dirs(root: &Path) -> Vec<PathBuf> {
+    let top = root.to_path_buf();
     ignore::WalkBuilder::new(root)
         .hidden(false)
         .git_ignore(true)
         .git_exclude(true)
-        .filter_entry(|e| e.file_name() != ".git")
+        .filter_entry(move |e| e.file_name() != ".git" && (e.path() == top || !e.path().join(".git").exists()))
         .build()
         .flatten()
         .filter(|e| e.file_type().is_some_and(|t| t.is_dir()))
@@ -108,6 +111,7 @@ struct Worker {
     common_dir: PathBuf,
     state: Arc<WatchState>,
     watcher: std::sync::Weak<Mutex<RecommendedWatcher>>,
+    history: Option<Arc<LocalHistory>>,
 }
 
 impl Worker {
@@ -140,6 +144,7 @@ impl Worker {
         let mut repo = false;
         let mut index = false;
         let mut files: Vec<PathBuf> = Vec::new();
+        let mut submodule = false;
         for (p, created) in paths {
             let in_git = [&self.git_dir, &self.common_dir].iter().find_map(|d| p.strip_prefix(d).ok().map(Path::to_path_buf));
             match in_git {
@@ -159,7 +164,14 @@ impl Worker {
                     if created && p.is_dir() && cfg!(target_os = "linux") {
                         self.watch_new_dir(&p);
                     }
-                    if p.starts_with(&self.root) && !files.contains(&p) {
+                    if !p.starts_with(&self.root) || files.contains(&p) {
+                        continue;
+                    }
+                    // A file in a submodule changes the submodule's status only. `git check-ignore`
+                    // refuses such a path, and Local History keeps the files of this repository only.
+                    if self.in_submodule(&p) {
+                        submodule = true;
+                    } else {
                         files.push(p);
                     }
                 }
@@ -169,12 +181,19 @@ impl Worker {
         if repo {
             self.state.repo.fetch_add(1, Ordering::SeqCst);
         }
-        if index || !files.is_empty() {
+        if index || submodule || !files.is_empty() {
             self.state.files.fetch_add(1, Ordering::SeqCst);
         }
-        if !files.is_empty() {
-            self.state.changed.lock().unwrap().extend(files);
+        if let Some(h) = &self.history {
+            if !files.is_empty() && files.len() <= MAX_BULK_FILES {
+                h.record(&files, "");
+            }
         }
+    }
+
+    /// True when a directory between the path and the root has a `.git` entry.
+    fn in_submodule(&self, path: &Path) -> bool {
+        path.ancestors().skip(1).take_while(|a| *a != self.root && a.starts_with(&self.root)).any(|a| a.join(".git").exists())
     }
 
     fn watch_new_dir(&self, dir: &Path) {

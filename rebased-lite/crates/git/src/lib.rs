@@ -7,6 +7,7 @@ pub mod merge;
 pub mod ops;
 pub mod remote;
 pub mod stash;
+pub mod submodule;
 pub mod worktree;
 
 use rebased_graph::linear::GraphCommit;
@@ -163,6 +164,9 @@ pub struct FileContent {
     pub binary: bool,
     pub size: usize,
     pub missing: bool,
+    /// Why the content is special, for example a submodule or a Git LFS object that is not downloaded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 pub const MAX_TEXT_SIZE: usize = 5 * 1024 * 1024;
@@ -313,21 +317,36 @@ impl Repo {
     }
 
     pub fn file_content(&self, rev: &Rev, path: &str) -> Result<FileContent> {
-        let bytes = match rev {
-            Rev::WorkTree => match std::fs::read(self.root.join(path)) {
-                Ok(b) => b,
-                Err(_) => return Ok(FileContent { text: None, binary: false, size: 0, missing: true }),
-            },
-            Rev::EmptyTree => return Ok(FileContent { text: None, binary: false, size: 0, missing: true }),
+        let missing = FileContent { text: None, binary: false, size: 0, missing: true, note: None };
+        let mut bytes = match rev {
+            Rev::WorkTree => {
+                let p = self.root.join(path);
+                if p.is_dir() {
+                    return Ok(self.submodule_content(None, path).unwrap_or(missing));
+                }
+                match std::fs::read(p) {
+                    Ok(b) => b,
+                    Err(_) => return Ok(missing),
+                }
+            }
+            Rev::EmptyTree => return Ok(missing),
             Rev::Commit(oid) => match self.git(&["show", &format!("{oid}:{path}")]) {
                 Ok(b) => b,
-                Err(_) => return Ok(FileContent { text: None, binary: false, size: 0, missing: true }),
+                Err(_) => return Ok(self.submodule_content(Some(oid), path).unwrap_or(missing)),
             },
         };
+        // A Git LFS pointer in a commit: show the real content when the object is downloaded.
+        let mut note = None;
+        if let Some((oid, size)) = submodule::lfs_pointer(&bytes) {
+            match self.lfs_object(&oid) {
+                Some(real) => bytes = real,
+                None => note = Some(format!("Git LFS object of {size} bytes is not downloaded. The diff shows its pointer.")),
+            }
+        }
         let size = bytes.len();
         let binary = bytes.iter().take(8000).any(|&b| b == 0);
         let text = if binary || size > MAX_TEXT_SIZE { None } else { Some(String::from_utf8_lossy(&bytes).into_owned()) };
-        Ok(FileContent { text, binary, size, missing: false })
+        Ok(FileContent { text, binary, size, missing: false, note })
     }
 }
 

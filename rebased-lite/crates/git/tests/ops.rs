@@ -62,8 +62,7 @@ fn squash_drop_reword_and_undo() {
     assert!(dir.join("local.txt").exists());
 
     // undo
-    let new_head = git(&dir, &["rev-parse", "HEAD"]);
-    repo.undo(r.undo_to.as_deref().unwrap(), &new_head, false).unwrap();
+    repo.apply_undo(&r.undo).unwrap();
     assert_eq!(git(&dir, &["rev-parse", "HEAD"]), head);
 
     // drop "two": the tree changes, so the working tree is updated with reset --keep

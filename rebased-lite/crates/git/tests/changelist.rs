@@ -1,6 +1,7 @@
 //! Runs changelists and partial commits against temporary repositories.
 
 use rebased_git::changelist::{ChangeListOp, LocalChanges, DEFAULT_ID};
+use rebased_git::ops::{UndoAction, UndoMode};
 use rebased_git::Repo;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -109,8 +110,8 @@ fn commit_one_changelist_only() {
 
     let before = git(&dir, &["rev-parse", "HEAD"]);
     let r = repo.commit_paths(&strings(&["a.txt", "gone.txt", "new.txt", "old.txt"]), &strings(&["fresh.txt"]), "Commit the default list", false).unwrap();
-    assert!(r.ok && r.undo_soft);
-    assert_eq!(r.undo_to.as_deref(), Some(before.as_str()));
+    assert!(r.ok);
+    assert!(matches!(&r.undo[..], [UndoAction::Reset { to, mode: UndoMode::Soft, .. }] if *to == before));
     let files = git(&dir, &["show", "--name-status", "--format=", "HEAD"]);
     assert_eq!(files, "M\ta.txt\nA\tfresh.txt\nD\tgone.txt\nR100\told.txt\tnew.txt");
     // The other changelist is untouched, and c.txt is still staged.
@@ -202,7 +203,7 @@ fn partial_commit_takes_the_given_content() {
     let r = repo
         .commit_partial(&strings(&["b.txt"]), &[], &[PartialFile { path: "a.txt".into(), content: "ONE\ntwo\n".into() }], "Part of a", false)
         .unwrap();
-    assert!(r.ok && r.undo_soft, "{}", r.message);
+    assert!(r.ok && matches!(&r.undo[..], [UndoAction::Reset { mode: UndoMode::Soft, .. }]), "{}", r.message);
     assert_eq!(git(&dir, &["show", "HEAD:a.txt"]), "ONE\ntwo");
     assert_eq!(git(&dir, &["show", "--name-only", "--format=", "HEAD"]), "a.txt\nb.txt");
     assert_eq!(git(&dir, &["rev-parse", "HEAD^"]), before);

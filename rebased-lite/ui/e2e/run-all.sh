@@ -35,6 +35,8 @@ fresh actions && run file-actions "$work/actions"
 fresh edit && run rebase-edit "$work/edit"
 fresh watch && run auto-refresh "$work/watch"
 fresh cred && run credentials "$work/cred"
+fresh lh && run local-history "$work/lh"
+fresh sm && run submodules "$work/sm"
 if [ -n "$large" ]; then
   run large-repo "$large"
   run collapse "$large"

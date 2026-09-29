@@ -35,9 +35,20 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   squash, drop, and interactive rebase. Squash, drop, edit and interactive rebase run in memory:
   a conflict stops them before a file or a ref changes. An interactive rebase with an Edit step
   runs `git rebase -i` instead: it stops at that commit, you change the files, amend in the
-  Commit tab, and continue. A notification after each operation has
-  an Undo button. A banner shows a merge, rebase, cherry-pick or revert in progress, with its
+  Commit tab, and continue. A banner shows a merge, rebase, cherry-pick or revert in progress, with its
   conflicting files and the Mark Resolved, Abort and Continue actions.
+- **Undo**: the notification after an operation has an Undo button, and `Ctrl/Cmd+Z` (outside a
+  text field) undoes the last operation. Undo works for checkout, new branch, new tag, rename,
+  delete of a branch or a tag (an annotated tag keeps its message), merge, rebase, cherry-pick,
+  revert, update, reset, the rewrites, commit, and drop of a stash. Undo stops when HEAD moved
+  after the operation.
+- **Local History**: the app keeps versions of the files that change in the working tree, as in
+  IntelliJ. It also keeps the content before Rollback, delete of unversioned files, Get from
+  Revision, Apply Changes, a hard reset, a stash and a resolve. The 🕘 Local History button shows
+  the recent versions of all files; "Show Local History" in the Commit tab shows one file. Revert
+  writes a version back, and first keeps the current content. The store is in the git directory,
+  in `rebased-lite/local-history`. It keeps 5 days and at most 200 MB, and skips files larger
+  than 2 MB and changes of more than 200 files at one time (for example a checkout).
 - **Changelists and commit**: the Commit tab (`Ctrl/Cmd+K`) groups the local changes into named
   changelists, as in IntelliJ. New changes go to the active changelist. Move files with the context
   menu or with drag and drop. The checked files go into the commit; the other local changes and the
@@ -82,6 +93,16 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   second. The diff of a local file follows the file and keeps its scroll position. Files that git
   ignores do not cause a refresh. On Linux the app watches each directory that git does not
   ignore; when the inotify limit is reached, the app refreshes when its window gets the focus.
+- **Submodules**: the Branches tab lists the submodules with their state (not initialized, other
+  commit, modified). Update initializes a submodule and checks out its recorded commit; Open as
+  Repository opens it. A submodule change shows in the diff as "Subproject commit <hash>", as in
+  `git diff`. Rollback of a submodule checks out its recorded commit. After a checkout, merge,
+  rebase, reset or update that changes a recorded commit, a notification offers Update Submodules.
+  The watcher does not watch inside a submodule.
+- **Git LFS**: the diff of a commit shows the real content of an LFS file when the object is in the
+  local LFS store. Otherwise it shows the pointer with a note. A partial commit runs the clean
+  filters of the path, so an LFS file goes in as its pointer. Git runs the LFS filters for all other
+  operations.
 - **Worktrees**: list, add (on a new or an existing branch), open, remove and prune.
 - **Other**: context menus, Refresh, Fetch, column choice and resize, resizable panels,
   light, dark or system theme, and a status bar.
@@ -89,7 +110,7 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 Keyboard: `Ctrl/Cmd+O` open, `Ctrl/Cmd+K` commit, `Ctrl/Cmd+Shift+K` push, `Ctrl/Cmd+T` update,
 `Ctrl/Cmd+Enter` commit from the message field, `Ctrl/Cmd+Alt+K` commit and push, `Ctrl/Cmd+R` or `F5` refresh, `Ctrl/Cmd+F` filter, `Ctrl/Cmd+1` branches
 panel, arrow keys, Page Up, Page Down, Home and End in the log, `Shift` with arrows to select a range,
-`Ctrl/Cmd+C` copy the hash, `F7` and `Shift+F7` next and previous change, `Alt+Down` and `Alt+Up` next
+`Ctrl/Cmd+C` copy the hash, `Ctrl/Cmd+Z` undo the last operation, `F7` and `Shift+F7` next and previous change, `Alt+Down` and `Alt+Up` next
 and previous file.
 
 ## Layout

@@ -335,6 +335,9 @@ export class DiffView {
       " ",
       change.old_path ? `${change.old_path} → ${change.path}` : change.path,
     );
+    // A submodule, or a Git LFS object that is not downloaded.
+    const note = left.note ?? right.note;
+    if (note) this.title.append(h("span", { class: "muted-inline diff-note" }, ` · ${note}`));
     this.stats.textContent = "";
     const tooBig = (f: FileContent) => !f.binary && !f.missing && f.text === null && f.size > 0;
     if (left.binary || right.binary) return this.showNotice("Binary file. The contents cannot be compared as text.");
