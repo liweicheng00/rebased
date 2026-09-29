@@ -42,6 +42,13 @@ export class DiffView {
   /** Local changes only: which changes go into the next commit. */
   private selectable: { excluded: Set<string>; onChange: (excluded: Set<string>, content: string | null) => void } | null = null;
   private hunkDeco: string[] = [];
+  /** A file in more than one changelist: the changes of the other changelists, marked in the diff. */
+  private listHunks: { start: number; lines: number; label: string }[] = [];
+  private listDeco: string[] = [];
+  private menuAt = { x: 0, y: 0 };
+  private moveKey: monaco.editor.IContextKey<boolean>;
+  /** Local changes only: move the change at a working-tree line to another changelist. */
+  onMoveChange: ((line: number, at: { x: number; y: number }) => void) | null = null;
   private hunks: { id: string; glyphLine: number; change: monaco.editor.ILineChange }[] = [];
 
   constructor() {
@@ -103,6 +110,7 @@ export class DiffView {
     this.editor.onDidUpdateDiff(() => {
       this.updateStats();
       this.renderHunks();
+      this.renderListHunks();
     });
     this.editor.getModifiedEditor().onMouseDown((ev) => {
       if (!this.selectable || ev.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) return;
@@ -116,6 +124,21 @@ export class DiffView {
       this.selectable.onChange(ex, ex.size ? this.partialContent() : null);
     });
     this.listenForBlameClicks(this.editor.getModifiedEditor());
+    const modified = this.editor.getModifiedEditor();
+    this.moveKey = modified.createContextKey("rebasedCanMoveChange", false);
+    modified.onContextMenu((e) => (this.menuAt = { x: e.event.posx, y: e.event.posy }));
+    modified.addAction({
+      id: "rebased.moveChange",
+      label: "Move Change to Another Changelist…",
+      precondition: "rebasedCanMoveChange",
+      contextMenuGroupId: "0_changelist",
+      run: (ed) => {
+        const line = ed.getPosition()?.lineNumber;
+        const fn = this.onMoveChange;
+        // Open the menu after the click that chose this action, so that click does not close it.
+        if (line && fn) setTimeout(() => fn(line, this.menuAt), 50);
+      },
+    });
     this.message("Select a file to see the diff.");
   }
 
@@ -186,6 +209,41 @@ export class DiffView {
     this.selectable = sel;
     this.editor.getModifiedEditor().updateOptions({ glyphMargin: !!sel });
     this.renderHunks();
+  }
+
+  /** Local changes: allows "Move Change to Another Changelist". Null turns it off. */
+  setMoveChange(fn: ((line: number, at: { x: number; y: number }) => void) | null) {
+    this.onMoveChange = fn;
+    this.moveKey.set(!!fn);
+  }
+
+  /** Marks the changes that are in other changelists. Call it before show(). */
+  setListHunks(hunks: { start: number; lines: number; label: string }[]) {
+    this.listHunks = hunks;
+    this.renderListHunks();
+  }
+
+  private renderListHunks() {
+    const ed = this.editor.getModifiedEditor();
+    const lineCount = ed.getModel()?.getLineCount() ?? 0;
+    const deco: monaco.editor.IModelDeltaDecoration[] = [];
+    if (this.notice.hidden && this.singleHost.hidden) {
+      for (const x of this.listHunks) {
+        // A change that only removes lines shows on the line after the removal.
+        const start = Math.max(1, Math.min(lineCount, x.lines ? x.start : x.start + 1));
+        const end = Math.max(start, Math.min(lineCount, x.lines ? x.start + x.lines - 1 : start));
+        deco.push({
+          range: new monaco.Range(start, 1, end, 1),
+          options: {
+            isWholeLine: true,
+            className: "hunk-other-list",
+            linesDecorationsClassName: "hunk-other-list-bar",
+            hoverMessage: { value: `This change is in the changelist ${x.label}` },
+          },
+        });
+      }
+    }
+    this.listDeco = ed.deltaDecorations(this.listDeco, deco);
   }
 
   private renderHunks() {

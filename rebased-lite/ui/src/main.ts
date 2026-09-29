@@ -461,6 +461,8 @@ async function openFile(i: number) {
     if (req !== request || active !== i) return;
     diff.setSource(c.status === "D" ? { path: c.old_path ?? c.path, rev: left } : { path: c.path, rev: r });
     diff.setSelectable(null);
+    diff.setListHunks([]);
+    diff.setMoveChange(null);
     diff.show(c, pair.left, pair.right);
   } catch (e) {
     if (req === request) diff.message(String(e));
@@ -784,8 +786,14 @@ async function showLocalDiff(f: LocalFile) {
       f.change.status === "D" ? (head ? { path: f.change.old_path ?? f.change.path, rev: { commit: head } } : null) : { path: f.change.path, rev: "worktree" },
     );
     // Changes of a modified file can go into the commit one by one.
-    const canSelect = f.list !== null && !pair.left.missing && !pair.right.missing && !pair.left.binary && !pair.right.binary && f.change.status !== "U" && !pair.left.note && !pair.right.note;
+    const text = !pair.left.missing && !pair.right.missing && !pair.left.binary && !pair.right.binary && !pair.left.note && !pair.right.note;
+    // A file in more than one changelist commits by changelist, not by check boxes.
+    const canSelect = f.list !== null && text && f.change.status !== "U" && !f.split;
     diff.setSelectable(canSelect ? { excluded: commitPanel.excludedFor(f.key), onChange: (ex, content) => commitPanel.setPartial(f.key, ex, content) } : null);
+    const names = new Map(commitPanel.lists.map((l) => [l.id, l.name]));
+    const hunks = f.split ? commitPanel.hunksOf(f.change.path) ?? [] : [];
+    diff.setListHunks(hunks.filter((x) => x.list !== f.list).map((x) => ({ start: x.newStart, lines: x.newLines, label: names.get(x.list) ?? x.list })));
+    diff.setMoveChange(f.list !== null && text && f.change.status === "M" ? (line, at) => moveChangeMenu(f, line, at) : null);
     diff.show(change, pair.left, pair.right);
   } catch (e) {
     if (req === localRequest) diff.message(String(e));
@@ -808,6 +816,29 @@ async function changeListOp(op: Parameters<typeof api.changeListOp>[0]) {
   } catch (e) {
     toast(String(e).replace(/^Error: /, ""), "error");
   }
+}
+
+/** The menu of "Move Change to Another Changelist" in the diff of a local file. */
+function moveChangeMenu(f: LocalFile, line: number, at: { x: number; y: number }) {
+  const path = f.change.path;
+  const hunk = commitPanel.hunksOf(path)?.find((x) => (x.newLines ? line >= x.newStart && line < x.newStart + x.newLines : line === x.newStart || line === x.newStart + 1));
+  const current = hunk?.list ?? f.list;
+  const move = async (to: string) => {
+    await changeListOp({ op: "moveLines", path, lines: [line], to });
+    commitPanel.revealFile(path, f.list);
+  };
+  const items: MenuItem[] = [{ header: "Move Change to Changelist" }];
+  for (const l of commitPanel.lists) items.push({ label: l.name + (l.active ? " (active)" : ""), disabled: l.id === current, action: () => void move(l.id) });
+  items.push({
+    label: "New Changelist…",
+    action: async () => {
+      const before = new Set(commitPanel.lists.map((l) => l.id));
+      await newChangeList();
+      const created = commitPanel.lists.find((l) => !before.has(l.id));
+      if (created) await move(created.id);
+    },
+  });
+  showMenu(at.x, at.y, items);
 }
 
 async function newChangeList(paths: string[] = []) {
@@ -844,7 +875,13 @@ async function rollback(files: LocalFile[]) {
     `Roll back ${tracked.length} file(s) to the HEAD version? The local changes are lost.` +
     (added ? ` ${added} added file(s) are deleted from the disk.` : "");
   if (!(await confirmDialog("Rollback", text, "Rollback", true))) return;
-  await runOp({ op: "rollback", paths: localPaths(tracked) }, "Rolling back");
+  // A file in more than one changelist: only the changes of this changelist are rolled back.
+  const whole = tracked.filter((f) => !f.split);
+  for (const f of tracked.filter((x) => x.split)) {
+    const ids = (commitPanel.hunksOf(f.change.path) ?? []).filter((x) => x.list === f.list).map((x) => x.id);
+    await runOp({ op: "rollbackHunks", path: f.change.path, ids }, `Rolling back ${f.change.path}`);
+  }
+  if (whole.length) await runOp({ op: "rollback", paths: localPaths(whole) }, "Rolling back");
 }
 
 async function deleteUnversioned(files: LocalFile[]) {
@@ -869,15 +906,29 @@ async function commitFiles(files: LocalFile[], message: string, amend: boolean, 
   const unversioned = files.filter((f) => f.list === null).map((f) => f.change.path);
   const partial: { path: string; content: string }[] = [];
   const whole: LocalFile[] = [];
+  // A file in more than one changelist: the hunks of the checked changelists go in.
+  const splitLists = new Map<string, Set<string>>();
   for (const f of files) {
+    if (f.split && f.list !== null) {
+      if (!splitLists.has(f.change.path)) splitLists.set(f.change.path, new Set());
+      splitLists.get(f.change.path)!.add(f.list);
+      continue;
+    }
     const content = commitPanel.partialContent(f.key);
     if (content === null) whole.push(f);
     else partial.push({ path: f.change.path, content });
   }
+  const hunks: { path: string; ids: string[] }[] = [];
+  for (const [path, lists] of splitLists) {
+    const all = commitPanel.hunksOf(path) ?? [];
+    const ids = all.filter((x) => lists.has(x.list)).map((x) => x.id);
+    if (ids.length === all.length) whole.push(files.find((f) => f.change.path === path)!);
+    else hunks.push({ path, ids });
+  }
   // A renamed file in part: the old path is removed whole.
   const paths = [...localPaths(whole), ...files.filter((f) => commitPanel.partialContent(f.key) !== null && f.change.old_path).map((f) => f.change.old_path!)];
-  if (partial.length && repoState?.operation === "merge") return toast("A merge is in progress: commit whole files to finish it.", "error");
-  const out = await runOp({ op: "commit", paths, unversioned, partial, message, amend }, amend ? "Amending" : "Committing");
+  if ((partial.length || hunks.length) && repoState?.operation === "merge") return toast("A merge is in progress: commit whole files to finish it.", "error");
+  const out = await runOp({ op: "commit", paths, unversioned, partial, hunks, message, amend }, amend ? "Amending" : "Committing");
   if (out?.result.ok) {
     commitPanel.committed(list);
     if (list && !amend) await changeListOp({ op: "saveMessage", id: list, message: "" });

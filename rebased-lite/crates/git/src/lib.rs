@@ -3,6 +3,7 @@
 
 pub mod changelist;
 pub mod history;
+pub mod hunks;
 pub mod merge;
 pub mod ops;
 pub mod remote;

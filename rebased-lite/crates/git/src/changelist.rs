@@ -4,11 +4,15 @@
 //! The groups live in `<git dir>/rebased-lite/changelists.json`. Each worktree has its own git dir, so each
 //! worktree has its own changelists. A changed file that is in no changelist goes to the active changelist
 //! the first time it is seen. A file that is not changed any more leaves its changelist.
+//!
+//! The hunks of a modified file can be in different changelists. The changelist that holds the file owns
+//! its new hunks. Another changelist can hold some hunks of the file; see [`crate::hunks`].
 
+use crate::hunks::Hunk;
 use crate::ops::{OpResult, UndoAction, UndoMode};
 use crate::{parse_name_status, Change, GitError, Repo, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 
 pub const DEFAULT_ID: &str = "default";
@@ -24,6 +28,15 @@ struct StoredList {
     comment: String,
     #[serde(default)]
     files: Vec<String>,
+    /// Hunks of files that another changelist holds.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    hunks: Vec<StoredHunk>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+struct StoredHunk {
+    path: String,
+    id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -54,6 +67,8 @@ pub struct LocalChanges {
     /// Files with merge conflicts. They are also in a changelist, with status `U`.
     pub conflicts: Vec<String>,
     pub head: Option<String>,
+    /// The hunks of the files that are in more than one changelist, with the changelist of each hunk.
+    pub hunks: HashMap<String, Vec<Hunk>>,
 }
 
 /// A file that goes into a commit in part: the content to commit.
@@ -72,13 +87,15 @@ pub enum ChangeListOp {
     Remove { id: String },
     SetActive { id: String },
     Move { paths: Vec<String>, to: String },
+    /// Moves the hunks that cover the working-tree lines of a file.
+    MoveLines { path: String, lines: Vec<u32>, to: String },
     SaveMessage { id: String, message: String },
 }
 
 impl Store {
     fn ensure_default(&mut self) {
         if self.lists.is_empty() {
-            self.lists.push(StoredList { id: DEFAULT_ID.into(), name: DEFAULT_NAME.into(), comment: String::new(), files: Vec::new() });
+            self.lists.push(StoredList { id: DEFAULT_ID.into(), name: DEFAULT_NAME.into(), comment: String::new(), files: Vec::new(), hunks: Vec::new() });
         }
         if !self.lists.iter().any(|l| l.id == self.active) {
             self.active = self.lists[0].id.clone();
@@ -103,6 +120,23 @@ impl Store {
     fn remove_paths(&mut self, paths: &HashSet<&str>) {
         for l in &mut self.lists {
             l.files.retain(|f| !paths.contains(f.as_str()));
+            l.hunks.retain(|h| !paths.contains(h.path.as_str()));
+        }
+    }
+
+    fn owner(&self, path: &str) -> Option<&str> {
+        self.lists.iter().find(|l| l.files.iter().any(|f| f == path)).map(|l| l.id.as_str())
+    }
+
+    /// The changelist of each hunk of a file: its own entry, else the owner of the file.
+    fn assign(&self, path: &str, hunks: &mut [Hunk]) {
+        let owner = self.owner(path).unwrap_or(&self.active).to_string();
+        for h in hunks {
+            h.list = self
+                .lists
+                .iter()
+                .find(|l| l.hunks.iter().any(|x| x.path == path && x.id == h.id))
+                .map_or(owner.clone(), |l| l.id.clone());
         }
     }
 }
@@ -207,6 +241,7 @@ impl Repo {
                 dirty = true;
             }
         }
+        let split = self.split_files(&mut store, &changes, &mut dirty);
         if dirty {
             // A read-only git dir must not break the view.
             let _ = self.save_store(&store);
@@ -216,17 +251,56 @@ impl Repo {
             .iter()
             .map(|l| {
                 let files: HashSet<&str> = l.files.iter().map(String::as_str).collect();
+                // A file in more than one changelist shows in each changelist that has a hunk of it.
+                let shows = |c: &&Change| match split.get(&c.path) {
+                    Some(hunks) => hunks.iter().any(|h| h.list == l.id),
+                    None => files.contains(c.path.as_str()),
+                };
                 ChangeListView {
                     id: l.id.clone(),
                     name: l.name.clone(),
                     comment: l.comment.clone(),
                     active: l.id == store.active,
-                    changes: changes.iter().filter(|c| files.contains(c.path.as_str())).cloned().collect(),
+                    changes: changes.iter().filter(shows).cloned().collect(),
                 }
             })
             .collect();
         let conflicts = changes.iter().filter(|c| c.status == 'U').map(|c| c.path.clone()).collect();
-        Ok(LocalChanges { lists, unversioned, conflicts, head: self.resolve("HEAD") })
+        Ok(LocalChanges { lists, unversioned, conflicts, head: self.resolve("HEAD"), hunks: split })
+    }
+
+    /// Finds the files whose hunks are in more than one changelist. It forgets hunk entries that are gone
+    /// or that name the owner, and gives a file to another changelist when that one holds all its hunks.
+    fn split_files(&self, store: &mut Store, changes: &[Change], dirty: &mut bool) -> HashMap<String, Vec<Hunk>> {
+        let mut split = HashMap::new();
+        let paths: HashSet<String> = store.lists.iter().flat_map(|l| l.hunks.iter().map(|h| h.path.clone())).collect();
+        for path in paths {
+            let modified = changes.iter().any(|c| c.path == path && c.status == 'M');
+            let mut hunks = if modified { self.file_hunks(&path).unwrap_or_default() } else { Vec::new() };
+            let owner = store.owner(&path).map(String::from);
+            let ids: HashSet<&str> = hunks.iter().map(|h| h.id.as_str()).collect();
+            for l in &mut store.lists {
+                let before = l.hunks.len();
+                l.hunks.retain(|h| h.path != path || (ids.contains(h.id.as_str()) && Some(&l.id) != owner.as_ref()));
+                *dirty |= l.hunks.len() != before;
+            }
+            store.assign(&path, &mut hunks);
+            let lists: HashSet<&str> = hunks.iter().map(|h| h.list.as_str()).collect();
+            if lists.len() == 1 {
+                // One changelist holds all hunks: it holds the file.
+                let to = lists.into_iter().next().unwrap_or_default().to_string();
+                if Some(&to) != owner.as_ref() {
+                    store.remove_paths(&HashSet::from([path.as_str()]));
+                    if let Ok(l) = store.list_mut(&to) {
+                        l.files.push(path.clone());
+                    }
+                    *dirty = true;
+                }
+            } else if lists.len() > 1 {
+                split.insert(path, hunks);
+            }
+        }
+        split
     }
 
     pub fn changelist_op(&self, op: ChangeListOp) -> Result<()> {
@@ -237,7 +311,7 @@ impl Repo {
                 store.next_id += 1;
                 let id = format!("cl{}", store.next_id);
                 store.remove_paths(&paths.iter().map(String::as_str).collect());
-                store.lists.push(StoredList { id: id.clone(), name, comment, files: paths });
+                store.lists.push(StoredList { id: id.clone(), name, comment, files: paths, hunks: Vec::new() });
                 if make_active {
                     store.active = id;
                 }
@@ -268,6 +342,25 @@ impl Repo {
                 store.list_mut(&to)?;
                 store.remove_paths(&paths.iter().map(String::as_str).collect());
                 store.list_mut(&to)?.files.extend(paths);
+            }
+            ChangeListOp::MoveLines { path, lines, to } => {
+                store.list_mut(&to)?;
+                let mut hunks = self.file_hunks(&path)?;
+                hunks.retain(|h| lines.iter().any(|&l| h.covers(l)));
+                if hunks.is_empty() {
+                    return Err(GitError("There is no change at this line".into()));
+                }
+                if store.owner(&path).is_none() {
+                    let active = store.active.clone();
+                    store.list_mut(&active)?.files.push(path.clone());
+                }
+                for l in &mut store.lists {
+                    l.hunks.retain(|x| !(x.path == path && hunks.iter().any(|h| h.id == x.id)));
+                }
+                // The owner holds its hunks without entries.
+                if store.owner(&path) != Some(to.as_str()) {
+                    store.list_mut(&to)?.hunks.extend(hunks.into_iter().map(|h| StoredHunk { path: path.clone(), id: h.id }));
+                }
             }
             ChangeListOp::SaveMessage { id, message } => {
                 store.list_mut(&id)?.comment = message;

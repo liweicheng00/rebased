@@ -358,6 +358,7 @@ get_file_pair(left: Rev, right: Rev | "WORKTREE", change: Change): { left?: Blob
 | Local History（v0.5） | 完成。watcher 在檔案變更時保存版本；Rollback、刪除未追蹤檔、Get from Revision、Apply Changes、hard reset、stash、resolve 之前也保存。存在 git 目錄的 `rebased-lite/local-history`（`index.jsonl` 與 gzip 壓縮的 blob）。保留 5 天、最多 200 MB。視窗顯示版本與目前檔案的 diff，可以 Revert。 |
 | Submodule（v0.5） | 完成。Branches 分頁列出 submodule 與狀態（未初始化、其他 commit、有本機變更）。可以 Update（init 後 checkout 記錄的 commit）與開啟。diff 顯示 `Subproject commit <hash>`。Rollback 會 checkout 記錄的 commit。checkout、merge、rebase、reset、update 改變記錄的 commit 後，通知提供 Update Submodules。watcher 不監看 submodule 內部。 |
 | Git LFS（v0.5） | 完成。commit 裡的 LFS 檔案，物件已下載時 diff 顯示真實內容，否則顯示 pointer 與說明。部分 commit 用 `git hash-object --path` 執行 clean filter，所以 LFS 檔案存成 pointer（修正前會存成真實內容）。 |
+| 部分 changelist（v0.5） | 完成。同一檔案的不同 hunk 可以在不同 changelist。hunk 來自 `git diff -U0 HEAD`，ID 是刪除行與新增行的雜湊，所以其他 hunk 改變時 ID 不變。在 diff 右鍵「Move Change to Another Changelist」。commit 一個 changelist 時，後端用 HEAD 加上該 changelist 的 hunk 組出內容，再用部分 commit 寫入。Rollback 只還原該 changelist 的 hunk。存在 `changelists.json`，重新開啟後保留。 |
 | 8.3 資源量測 | 見下表。 |
 
 資源量測（Linux x86_64、Xvfb、WebKitGTK 軟體繪圖，git/git）：
@@ -415,6 +416,6 @@ Rebased 的 1,479 MB 裡，Java heap、metaspace 和 native malloc 占 830 MB，
 macOS 的 WKWebView 數字會不同，還需要在 macOS 上量測。
 
 v0.4 沒有做的事：
-- 一個檔案的不同行不能分到不同 changelist（IntelliJ 的 partial changelist）。部分 commit 可以只 commit 一個檔案的部分變更，但這個選擇只存在記憶體中，重新開啟 repo 後就消失。
+- diff 勾選框的部分 commit 選擇只存在記憶體中。要保留選擇，請把變更移到另一個 changelist。
 - 沒有 TextMate 上色（見 6.3）。
 - 所有功能只在 Linux 上測試過，還沒有在 macOS 上測試。

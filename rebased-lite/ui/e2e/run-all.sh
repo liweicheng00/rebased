@@ -37,6 +37,7 @@ fresh watch && run auto-refresh "$work/watch"
 fresh cred && run credentials "$work/cred"
 fresh lh && run local-history "$work/lh"
 fresh sm && run submodules "$work/sm"
+fresh pcl && run partial-changelists "$work/pcl"
 if [ -n "$large" ]; then
   run large-repo "$large"
   run collapse "$large"

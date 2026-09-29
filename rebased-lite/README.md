@@ -56,6 +56,12 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   The panel also has Amend, Rollback, Add to Git, delete of unversioned files, and Undo of the last
   commit (the changes become local changes again). The changelists of a worktree are stored in its
   git directory, in `rebased-lite/changelists.json`.
+- **Partial changelists**: the changes (hunks) of one file can be in different changelists, as in
+  IntelliJ. Right-click a changed line in the diff and choose "Move Change to Another Changelist".
+  Such a file shows in each changelist with a count, for example 1/2. The diff marks the changes of
+  the other changelists. A commit of a changelist takes only its changes. Rollback of such a row
+  rolls back only its changes. New changes of the file go to the changelist that holds the file.
+  The assignment is stored in `changelists.json` and survives a restart.
 - **Partial commit**: the diff of a local file has a check box for each change. Unchecked changes
   stay local; the file check box then shows a partial file. Such a commit is built in a temporary
   index with `git commit-tree`. With "Ignore whitespace" on,

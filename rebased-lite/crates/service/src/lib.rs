@@ -230,7 +230,19 @@ pub enum Op {
     AddWorktree { path: String, branch: String, new_branch: bool, at: String },
     RemoveWorktree { path: String, force: bool },
     PruneWorktrees,
-    Commit { paths: Vec<String>, #[serde(default)] unversioned: Vec<String>, #[serde(default)] partial: Vec<PartialFile>, message: String, #[serde(default)] amend: bool },
+    Commit {
+        paths: Vec<String>,
+        #[serde(default)]
+        unversioned: Vec<String>,
+        #[serde(default)]
+        partial: Vec<PartialFile>,
+        /// Files in more than one changelist: the hunks to commit.
+        #[serde(default)]
+        hunks: Vec<HunkSelection>,
+        message: String,
+        #[serde(default)]
+        amend: bool,
+    },
     Rollback { paths: Vec<String> },
     AddFiles { paths: Vec<String> },
     DeleteUnversioned { paths: Vec<String> },
@@ -244,10 +256,18 @@ pub enum Op {
     ResolveSide { paths: Vec<String>, side: Side },
     ApplyFileChanges { from: String, to: String, paths: Vec<String>, #[serde(default)] reverse: bool },
     GetFromRevision { rev: String, paths: Vec<String> },
+    /// Rolls back the hunks of one changelist of a file that is in more than one changelist.
+    RollbackHunks { path: String, ids: Vec<String> },
     /// Initializes the submodules and checks out their recorded commits. No paths means all submodules.
     UpdateSubmodules { #[serde(default)] paths: Vec<String> },
     /// Writes a Local History version back to the working tree. No blob deletes the file.
     RevertLocalHistory { path: String, blob: Option<String> },
+}
+
+#[derive(Deserialize)]
+pub struct HunkSelection {
+    pub path: String,
+    pub ids: Vec<String>,
 }
 
 /// The files whose local changes an operation can lose, and the Local History label for them.
@@ -255,6 +275,7 @@ fn at_risk(repo: &Repo, op: &Op) -> Option<(&'static str, Vec<PathBuf>)> {
     let files = |paths: &[String]| paths.iter().map(PathBuf::from).collect::<Vec<_>>();
     let (label, paths) = match op {
         Op::Rollback { paths } => ("Before Rollback", files(paths)),
+        Op::RollbackHunks { path, .. } => ("Before Rollback", files(std::slice::from_ref(path))),
         Op::DeleteUnversioned { paths } => ("Before Delete", files(paths)),
         Op::GetFromRevision { paths, .. } => ("Before Get from Revision", files(paths)),
         Op::ApplyFileChanges { paths, .. } => ("Before Apply Changes", files(paths)),
@@ -782,7 +803,11 @@ impl Service {
                 repo.remove_worktree(&path, force).map(|_| OpResult::ok_msg(format!("Removed worktree {path}")))
             }
             Op::PruneWorktrees => repo.prune_worktrees().map(|_| OpResult::ok_msg("Pruned stale worktrees")),
-            Op::Commit { paths, unversioned, partial, message, amend } => {
+            Op::Commit { paths, unversioned, mut partial, hunks, message, amend } => {
+                for h in hunks {
+                    let content = repo.content_with_hunks(&h.path, &h.ids).map_err(err)?;
+                    partial.push(PartialFile { path: h.path, content });
+                }
                 if partial.is_empty() {
                     repo.commit_paths(&paths, &unversioned, &message, amend)
                 } else {
@@ -805,6 +830,7 @@ impl Service {
             Op::ApplyFileChanges { from, to, paths, reverse } => repo.apply_file_changes(&from, &to, &paths, reverse),
             Op::GetFromRevision { rev, paths } => repo.get_from_revision(&rev, &paths),
             Op::UpdateSubmodules { paths } => repo.update_submodules(&paths),
+            Op::RollbackHunks { path, ids } => repo.rollback_hunks(&path, &ids),
             Op::RevertLocalHistory { path, blob } => history
                 .revert(&path, blob.as_deref())
                 .map(|_| OpResult::ok_msg(format!("Reverted {path} to the Local History version")))

@@ -122,7 +122,7 @@ export const inTauri = "__TAURI_INTERNALS__" in window;
 
 async function call<T>(cmd: string, args?: unknown): Promise<T> {
   // A command that does not answer leaves a part of the window empty; the warning names it.
-  const slow = setTimeout(() => console.warn(`The command ${cmd} has not answered after 10 s`), 10000);
+  const slow = setTimeout(() => console.error(`The command ${cmd} has not answered after 10 s`), 10000);
   try {
     return await callNow<T>(cmd, args);
   } finally {
@@ -235,11 +235,12 @@ export type Op =
   | { op: "rewrite"; base: string; plan: PlanEntry[]; what: string }
   | { op: "undo"; actions: UndoAction[] }
   | { op: "updateSubmodules"; paths: string[] }
+  | { op: "rollbackHunks"; path: string; ids: string[] }
   | { op: "revertLocalHistory"; path: string; blob: string | null }
   | { op: "addWorktree"; path: string; branch: string; newBranch: boolean; at: string }
   | { op: "removeWorktree"; path: string; force: boolean }
   | { op: "pruneWorktrees" }
-  | { op: "commit"; paths: string[]; unversioned: string[]; partial?: { path: string; content: string }[]; message: string; amend: boolean }
+  | { op: "commit"; paths: string[]; unversioned: string[]; partial?: { path: string; content: string }[]; hunks?: { path: string; ids: string[] }[]; message: string; amend: boolean }
   | { op: "rollback"; paths: string[] }
   | { op: "addFiles"; paths: string[] }
   | { op: "deleteUnversioned"; paths: string[] }
@@ -332,6 +333,20 @@ export interface LocalChanges {
   unversioned: string[];
   conflicts: string[];
   head: string | null;
+  /** The hunks of the files that are in more than one changelist, by path. */
+  hunks: Record<string, Hunk[]>;
+}
+
+/** A change of a local file, from `git diff -U0 HEAD`. */
+export interface Hunk {
+  id: string;
+  oldStart: number;
+  oldLines: number;
+  /** The first added line in the working tree. With no added lines, the line after which it removes. */
+  newStart: number;
+  newLines: number;
+  /** The changelist of the hunk. */
+  list: string;
 }
 
 export type ChangeListOp =
@@ -340,6 +355,7 @@ export type ChangeListOp =
   | { op: "remove"; id: string }
   | { op: "setActive"; id: string }
   | { op: "move"; paths: string[]; to: string }
+  | { op: "moveLines"; path: string; lines: number[]; to: string }
   | { op: "saveMessage"; id: string; message: string };
 
 export const api = {

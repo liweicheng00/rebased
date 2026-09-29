@@ -67,6 +67,8 @@ await page.click(".cl-header:has-text('Changes') .cl-check");
 await page.fill(".commit-message", "Keep the edits");
 await page.keyboard.press("Control+Enter");
 await within("the commit is made", async () => git("rev-parse", "HEAD") !== head);
+// The operation ends with its notification; only then is its undo known.
+await page.waitForSelector(".toast-action:has-text('Undo')");
 await page.click(".log-row >> nth=1");
 await page.keyboard.press("Control+z");
 await within("Ctrl+Z undoes the commit", async () => git("rev-parse", "HEAD") === head);

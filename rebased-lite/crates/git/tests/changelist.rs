@@ -222,3 +222,77 @@ fn partial_commit_takes_the_given_content() {
     assert_eq!(git(&dir, &["diff", "--name-only"]), "");
     assert!(repo.commit_partial(&[], &[], &[PartialFile { path: "../x".into(), content: String::new() }], "x", false).is_err());
 }
+
+#[test]
+fn hunks_in_different_changelists() {
+    let dir = temp_repo("hunks");
+    git(&dir, &["config", "commit.gpgsign", "false"]);
+    let base: String = (1..=20).map(|i| format!("line {i}\n")).collect();
+    std::fs::write(dir.join("a.txt"), &base).unwrap();
+    git(&dir, &["commit", "-q", "-am", "Twenty lines"]);
+    let repo = Repo::open(&dir).unwrap();
+    // Two changes: line 2 and line 18.
+    let edited = base.replace("line 2\n", "line 2 fixed\n").replace("line 18\n", "line 18 debug\n");
+    std::fs::write(dir.join("a.txt"), &edited).unwrap();
+    repo.local_changes().unwrap();
+    repo.changelist_op(ChangeListOp::Create { name: "Debug".into(), comment: String::new(), make_active: false, paths: vec![] }).unwrap();
+    let lc = repo.local_changes().unwrap();
+    let debug = id(&lc, "Debug");
+
+    // Move the change at line 18 to Debug: the file is in both changelists.
+    repo.changelist_op(ChangeListOp::MoveLines { path: "a.txt".into(), lines: vec![18], to: debug.clone() }).unwrap();
+    let lc = repo.local_changes().unwrap();
+    assert_eq!(list(&lc, "Changes"), ["a.txt"]);
+    assert_eq!(list(&lc, "Debug"), ["a.txt"]);
+    let hunks = &lc.hunks["a.txt"];
+    assert_eq!(hunks.len(), 2);
+    assert_eq!(hunks[0].list, DEFAULT_ID);
+    assert_eq!(hunks[1].list, debug);
+
+    // A new change goes to the owner of the file; the Debug hunk keeps its changelist.
+    let edited = format!("new first line\n{edited}");
+    std::fs::write(dir.join("a.txt"), &edited).unwrap();
+    let lc = repo.local_changes().unwrap();
+    let hunks = &lc.hunks["a.txt"];
+    assert_eq!(hunks.iter().map(|h| h.list.as_str()).collect::<Vec<_>>(), [DEFAULT_ID, DEFAULT_ID, debug.as_str()]);
+
+    // Commit the default changelist: only its hunks go in.
+    let ids: Vec<String> = hunks.iter().filter(|h| h.list == DEFAULT_ID).map(|h| h.id.clone()).collect();
+    let content = repo.content_with_hunks("a.txt", &ids).unwrap();
+    let file = rebased_git::changelist::PartialFile { path: "a.txt".into(), content };
+    let r = repo.commit_partial(&[], &[], &[file], "Fix line 2", false).unwrap();
+    assert!(r.ok, "{}", r.message);
+    let committed = git(&dir, &["show", "HEAD:a.txt"]);
+    assert!(committed.starts_with("new first line\nline 1\nline 2 fixed\n"));
+    assert!(committed.contains("line 18\n") && !committed.contains("debug"));
+    assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), edited, "the working tree stays");
+
+    // The rest is the Debug hunk only: Debug holds the whole file now.
+    let lc = repo.local_changes().unwrap();
+    assert!(list(&lc, "Changes").is_empty());
+    assert_eq!(list(&lc, "Debug"), ["a.txt"]);
+    assert!(lc.hunks.is_empty());
+
+    // Move the hunk back, then move the whole file: no hunk entries stay.
+    std::fs::write(dir.join("a.txt"), edited.replace("line 5\n", "line 5 more\n")).unwrap();
+    repo.local_changes().unwrap();
+    repo.changelist_op(ChangeListOp::MoveLines { path: "a.txt".into(), lines: vec![6], to: DEFAULT_ID.into() }).unwrap();
+    assert_eq!(repo.local_changes().unwrap().hunks["a.txt"].len(), 2);
+    repo.changelist_op(ChangeListOp::Move { paths: vec!["a.txt".into()], to: debug.clone() }).unwrap();
+    let lc = repo.local_changes().unwrap();
+    assert!(lc.hunks.is_empty());
+    assert_eq!(list(&lc, "Debug"), ["a.txt"]);
+
+    // Rollback of the Debug hunks keeps the other changelist's hunk.
+    std::fs::write(dir.join("a.txt"), edited.replace("line 5\n", "line 5 more\n")).unwrap();
+    repo.local_changes().unwrap();
+    repo.changelist_op(ChangeListOp::MoveLines { path: "a.txt".into(), lines: vec![6], to: DEFAULT_ID.into() }).unwrap();
+    let lc = repo.local_changes().unwrap();
+    let ids: Vec<String> = lc.hunks["a.txt"].iter().filter(|h| h.list == debug).map(|h| h.id.clone()).collect();
+    repo.rollback_hunks("a.txt", &ids).unwrap();
+    let now = std::fs::read_to_string(dir.join("a.txt")).unwrap();
+    assert!(now.contains("line 5 more\n") && !now.contains("debug"));
+
+    // A line without a change is an error.
+    assert!(repo.changelist_op(ChangeListOp::MoveLines { path: "a.txt".into(), lines: vec![12], to: DEFAULT_ID.into() }).is_err());
+}

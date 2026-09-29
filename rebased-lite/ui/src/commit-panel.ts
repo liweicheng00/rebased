@@ -11,6 +11,13 @@ export interface LocalFile {
   change: Change;
   /** The changelist id, or null for an unversioned file. */
   list: string | null;
+  /** The file has hunks in other changelists too. The row stands for the hunks of its changelist. */
+  split?: boolean;
+}
+
+/** The key of a file row. A file in more than one changelist has one row in each. */
+export function fileKey(list: string, path: string, split: boolean): string {
+  return split ? `s:${list}:${path}` : `f:${path}`;
 }
 
 const UNVERSIONED = "Unversioned Files";
@@ -133,7 +140,7 @@ export class CommitPanel {
   set(data: LocalChanges) {
     this.data = data;
     const files: LocalFile[] = [];
-    for (const l of data.lists) for (const c of l.changes) files.push({ key: `f:${c.path}`, change: c, list: l.id });
+    for (const l of data.lists) for (const c of l.changes) files.push(this.tracked(l.id, c));
     for (const p of data.unversioned) files.push({ key: `u:${p}`, change: { status: "?", path: p, old_path: null }, list: null });
     const keys = new Set(files.map((f) => f.key));
     const active = data.lists.find((l) => l.active)?.id;
@@ -149,6 +156,16 @@ export class CommitPanel {
     this.files = files;
     this.render();
     this.updateTarget();
+  }
+
+  private tracked(list: string, c: Change): LocalFile {
+    const split = !!this.data?.hunks[c.path];
+    return { key: fileKey(list, c.path, split), change: c, list, split };
+  }
+
+  /** The hunks of a file that is in more than one changelist. */
+  hunksOf(path: string) {
+    return this.data?.hunks[path] ?? null;
   }
 
   private emptyText = "Open a repository to see its local changes.";
@@ -215,6 +232,15 @@ export class CommitPanel {
     this.open(next);
   }
 
+  /** Selects and opens the row of a file, in the given changelist when the file is there. */
+  revealFile(path: string, list: string | null) {
+    const f = this.files.find((x) => x.change.path === path && x.list === list) ?? this.files.find((x) => x.change.path === path);
+    if (!f) return;
+    this.selection = new Set([f.key]);
+    this.anchor = f.key;
+    this.open(f.key);
+  }
+
   /** The file whose diff is shown. */
   activeFile(): LocalFile | null {
     return this.files.find((f) => f.key === this.activeKey) ?? null;
@@ -263,7 +289,7 @@ export class CommitPanel {
     let best: string | null = null;
     let most = 0;
     for (const l of lists) {
-      const n = l.changes.filter((c) => this.included.has(`f:${c.path}`)).length;
+      const n = l.changes.filter((c) => this.included.has(this.tracked(l.id, c).key)).length;
       if (n > most) {
         most = n;
         best = l.id;
@@ -347,8 +373,8 @@ export class CommitPanel {
       return;
     }
     for (const l of this.data.lists) {
-      frag.append(this.header(l.id, l.name, l.changes.map((c) => `f:${c.path}`), l));
-      if (!this.collapsed.has(l.id)) for (const c of l.changes) frag.append(this.fileRow({ key: `f:${c.path}`, change: c, list: l.id }));
+      frag.append(this.header(l.id, l.name, l.changes.map((c) => this.tracked(l.id, c).key), l));
+      if (!this.collapsed.has(l.id)) for (const c of l.changes) frag.append(this.fileRow(this.tracked(l.id, c)));
     }
     if (this.data.unversioned.length) {
       frag.append(this.header(UNVERSIONED, UNVERSIONED, this.data.unversioned.map((p) => `u:${p}`), null));
@@ -418,7 +444,11 @@ export class CommitPanel {
   private fileRow(f: LocalFile): HTMLElement {
     const c = f.change;
     const slash = c.path.lastIndexOf("/");
-    const box = h("input", { type: "checkbox", class: "cl-check", title: this.partial.has(f.key) ? "Some changes of this file stay out of the commit" : "" });
+    const box = h("input", {
+      type: "checkbox",
+      class: "cl-check",
+      title: this.partial.has(f.key) ? "Some changes of this file stay out of the commit" : f.split ? "The changes of this file in this changelist" : "",
+    });
     box.checked = this.included.has(f.key);
     box.indeterminate = this.included.has(f.key) && this.partial.has(f.key);
     box.addEventListener("click", (e) => e.stopPropagation());
@@ -445,6 +475,7 @@ export class CommitPanel {
       h("span", { class: `status status-${status}`, title: status === "?" ? "Unversioned" : c.status === "U" ? "Conflict" : statusName(c.status) }, status),
       h("span", { class: `path status-text-${status}` }, c.path.slice(slash + 1)),
       c.old_path ? h("span", { class: "dir" }, `← ${c.old_path}`) : slash > 0 ? h("span", { class: "dir" }, c.path.slice(0, slash)) : "",
+      f.split ? h("span", { class: "cl-split", title: this.splitTitle(f) }, `${this.hunksOf(c.path)!.filter((x) => x.list === f.list).length}/${this.hunksOf(c.path)!.length}`) : "",
     );
     row.addEventListener("mousedown", (e) => {
       if (e.button !== 0 || (e.target as HTMLElement).tagName === "INPUT") return;
@@ -485,6 +516,15 @@ export class CommitPanel {
       e.dataTransfer?.setData("text/plain", paths.join("\n"));
     });
     return row;
+  }
+
+  /** Where the changes of a split file are, for the tooltip of its row. */
+  private splitTitle(f: LocalFile): string {
+    const hunks = this.hunksOf(f.change.path) ?? [];
+    const names = new Map((this.data?.lists ?? []).map((l) => [l.id, l.name]));
+    const count = new Map<string, number>();
+    for (const x of hunks) count.set(x.list, (count.get(x.list) ?? 0) + 1);
+    return [...count].map(([id, n]) => `${n} change${n === 1 ? "" : "s"} in ${names.get(id) ?? id}`).join("\n");
   }
 }
 
