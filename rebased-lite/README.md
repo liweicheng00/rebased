@@ -162,6 +162,19 @@ and previous file.
 | `crates/devserver` | An HTTP server for the UI in a browser, for development and UI tests |
 | `ui` | The frontend (TypeScript, Vite, Monaco) |
 
+The front end in `ui/src`:
+
+- `main.ts` loads the modules in order and opens the repositories of the last session.
+- `state.ts` holds the state that the modules share: the open repository, its refs, and the selection.
+- `shell.ts` makes the components and the layout. It depends on no feature module, so it loads first.
+- One module for each feature registers its handlers when it loads: `repo` (tabs, log, refs), `watch`
+  (auto refresh, credential prompts), `selection` (compared commits and the diff), `operations`,
+  `commit-flow`, `sync` (push and update), `stash-flow`, `history-flow`, `conflicts`, `menus`,
+  `remotes`, `welcome`, `keyboard` and `settings-flow`.
+- The components (`log-view`, `diff-view`, `commit-panel`, `sidebar`, dialogs and windows) know
+  nothing about the backend; the feature modules connect them to `api.ts`.
+- `bindings/` has the generated types of the command results.
+
 ## Build
 
 You need Rust, Node.js 20 or later, and git. On Linux, Tauri also needs WebKitGTK
