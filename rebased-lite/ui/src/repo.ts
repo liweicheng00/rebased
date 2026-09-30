@@ -112,6 +112,8 @@ async function showRepo(r: ViewResult, state: TabState | null) {
   commitPanel.clear();
   showWorkspace(true);
   await applyView(r, false);
+  // The watcher counters now are the base: the events after this reload what changed.
+  app.watchSeen = await api.watchState().catch(() => null);
   await loadRefs();
   commitPanel.setTemplate(await api.commitTemplate().catch(() => null));
   const target = state?.selected ?? r.headOid;

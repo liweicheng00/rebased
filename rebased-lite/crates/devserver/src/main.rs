@@ -100,6 +100,9 @@ fn respond(mut stream: &TcpStream, status: u16, content_type: &str, body: &[u8])
 fn handle(stream: TcpStream, service: &Service, dist: &std::path::Path) -> std::io::Result<()> {
     let Some(req) = read_request(&stream)? else { return Ok(()) };
     let url = req.url.split('?').next().unwrap_or("/").to_string();
+    if url == "/events" {
+        return events(stream, service);
+    }
     if let Some(cmd) = url.strip_prefix("/api/") {
         if req.method != "POST" {
             return respond(&stream, 400, "application/json", serde_json_string("use POST").as_bytes());
@@ -126,6 +129,25 @@ fn handle(stream: TcpStream, service: &Service, dist: &std::path::Path) -> std::
     match std::fs::read(dist.join(&rel)) {
         Ok(bytes) => respond(&stream, 200, content_type(&rel), &bytes),
         Err(_) => respond(&stream, 404, "text/plain", b""),
+    }
+}
+
+/// Server-sent events: the backend events, one JSON object each. A comment line every 15 s finds a
+/// closed connection, so its thread ends.
+fn events(mut stream: TcpStream, service: &Service) -> std::io::Result<()> {
+    let rx = service.subscribe();
+    stream.set_read_timeout(None)?;
+    stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\nConnection: keep-alive\r\n\r\n: open\n\n")?;
+    loop {
+        match rx.recv_timeout(Duration::from_secs(15)) {
+            Ok(e) => {
+                let json = serde_json::to_string(&e).unwrap_or_default();
+                stream.write_all(format!("data: {json}\n\n").as_bytes())?;
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => stream.write_all(b": ping\n\n")?,
+            Err(_) => return Ok(()),
+        }
+        stream.flush()?;
     }
 }
 

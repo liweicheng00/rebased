@@ -117,7 +117,8 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   `git rebase`.
 - **Auto refresh**: the app watches the working tree and the git directory. A file edited in
   another program, a commit or a branch made in a terminal, and a fetch show up within about a
-  second. The diff of a local file follows the file and keeps its scroll position. Files that git
+  second: the watcher sends an event to the window. The diff of a local file follows the file and keeps
+  its scroll position. Files that git
   ignores do not cause a refresh. On Linux the app watches each directory that git does not
   ignore; when the inotify limit is reached, the app refreshes when its window gets the focus.
 - **Submodules**: the Branches tab lists the submodules with their state (not initialized, other

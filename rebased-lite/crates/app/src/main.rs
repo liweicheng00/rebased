@@ -3,7 +3,7 @@
 
 use rebased_service::Service;
 use serde_json::Value;
-use tauri::State;
+use tauri::{Emitter, Manager, State};
 
 /// Runs a command of the service by name, as the dev server does. The command runs off the UI thread,
 /// because git can take a while on a large repository. `body` holds the arguments, and "root" names the
@@ -43,6 +43,17 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Service::with_askpass(&std::env::current_exe().expect("current executable")))
+        .setup(|app| {
+            // The backend events go to the window as "backend-event".
+            let events = app.state::<Service>().subscribe();
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                for e in events {
+                    let _ = handle.emit("backend-event", e);
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![initial_path, call])
         .run(tauri::generate_context!())
         .expect("error while running Rebased Lite");

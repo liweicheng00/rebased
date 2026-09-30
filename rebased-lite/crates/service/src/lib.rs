@@ -6,6 +6,7 @@
 
 pub mod askpass;
 pub mod config;
+pub mod events;
 mod dispatch;
 pub mod history;
 mod ops;
@@ -34,4 +35,5 @@ pub struct Service {
     /// The directory of settings.json; None keeps the settings in memory only, as in tests.
     config_dir: Option<std::path::PathBuf>,
     settings: Mutex<config::BackendSettings>,
+    events: std::sync::Arc<events::Events>,
 }

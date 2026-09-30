@@ -48,17 +48,21 @@ struct State {
     cache: HashMap<String, String>,
 }
 
+/// Gets the prompts that wait for an answer, each time they change.
+pub type OnPrompts = Arc<dyn Fn(Vec<Prompt>) + Send + Sync>;
+
 pub struct Askpass {
     state: Mutex<State>,
     changed: Condvar,
     socket: PathBuf,
+    on_prompts: Option<OnPrompts>,
 }
 
 impl Askpass {
     /// Starts the socket listener and makes git use `helper` for prompts.
-    pub fn start(helper: &Path) -> std::io::Result<Arc<Askpass>> {
+    pub fn start(helper: &Path, on_prompts: Option<OnPrompts>) -> std::io::Result<Arc<Askpass>> {
         let socket = std::env::temp_dir().join(format!("rebased-lite-askpass-{}.sock", std::process::id()));
-        let askpass = Arc::new(Askpass { state: Mutex::default(), changed: Condvar::new(), socket: socket.clone() });
+        let askpass = Arc::new(Askpass { state: Mutex::default(), changed: Condvar::new(), socket: socket.clone(), on_prompts });
         #[cfg(unix)]
         {
             let _ = std::fs::remove_file(&socket);
@@ -113,12 +117,20 @@ impl Askpass {
             secret: ["password", "passphrase", "pin", "token"].iter().any(|w| lower.contains(w)),
             confirm: lower.contains("(yes/no"),
         });
+        self.notify(&st);
         let (mut st, timeout) = self.changed.wait_timeout_while(st, TIMEOUT, |s| !s.answers.contains_key(&id)).unwrap();
         st.pending.retain(|p| p.id != id);
+        self.notify(&st);
         if timeout.timed_out() {
             return None;
         }
         st.answers.remove(&id).flatten()
+    }
+
+    fn notify(&self, st: &State) {
+        if let Some(f) = &self.on_prompts {
+            f(st.pending.clone());
+        }
     }
 
     pub fn pending(&self) -> Vec<Prompt> {
@@ -133,6 +145,7 @@ impl Askpass {
         }
         st.answers.insert(a.id, a.answer);
         st.pending.retain(|x| x.id != a.id);
+        self.notify(&st);
         self.changed.notify_all();
     }
 

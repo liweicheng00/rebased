@@ -5,6 +5,7 @@
 // and many of their fields have defaults.
 import type { Action } from "./bindings/Action";
 import type { BackendSettings } from "./bindings/BackendSettings";
+import type { Event as BackendEvent } from "./bindings/Event";
 import type { Blame } from "./bindings/Blame";
 import type { BranchInfo } from "./bindings/BranchInfo";
 import type { ChangeListView } from "./bindings/ChangeListView";
@@ -37,6 +38,7 @@ import type { Worktree } from "./bindings/Worktree";
 import type { Change as ChangeResult } from "./bindings/Change";
 export type {
   Action,
+  BackendEvent,
   BackendSettings,
   Blame,
   BranchInfo,
@@ -209,7 +211,6 @@ export const api = {
   localChanges: () => call<LocalChanges>("local_changes"),
   changeListOp: (op: ChangeListOp) => call<LocalChanges>("changelist_op", op),
   headMessage: () => call<string>("head_message"),
-  askpassPending: () => call<AskpassPrompt[]>("askpass_pending"),
   askpassAnswer: (id: number, answer: string | null, remember: boolean) => call<null>("askpass_answer", { id, answer, remember }),
   watchState: () => call<{ repo: number; files: number } | null>("watch_state"),
   stashes: () => call<Stash[]>("stashes"),
@@ -229,6 +230,18 @@ export const api = {
   filePair: (left: RevSpec, right: RevSpec, path: string, oldPath: string | null) =>
     call<{ left: FileContent; right: FileContent }>("file_pair", { left, right, path, oldPath }),
 };
+
+/** Calls `handler` for each event of the backend: in the app a window event, in a browser a server-sent
+ * event. EventSource connects again by itself after the dev server restarts. */
+export async function onBackendEvent(handler: (e: BackendEvent) => void) {
+  if (inTauri) {
+    const { listen } = await import("@tauri-apps/api/event");
+    await listen<BackendEvent>("backend-event", (e) => handler(e.payload));
+    return;
+  }
+  const source = new EventSource("/events");
+  source.onmessage = (m) => handler(JSON.parse(m.data) as BackendEvent);
+}
 
 export async function initialPath(): Promise<string | null> {
   if (!inTauri) return null;

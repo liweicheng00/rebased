@@ -37,6 +37,9 @@ impl WatchState {
     }
 }
 
+/// Gets the counters after a change.
+pub type OnChange = Arc<dyn Fn(WatchCounters) + Send + Sync>;
+
 pub struct RepoWatcher {
     pub state: Arc<WatchState>,
     // Dropping the watcher stops the events; the worker thread then ends.
@@ -56,7 +59,14 @@ fn is_repo_file(rel: &Path) -> bool {
 
 impl RepoWatcher {
     /// Starts to watch. When `history` is set, each changed file gets a version in Local History.
-    pub fn start(root: &Path, git_dir: &Path, common_dir: &Path, history: Option<Arc<LocalHistory>>) -> notify::Result<RepoWatcher> {
+    /// `on_change` gets the counters after each change.
+    pub fn start(
+        root: &Path,
+        git_dir: &Path,
+        common_dir: &Path,
+        history: Option<Arc<LocalHistory>>,
+        on_change: Option<OnChange>,
+    ) -> notify::Result<RepoWatcher> {
         let state = Arc::new(WatchState::default());
         let (tx, rx) = channel::<notify::Result<Event>>();
         let watcher = Arc::new(Mutex::new(notify::recommended_watcher(tx)?));
@@ -85,6 +95,7 @@ impl RepoWatcher {
             state: state.clone(),
             watcher: Arc::downgrade(&watcher),
             history,
+            on_change,
         };
         std::thread::spawn(move || worker.run(rx));
         Ok(RepoWatcher { state, _watcher: watcher })
@@ -114,6 +125,7 @@ struct Worker {
     state: Arc<WatchState>,
     watcher: std::sync::Weak<Mutex<RecommendedWatcher>>,
     history: Option<Arc<LocalHistory>>,
+    on_change: Option<OnChange>,
 }
 
 impl Worker {
@@ -185,6 +197,11 @@ impl Worker {
         }
         if index || submodule || !files.is_empty() {
             self.state.files.fetch_add(1, Ordering::SeqCst);
+        }
+        if repo || index || submodule || !files.is_empty() {
+            if let Some(f) = &self.on_change {
+                f(self.state.counters());
+            }
         }
         if let Some(h) = &self.history {
             if !files.is_empty() && files.len() <= MAX_BULK_FILES {

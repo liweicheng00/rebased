@@ -1,7 +1,7 @@
 //! The open repositories, one per tab.
 
 use crate::view::{build_full, build_view, View};
-use crate::{askpass, config, err, history, watch, OpenArgs, PathArgs, Result, Service, ViewArgs, ViewResult};
+use crate::{askpass, config, err, events, history, watch, OpenArgs, PathArgs, Result, Service, ViewArgs, ViewResult};
 use rebased_git::{CommitDetails, Repo, Topology};
 use rebased_graph::linear::PermanentLinearGraph;
 use std::collections::HashMap;
@@ -44,7 +44,16 @@ impl Service {
         let settings = config::load(&config_dir);
         // A git program that does not work any more falls back to git from PATH.
         let _ = rebased_git::set_git_program(&settings.git_path);
-        Service { askpass: askpass::Askpass::start(helper).ok(), config_dir, settings: Mutex::new(settings), ..Service::default() }
+        let events = Arc::new(events::Events::default());
+        let sink = events.clone();
+        let on_prompts: askpass::OnPrompts = Arc::new(move |prompts| sink.emit(events::Event::Askpass { prompts }));
+        let askpass = askpass::Askpass::start(helper, Some(on_prompts)).ok();
+        Service { askpass, config_dir, settings: Mutex::new(settings), events, ..Service::default() }
+    }
+
+    /// The events of the backend: repository changes and password prompts.
+    pub fn subscribe(&self) -> std::sync::mpsc::Receiver<events::Event> {
+        self.events.subscribe()
     }
 
     pub fn askpass_pending(&self) -> Vec<askpass::Prompt> {
@@ -129,7 +138,13 @@ impl Service {
         let history = history
             .unwrap_or_else(|| Arc::new(history::LocalHistory::open(&repo.root, &repo.git_dir(), self.settings.lock().unwrap().history)));
         let watcher =
-            kept.or_else(|| watch::RepoWatcher::start(&repo.root, &repo.git_dir(), &repo.common_dir(), Some(history.clone())).ok());
+            kept.or_else(|| {
+                let sink = self.events.clone();
+                let root = repo.root.display().to_string();
+                let on_change: watch::OnChange =
+                    Arc::new(move |c| sink.emit(events::Event::Watch { root: root.clone(), repo: c.repo, files: c.files }));
+                watch::RepoWatcher::start(&repo.root, &repo.git_dir(), &repo.common_dir(), Some(history.clone()), Some(on_change)).ok()
+            });
         let mut s = Session { repo, topo, full, settings, view, details: HashMap::new(), head_node, watcher, history };
         let result = Self::result(&mut s, t);
         let root = s.repo.root.clone();

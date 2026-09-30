@@ -39,7 +39,7 @@ fn counters_follow_files_and_refs() {
     git(&dir, &["commit", "-q", "-m", "Initial"]);
     let repo = Repo::open(&dir).unwrap();
     let history = Arc::new(LocalHistory::open(&repo.root, &repo.git_dir(), Limits::default()));
-    let w = RepoWatcher::start(&repo.root, &repo.git_dir(), &repo.common_dir(), Some(history.clone())).unwrap();
+    let w = RepoWatcher::start(&repo.root, &repo.git_dir(), &repo.common_dir(), Some(history.clone()), None).unwrap();
     let recorded = |p: &str| !history.revisions(Some(p), 10).is_empty();
     std::thread::sleep(Duration::from_millis(400));
     let c0 = w.state.counters();
