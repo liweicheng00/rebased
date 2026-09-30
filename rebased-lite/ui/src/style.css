@@ -117,7 +117,7 @@ input { font: inherit; }
 .badges { display: flex; gap: 3px; font-size: 11px; }
 .ahead { color: var(--added); }
 .behind { color: var(--deleted); }
-.filter-toggle { margin-left: auto; visibility: hidden; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 11px; }
+.filter-toggle { visibility: hidden; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 11px; }
 .branch:hover .filter-toggle, .filter-toggle.on { visibility: visible; }
 .filter-toggle.on { color: var(--accent); }
 
@@ -507,3 +507,28 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .remote-url { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .remote-actions { display: flex; gap: 4px; }
 .dialog-buttons .spacer { flex: 1; }
+
+/* Favorite branches */
+.sidebar-search-row { display: flex; align-items: center; gap: 4px; }
+.sidebar-search-row .sidebar-search { flex: 1; min-width: 0; }
+.fav-filter { margin-right: 8px; }
+.fav-filter.on { color: #d4a017; background: var(--select); }
+.fav-toggle { margin-left: auto; border: none; background: none; cursor: pointer; color: var(--muted); padding: 0 3px; visibility: hidden; font-size: 12px; }
+.branch:hover .fav-toggle, .fav-toggle.on { visibility: visible; }
+.fav-toggle.on { color: #d4a017; }
+
+.commit-warnings { font-size: 11px; color: #b26a00; display: flex; flex-direction: column; gap: 2px; padding: 2px 2px 0; }
+:root[data-theme="dark"] .commit-warnings { color: #e0a340; }
+
+/* Compare Branches */
+.compare-header { gap: 8px; }
+.compare-select { width: auto; max-width: 260px; padding: 3px 6px; }
+.compare-side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); }
+.compare-commits { flex: 0 1 45%; overflow: auto; border-bottom: 1px solid var(--border); }
+.compare-group-title, .compare-files-title { display: flex; align-items: center; gap: 6px; padding: 6px 8px 3px; font-weight: 600; font-size: 12px; color: var(--muted); }
+.compare-group-title .group-count { margin-left: auto; }
+.compare-none { padding: 2px 8px 6px; display: block; }
+.compare-commit { grid-template-columns: 70px minmax(0, 1fr) auto auto; }
+.compare-files { flex: 1; border-right: none; }
+.compare-file { grid-template-columns: 14px auto minmax(0, 1fr); }
+.compare-file .rebase-author { overflow: hidden; text-overflow: ellipsis; }

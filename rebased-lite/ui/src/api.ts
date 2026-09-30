@@ -141,7 +141,7 @@ async function call<T>(cmd: string, args?: unknown): Promise<T> {
 const READS = new Set([
   "refs", "recent_branches", "worktrees", "repo_state", "submodules", "remotes", "local_changes", "watch_state", "stashes",
   "stash_detail", "rows", "commit", "find", "compare", "file_pair", "head_message", "push_info", "merge_sides", "file_history",
-  "blame", "local_history", "local_history_content", "askpass_pending", "rewrite_range",
+  "blame", "commit_template", "compare_refs", "local_history", "local_history_content", "askpass_pending", "rewrite_range",
 ]);
 
 async function callNow<T>(cmd: string, args?: unknown): Promise<T> {
@@ -226,11 +226,13 @@ export interface PlanEntry {
   oid: string;
   action: PlanAction;
   message?: string;
+  /** A new author, as "Name <email>". */
+  author?: string;
 }
 
 export interface RewriteRange {
   base: string;
-  entries: { oid: string; subject: string; message: string; author: string }[];
+  entries: { oid: string; subject: string; message: string; author: string; authorEmail: string }[];
   published: boolean;
 }
 
@@ -284,7 +286,7 @@ export type Op =
   | { op: "addWorktree"; path: string; branch: string; newBranch: boolean; at: string }
   | { op: "removeWorktree"; path: string; force: boolean }
   | { op: "pruneWorktrees" }
-  | { op: "commit"; paths: string[]; unversioned: string[]; partial?: { path: string; content: string }[]; hunks?: { path: string; ids: string[] }[]; message: string; amend: boolean }
+  | { op: "commit"; paths: string[]; unversioned: string[]; partial?: { path: string; content: string }[]; hunks?: { path: string; ids: string[] }[]; message: string; amend: boolean; signOff?: boolean }
   | { op: "rollback"; paths: string[] }
   | { op: "addFiles"; paths: string[] }
   | { op: "deleteUnversioned"; paths: string[] }
@@ -435,11 +437,14 @@ export const api = {
   setLocalHistoryLimits: (days: number, maxMb: number) => call<null>("set_local_history_limits", { days, maxMb }),
   submodules: () => call<Submodule[]>("submodules"),
   remotes: () => call<RemoteInfo[]>("remotes"),
+  commitTemplate: () => call<string | null>("commit_template"),
   fileHistory: (path: string) => call<HistoryEntry[]>("file_history", { path }),
   blame: (path: string, rev: RevSpec) => call<Blame>("blame", { path, rev }),
   mergeSides: (path: string) => call<MergeSides>("merge_sides", { path }),
   stashDetail: (index: number) => call<StashDetail>("stash_detail", { index }),
   pushInfo: (branch?: string) => call<PushInfo>("push_info", { branch: branch ?? null }),
+  compareRefs: (left: string, right: string) =>
+    call<{ left: string; right: string; base: string | null; onlyLeft: OutgoingCommit[]; onlyRight: OutgoingCommit[] }>("compare_refs", { left, right }),
   compare: (left: RevSpec, right: RevSpec) => call<{ changes: Change[] }>("compare", { left, right }),
   filePair: (left: RevSpec, right: RevSpec, path: string, oldPath: string | null) =>
     call<{ left: FileContent; right: FileContent }>("file_pair", { left, right, path, oldPath }),

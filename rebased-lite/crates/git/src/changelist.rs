@@ -470,6 +470,11 @@ impl Repo {
             std::fs::write(&msg_file, format!("{}\n", message.trim_end())).map_err(|e| GitError(e.to_string()))?;
             run_hook(self, "commit-msg", &[&msg_file.to_string_lossy()], &env)?;
             let message = std::fs::read_to_string(&msg_file).map_err(|e| GitError(e.to_string()))?;
+            // git commit-tree keeps comment lines; git commit removes them. Do the same as git commit.
+            let message = self.clean_message(&message)?;
+            if message.trim().is_empty() {
+                return Err(GitError("The commit message is empty after comment lines are removed".into()));
+            }
             let tree = run(&["write-tree"])?;
             let mut parents: Vec<String> = Vec::new();
             let mut author_env: Vec<(&str, String)> = Vec::new();
@@ -593,6 +598,40 @@ impl Repo {
             std::fs::remove_file(&full).map_err(|e| GitError(format!("{p}: {e}")))?;
         }
         Ok(OpResult::ok_msg(format!("Deleted {} file{}", paths.len(), if paths.len() == 1 { "" } else { "s" })))
+    }
+
+    /// Adds "Signed-off-by: <committer>" to a message, as `git commit -s` does. A message that has the
+    /// same line already stays as it is.
+    pub fn with_sign_off(&self, message: &str) -> Result<String> {
+        let ident = String::from_utf8_lossy(&self.git(&["var", "GIT_COMMITTER_IDENT"])?).trim().to_string();
+        // "Name <email> 1700000000 +0100": the name and the email end at '>'. The message must end with a
+        // line break, else git takes its last line for the trailer block.
+        let who = ident.rfind('>').map(|i| &ident[..=i]).ok_or_else(|| GitError("The committer name and email are not set".into()))?;
+        let trailer = format!("Signed-off-by: {who}");
+        let out = self
+            .git_stdin(&["interpret-trailers", "--if-exists", "addIfDifferent", "--trailer", &trailer], format!("{}\n", message.trim_end()).as_bytes())
+            .map_err(GitError)?;
+        Ok(out.trim_end().to_string())
+    }
+
+    /// The text of the file in `commit.template`, or None when it is not set or cannot be read. A path
+    /// that starts with "~/" is in the home directory; a relative path is in the root of the working tree.
+    pub fn commit_template(&self) -> Option<String> {
+        let raw = self.git(&["config", "--get", "commit.template"]).ok()?;
+        let path = String::from_utf8_lossy(&raw).trim().to_string();
+        if path.is_empty() {
+            return None;
+        }
+        let full = match path.strip_prefix("~/") {
+            Some(rest) => PathBuf::from(std::env::var_os("HOME")?).join(rest),
+            None => self.root.join(&path),
+        };
+        std::fs::read_to_string(full).ok()
+    }
+
+    /// Removes comment lines and extra blank lines, as `git commit --cleanup=strip` does.
+    pub fn clean_message(&self, message: &str) -> Result<String> {
+        self.git_stdin(&["stripspace", "--strip-comments"], message.as_bytes()).map_err(GitError)
     }
 
     /// The full message of HEAD, for Amend.

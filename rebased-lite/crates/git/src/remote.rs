@@ -259,4 +259,43 @@ impl Repo {
             None => self.write(&["branch", "--unset-upstream", branch], format!("{branch} tracks no branch now")),
         }
     }
+
+    /// The commits of `range` (for example `a..b`), newest first, at most MAX_OUTGOING.
+    pub fn range_commits(&self, range: &str) -> Result<Vec<OutgoingCommit>> {
+        let n = format!("-n{MAX_OUTGOING}");
+        Ok(text(self.git(&["log", &n, "--format=%H%x1f%s%x1f%an%x1f%ct", range, "--"])?)
+            .lines()
+            .filter_map(|l| {
+                let mut p = l.split('\x1f');
+                Some(OutgoingCommit { oid: p.next()?.to_string(), subject: p.next()?.to_string(), author: p.next()?.to_string(), time: p.next()?.parse().ok()? })
+            })
+            .collect())
+    }
+
+    /// Compares two refs: the commits of each side that the other side does not have, and the commit
+    /// that both sides start from.
+    pub fn compare_refs(&self, left: &str, right: &str) -> Result<RefComparison> {
+        let l = self.resolve(safe(left)?).ok_or_else(|| GitError(format!("{left} does not exist")))?;
+        let r = self.resolve(safe(right)?).ok_or_else(|| GitError(format!("{right} does not exist")))?;
+        let base = self.git(&["merge-base", &l, &r]).ok().map(text).filter(|s| !s.is_empty());
+        Ok(RefComparison {
+            only_left: self.range_commits(&format!("{r}..{l}"))?,
+            only_right: self.range_commits(&format!("{l}..{r}"))?,
+            left: l,
+            right: r,
+            base,
+        })
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefComparison {
+    pub left: String,
+    pub right: String,
+    /// The best common ancestor; None when the histories do not meet.
+    pub base: Option<String>,
+    /// Commits in the left ref that the right ref does not have, newest first.
+    pub only_left: Vec<OutgoingCommit>,
+    pub only_right: Vec<OutgoingCommit>,
 }

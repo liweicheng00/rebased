@@ -162,3 +162,22 @@ fn manage_remotes_tags_and_tracking() {
     repo.set_upstream("main", Some("origin/main")).unwrap();
     assert_eq!(repo.push_info(None).unwrap().upstream.as_deref(), Some("origin/main"));
 }
+
+#[test]
+fn compare_two_refs() {
+    let (_origin, _seed, mine) = setup("compare");
+    git(&mine, &["config", "commit.gpgsign", "false"]);
+    let base = git(&mine, &["rev-parse", "HEAD"]);
+    git(&mine, &["checkout", "-q", "-b", "topic"]);
+    commit(&mine, "t1.txt", "1\n", "T1");
+    commit(&mine, "t2.txt", "2\n", "T2");
+    git(&mine, &["checkout", "-q", "main"]);
+    commit(&mine, "m.txt", "m\n", "M1");
+    let repo = Repo::open(&mine).unwrap();
+    let c = repo.compare_refs("topic", "main").unwrap();
+    assert_eq!(c.only_left.iter().map(|x| x.subject.as_str()).collect::<Vec<_>>(), ["T2", "T1"]);
+    assert_eq!(c.only_right.iter().map(|x| x.subject.as_str()).collect::<Vec<_>>(), ["M1"]);
+    assert_eq!(c.base.as_deref(), Some(base.as_str()));
+    assert!(repo.compare_refs("topic", "no-such-branch").is_err());
+    assert!(repo.compare_refs("-x", "main").is_err());
+}

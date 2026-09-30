@@ -56,8 +56,8 @@ fn rewrites_and_partial_commits_are_signed_and_run_hooks() {
 
     // An in-memory squash writes new commits with commit-tree; they are signed.
     let plan = vec![
-        PlanEntry { oid: b.clone(), action: Action::Pick, message: Some("B and C".into()) },
-        PlanEntry { oid: c.clone(), action: Action::Squash, message: Some("B and C".into()) },
+        PlanEntry { oid: b.clone(), action: Action::Pick, message: Some("B and C".into()), author: None },
+        PlanEntry { oid: c.clone(), action: Action::Squash, message: Some("B and C".into()), author: None },
     ];
     assert!(repo.rewrite(&a, &plan, "Squash").unwrap().ok);
     assert_eq!(git(&dir, &["log", "-1", "--format=%s"]), "B and C");

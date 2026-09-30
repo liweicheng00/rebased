@@ -35,6 +35,18 @@ export interface Settings {
   /** Local History keeps versions this many days, and at most this many MB. */
   historyDays: number;
   historyMaxMb: number;
+  /** Favorite branches and tags by repository root, as full ref names. A repository without an entry has
+   * main and master as favorites. */
+  favorites: Record<string, string[]>;
+  /** The last commit messages, newest first. */
+  messageHistory: string[];
+  /** Add "Signed-off-by" to commits. */
+  signOff: boolean;
+  /** Commit message checks: the longest subject and body line; 0 turns a check off. */
+  subjectLimit: number;
+  bodyLimit: number;
+  /** Check for a blank line between the subject and the body. */
+  blankAfterSubject: boolean;
   /** The keys of the actions that the user changed, by action id. */
   keymap: Record<string, string[]>;
   /** The repositories open in tabs, and the active one. They open again at the next start. */
@@ -74,6 +86,12 @@ const DEFAULTS: Settings = {
   historyDays: 5,
   historyMaxMb: 200,
   keymap: {},
+  favorites: {},
+  messageHistory: [],
+  signOff: false,
+  subjectLimit: 72,
+  bodyLimit: 72,
+  blankAfterSubject: true,
 };
 
 const KEY = "rebased-lite.settings.v1";

@@ -103,6 +103,21 @@ pub struct PlanEntry {
     /// New message for reword, or the combined message for the first commit of a squash group.
     #[serde(default)]
     pub message: Option<String>,
+    /// A new author, as "Name <email>". The author date stays.
+    #[serde(default)]
+    pub author: Option<String>,
+}
+
+/// Splits "Name <email>" into the name and the email.
+pub fn parse_author(s: &str) -> Result<(String, String)> {
+    let s = s.trim();
+    let (name, rest) = s.split_once('<').ok_or_else(|| GitError(format!("The author must be \"Name <email>\": {s}")))?;
+    let email = rest.strip_suffix('>').ok_or_else(|| GitError(format!("The author must be \"Name <email>\": {s}")))?;
+    let (name, email) = (name.trim(), email.trim());
+    if name.is_empty() || email.is_empty() || email.contains(['<', '>']) {
+        return Err(GitError(format!("The author must be \"Name <email>\": {s}")));
+    }
+    Ok((name.to_string(), email.to_string()))
 }
 
 /// The commits from `base` (exclusive) to HEAD, oldest first, ready for a rewrite.
@@ -122,6 +137,7 @@ pub struct RangeCommit {
     pub subject: String,
     pub message: String,
     pub author: String,
+    pub author_email: String,
 }
 
 /// Rejects a name or revision that git could read as an option.
@@ -490,6 +506,7 @@ impl Repo {
                 subject: m.message.lines().next().unwrap_or("").to_string(),
                 message: m.message,
                 author: m.author_name,
+                author_email: m.author_email,
             });
         }
         let published = match entries.first() {
@@ -551,7 +568,15 @@ impl Repo {
                 }
                 _ => {
                     let message = e.message.clone().unwrap_or_else(|| m.message.clone());
-                    if unchanged && parent == current && message == m.message {
+                    let mut m = m;
+                    let mut new_author = false;
+                    if let Some(a) = &e.author {
+                        let (name, email) = parse_author(a)?;
+                        new_author = name != m.author_name || email != m.author_email;
+                        m.author_name = name;
+                        m.author_email = email;
+                    }
+                    if unchanged && parent == current && message == m.message && !new_author {
                         current = e.oid.clone();
                     } else {
                         current = self.commit_tree(&tree, &current, &m, &message)?;

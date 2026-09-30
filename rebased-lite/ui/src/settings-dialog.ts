@@ -12,7 +12,7 @@ export interface SettingsContext {
   pickFile: () => Promise<string | null>;
 }
 
-type Page = "general" | "git" | "diff" | "history" | "keymap";
+type Page = "general" | "git" | "commit" | "diff" | "history" | "keymap";
 
 export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | null> {
   const draft: Settings = structuredClone(settings);
@@ -55,6 +55,7 @@ export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | nul
     const pages: [Page, string][] = [
       ["general", "General"],
       ["git", "Git"],
+      ["commit", "Commit"],
       ["diff", "Diff"],
       ["history", "Local History"],
       ["keymap", "Keymap"],
@@ -126,6 +127,14 @@ export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | nul
         h("p", { class: "settings-hint" }, "Rebased Lite runs this program for all git commands. An empty field uses git from PATH."),
       ];
     };
+
+    const commit = () => [
+      row("Subject length", h("span", { class: "settings-inline" }, number(() => draft.subjectLimit, (v) => (draft.subjectLimit = v), 0, 500), " characters at most")),
+      row("Body lines", h("span", { class: "settings-inline" }, number(() => draft.bodyLimit, (v) => (draft.bodyLimit = v), 0, 500), " characters at most")),
+      row("", check("A blank line after the subject", () => draft.blankAfterSubject, (v) => (draft.blankAfterSubject = v))),
+      row("Sign-off", check("Add Signed-off-by to new commits", () => draft.signOff, (v) => (draft.signOff = v))),
+      h("p", { class: "settings-hint" }, "0 turns a length check off. The checks show below the message and ask before a commit. Comment lines (#) do not count. An empty message gets the file of commit.template."),
+    ];
 
     const diff = () => [
       row("Font size", number(() => draft.diffFontSize, (v) => (draft.diffFontSize = v), 8, 32)),
@@ -201,7 +210,7 @@ export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | nul
           return b;
         }),
       );
-      const body = { general, git, diff, history, keymap: keymapPage }[page]();
+      const body = { general, git, commit, diff, history, keymap: keymapPage }[page]();
       content.replaceChildren(h("h3", { class: "settings-title" }, pages.find((p) => p[0] === page)![1]), ...body);
     };
 

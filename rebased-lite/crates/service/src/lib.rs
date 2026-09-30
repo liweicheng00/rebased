@@ -173,6 +173,12 @@ pub struct CompareArgs {
     pub right: RevSpec,
 }
 
+#[derive(Deserialize)]
+pub struct CompareRefsArgs {
+    pub left: String,
+    pub right: String,
+}
+
 #[derive(Serialize)]
 pub struct CompareResult {
     pub changes: Vec<Change>,
@@ -254,6 +260,9 @@ pub enum Op {
         #[serde(default)]
         hunks: Vec<HunkSelection>,
         message: String,
+        /// Add "Signed-off-by" with the committer, as `git commit -s`.
+        #[serde(default)]
+        sign_off: bool,
         #[serde(default)]
         amend: bool,
     },
@@ -797,6 +806,10 @@ impl Service {
         Ok(())
     }
 
+    pub fn commit_template(&self) -> Result<Option<String>> {
+        self.with(|s| Ok(s.repo.commit_template()))
+    }
+
     pub fn remotes(&self) -> Result<Vec<rebased_git::remote::RemoteInfo>> {
         self.with(|s| s.repo.remote_details().map_err(err))
     }
@@ -867,7 +880,8 @@ impl Service {
                 repo.remove_worktree(&path, force).map(|_| OpResult::ok_msg(format!("Removed worktree {path}")))
             }
             Op::PruneWorktrees => repo.prune_worktrees().map(|_| OpResult::ok_msg("Pruned stale worktrees")),
-            Op::Commit { paths, unversioned, mut partial, hunks, message, amend } => {
+            Op::Commit { paths, unversioned, mut partial, hunks, message, sign_off, amend } => {
+                let message = if sign_off { repo.with_sign_off(&message).map_err(err)? } else { message };
                 for h in hunks {
                     let content = repo.content_with_hunks(&h.path, &h.ids).map_err(err)?;
                     partial.push(PartialFile { path: h.path, content });
@@ -938,6 +952,11 @@ impl Service {
         }
     }
 
+    /// The commits that each of two refs has and the other has not.
+    pub fn compare_refs(&self, args: CompareRefsArgs) -> Result<rebased_git::remote::RefComparison> {
+        self.with(|s| s.repo.compare_refs(&args.left, &args.right).map_err(err))
+    }
+
     pub fn compare(&self, args: CompareArgs) -> Result<CompareResult> {
         self.with(|s| {
             let (l, r) = (Self::rev(&s.repo, &args.left)?, Self::rev(&s.repo, &args.right)?);
@@ -991,6 +1010,7 @@ impl Service {
             "head_message" => serde_json::to_string(&self.head_message()?),
             "submodules" => serde_json::to_string(&self.submodules()?),
             "remotes" => serde_json::to_string(&self.remotes()?),
+            "commit_template" => serde_json::to_string(&self.commit_template()?),
             "local_history" => serde_json::to_string(&self.local_history(parse(body)?)?),
             "local_history_content" => serde_json::to_string(&self.local_history_content(parse(body)?)?),
             "set_local_history_limits" => serde_json::to_string(&self.set_local_history_limits(parse(body)?)?),
@@ -1000,6 +1020,7 @@ impl Service {
             "rewrite_range" => serde_json::to_string(&self.rewrite_range(parse(body)?)?),
             "run_op" => serde_json::to_string(&self.run_op(parse(body)?)?),
             "compare" => serde_json::to_string(&self.compare(parse(body)?)?),
+            "compare_refs" => serde_json::to_string(&self.compare_refs(parse(body)?)?),
             "file_pair" => serde_json::to_string(&self.file_pair(parse(body)?)?),
             _ => return Err(format!("unknown command {cmd}")),
         };

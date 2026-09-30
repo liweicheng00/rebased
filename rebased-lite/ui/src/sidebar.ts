@@ -13,6 +13,11 @@ export class Sidebar {
   private submodules: Submodule[] = [];
   private collapsed = new Set<string>(["Tags"]);
   private filterSet = new Set<string>();
+  /** Favorite branches and tags, by full ref name. */
+  private favorites = new Set<string>();
+  private onlyFavorites = false;
+  private favBtn: HTMLButtonElement;
+  onToggleFavorite: (b: BranchInfo) => void = () => {};
   onNavigate: (b: BranchInfo) => void = () => {};
   onToggleFilter: (b: BranchInfo) => void = () => {};
   onContextMenu: (b: BranchInfo, e: MouseEvent) => void = () => {};
@@ -30,7 +35,13 @@ export class Sidebar {
     this.search = h("input", { class: "sidebar-search", placeholder: "Search branches and tags", spellcheck: false });
     this.search.addEventListener("input", () => this.render());
     this.list = h("div", { class: "sidebar-list" });
-    this.el = h("aside", { class: "sidebar" }, h("div", { class: "pane-title" }, "Branches"), this.search, this.list);
+    this.favBtn = h("button", { class: "icon-button fav-filter", title: "Show only the favorite branches" }, "★");
+    this.favBtn.addEventListener("click", () => {
+      this.onlyFavorites = !this.onlyFavorites;
+      this.favBtn.classList.toggle("on", this.onlyFavorites);
+      this.render();
+    });
+    this.el = h("aside", { class: "sidebar" }, h("div", { class: "pane-title" }, "Branches"), h("div", { class: "sidebar-search-row" }, this.search, this.favBtn), this.list);
   }
 
   setRefs(refs: BranchInfo[]) {
@@ -53,6 +64,15 @@ export class Sidebar {
     this.render();
   }
 
+  setFavorites(full: Iterable<string>) {
+    this.favorites = new Set(full);
+    this.render();
+  }
+
+  isFavorite(b: BranchInfo): boolean {
+    return this.favorites.has(b.full);
+  }
+
   setFilter(names: string[]) {
     this.filterSet = new Set(names);
     this.render();
@@ -60,13 +80,12 @@ export class Sidebar {
 
   private render() {
     const q = this.search.value.trim().toLowerCase();
-    const match = (b: BranchInfo) => !q || b.name.toLowerCase().includes(q);
+    const match = (b: BranchInfo) => (!q || b.name.toLowerCase().includes(q)) && (!this.onlyFavorites || b.current || this.favorites.has(b.full));
     const groups: [string, BranchInfo[]][] = [];
     const current = this.refs.filter((b) => b.current);
     const recent = this.recent
-      .filter((r) => !q || r.name.toLowerCase().includes(q))
       .map((r) => this.refs.find((b) => b.kind === "local" && b.name === r.name))
-      .filter((b): b is BranchInfo => !!b);
+      .filter((b): b is BranchInfo => !!b && match(b));
     if (recent.length) groups.push(["Recent", recent]);
     const locals = this.refs.filter((b) => b.kind === "local" && match(b));
     groups.push(["Local", locals]);
@@ -84,7 +103,9 @@ export class Sidebar {
       const c = current[0];
       frag.append(h("div", { class: "sidebar-head", title: c.subject }, h("span", { class: "head-icon" }, "HEAD"), " ", c.name));
     }
-    for (const [title, items] of groups) {
+    for (const [title, unsorted] of groups) {
+      // Favorites first, as in IntelliJ; the order stays otherwise.
+      const items = [...unsorted.filter((b) => this.favorites.has(b.full)), ...unsorted.filter((b) => !this.favorites.has(b.full))];
       if (!items.length) continue;
       const open = q ? true : !this.collapsed.has(title);
       const header = h(
@@ -222,12 +243,20 @@ export class Sidebar {
       e.stopPropagation();
       this.onToggleFilter(b);
     });
+    const fav = this.favorites.has(b.full);
+    const favBtn = h("button", { class: "fav-toggle" + (fav ? " on" : ""), title: fav ? "Remove from favorites" : "Add to favorites" }, fav ? "★" : "☆");
+    favBtn.addEventListener("dblclick", (e) => e.stopPropagation());
+    favBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.onToggleFavorite(b);
+    });
     const el = h(
       "div",
-      { class: `branch branch-${b.kind}` + (b.current ? " current" : "") + (filtered ? " filtered" : ""), title: `${b.name}\n${b.subject}` },
-      h("span", { class: "branch-icon" }, b.kind === "tag" ? "⌗" : b.current ? "★" : "⑂"),
+      { class: `branch branch-${b.kind}` + (b.current ? " current" : "") + (filtered ? " filtered" : "") + (fav ? " favorite" : ""), title: `${b.name}\n${b.subject}` },
+      h("span", { class: "branch-icon", title: b.current ? "The current branch" : "" }, b.kind === "tag" ? "⌗" : b.current ? "◉" : "⑂"),
       h("span", { class: "branch-name" }, label),
       badges,
+      favBtn,
       filterBtn,
     );
     el.addEventListener("click", () => this.onNavigate(b));

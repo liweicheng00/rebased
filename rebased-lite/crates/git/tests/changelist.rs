@@ -296,3 +296,25 @@ fn hunks_in_different_changelists() {
     // A line without a change is an error.
     assert!(repo.changelist_op(ChangeListOp::MoveLines { path: "a.txt".into(), lines: vec![12], to: DEFAULT_ID.into() }).is_err());
 }
+
+#[test]
+fn commit_template_and_comment_lines() {
+    let dir = temp_repo("template");
+    git(&dir, &["config", "commit.gpgsign", "false"]);
+    let repo = Repo::open(&dir).unwrap();
+    assert!(repo.commit_template().is_none());
+    std::fs::write(dir.join(".gitmessage"), "Subject\n\n# Why is this change needed?\n").unwrap();
+    git(&dir, &["config", "commit.template", ".gitmessage"]);
+    assert_eq!(repo.commit_template().as_deref(), Some("Subject\n\n# Why is this change needed?\n"));
+
+    // A partial commit removes comment lines, as git commit does.
+    std::fs::write(dir.join("a.txt"), "a.txt\nmore\n").unwrap();
+    let file = rebased_git::changelist::PartialFile { path: "a.txt".into(), content: "a.txt\nmore\n".into() };
+    let r = repo.commit_partial(&[], &[], &[file], "Real subject\n\n# a comment\nBody\n", false).unwrap();
+    assert!(r.ok, "{}", r.message);
+    assert_eq!(git(&dir, &["log", "-1", "--format=%B"]), "Real subject\n\nBody");
+    // Only comments: refused.
+    std::fs::write(dir.join("b.txt"), "changed\n").unwrap();
+    let file = rebased_git::changelist::PartialFile { path: "b.txt".into(), content: "changed\n".into() };
+    assert!(repo.commit_partial(&[], &[], &[file], "# only a comment\n", false).is_err());
+}

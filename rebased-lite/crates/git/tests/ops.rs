@@ -33,7 +33,7 @@ fn subjects(dir: &Path) -> Vec<String> {
 }
 
 fn entry(oid: &str, action: Action) -> PlanEntry {
-    PlanEntry { oid: oid.into(), action, message: None }
+    PlanEntry { oid: oid.into(), action, message: None, author: None }
 }
 
 #[test]
@@ -229,7 +229,7 @@ fn interactive_rebase_stops_for_edit() {
     let plan = vec![
         entry(&a, Action::Pick),
         entry(&b, Action::Edit),
-        PlanEntry { oid: c.clone(), action: Action::Reword, message: Some("C reworded".into()) },
+        PlanEntry { oid: c.clone(), action: Action::Reword, message: Some("C reworded".into()), author: None },
         entry(&d, Action::Squash),
     ];
     let r = repo.rewrite(&base, &plan, "Interactive rebase").unwrap();
@@ -265,4 +265,29 @@ fn git_program_setting() {
     let path = String::from_utf8(Command::new("sh").args(["-c", "command -v git"]).output().unwrap().stdout).unwrap();
     assert_eq!(rebased_git::set_git_program(path.trim()).unwrap(), version);
     rebased_git::set_git_program("").unwrap();
+}
+
+#[test]
+fn change_author_and_sign_off() {
+    let dir = temp_repo("author");
+    git(&dir, &["config", "commit.gpgsign", "false"]);
+    commit(&dir, "a.txt", "a\n", "A");
+    commit(&dir, "b.txt", "b\n", "B");
+    let repo = Repo::open(&dir).unwrap();
+    let head = git(&dir, &["rev-parse", "HEAD"]);
+    let parent = git(&dir, &["rev-parse", "HEAD~1"]);
+    let date = git(&dir, &["log", "-1", "--format=%ad", "--date=raw", "HEAD"]);
+    let plan = [PlanEntry { oid: head.clone(), action: Action::Pick, message: None, author: Some("Grace Hopper <grace@example.com>".into()) }];
+    let r = repo.rewrite(&parent, &plan, "Change author").unwrap();
+    assert!(r.ok, "{}", r.message);
+    assert_eq!(git(&dir, &["log", "-1", "--format=%an <%ae>", "HEAD"]), "Grace Hopper <grace@example.com>");
+    assert_eq!(git(&dir, &["log", "-1", "--format=%ad", "--date=raw", "HEAD"]), date, "the author date stays");
+    // A bad author is refused before anything changes.
+    let bad = [PlanEntry { oid: git(&dir, &["rev-parse", "HEAD"]), action: Action::Pick, message: None, author: Some("no email".into()) }];
+    assert!(repo.rewrite(&parent, &bad, "Change author").is_err());
+
+    // Sign-off adds the committer once.
+    let m = repo.with_sign_off("Fix it").unwrap();
+    assert!(m.starts_with("Fix it\n\nSigned-off-by: "), "{m}");
+    assert_eq!(repo.with_sign_off(&m).unwrap(), m);
 }

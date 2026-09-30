@@ -56,6 +56,22 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   The panel also has Amend, Rollback, Add to Git, delete of unversioned files, and Undo of the last
   commit (the changes become local changes again). The changelists of a worktree are stored in its
   git directory, in `rebased-lite/changelists.json`.
+- **Commit extras**: Sign-off adds "Signed-off-by" with your name, as `git commit -s`. The 🕘
+  button (or `Ctrl/Cmd+M` in the message field) lists the last 30 commit messages. "Edit Author…" in
+  the context menu of one or more commits of the current branch changes their author; the author
+  date stays, and the commits get new hashes.
+- **Commit message checks**: below the message field, a warning shows when the subject is longer
+  than 72 characters, when the line after the subject is not blank, or when a body line is longer
+  than 72 characters. A commit with warnings asks first. Settings → Commit changes the limits.
+  An empty message field gets the file of `commit.template`, and a message that is only the
+  template asks first. Comment lines (#) do not count and do not go into the commit.
+- **Compare Branches**: "Compare Branches…" and "Compare with the Working Tree…" in the context menu
+  of a branch or a tag open a window. It lists the commits of each side that the other side does not
+  have, and the changed files with their diff. The files can be compared tip to tip, or from the
+  common ancestor to the right side. ⇄ swaps the sides. Double-click a commit to show it in the log.
+- **Favorite branches**: the ☆ of a branch or a tag marks it as a favorite. Favorites come first in
+  each group, and the ★ button next to the search field shows only the favorites and the current
+  branch. At first, main and master are favorites. The current branch has the ◉ icon.
 - **Partial changelists**: the changes (hunks) of one file can be in different changelists, as in
   IntelliJ. Right-click a changed line in the diff and choose "Move Change to Another Changelist".
   Such a file shows in each changelist with a count, for example 1/2. The diff marks the changes of

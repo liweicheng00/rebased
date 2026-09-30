@@ -29,6 +29,7 @@ import { openLocalHistory } from "./local-history-view";
 import { isMac, Keymap, type KeyAction } from "./keymap";
 import { openSettingsDialog } from "./settings-dialog";
 import { openRemotesDialog } from "./remotes-dialog";
+import { openCompare, WORKTREE } from "./compare-view";
 import { openHistory } from "./history-view";
 import { confirmDialog, conflictsDialog, credentialDialog, formDialog, interactiveRebaseDialog, messageDialog, pushDialog, resetDialog, updateDialog } from "./dialogs";
 import { toast } from "./notify";
@@ -317,6 +318,7 @@ async function showRepo(r: ViewResult, state: TabState | null) {
   showWorkspace(true);
   await applyView(r, false);
   await loadRefs();
+  commitPanel.setTemplate(await api.commitTemplate().catch(() => null));
   const target = state?.selected ?? r.headOid;
   if (target) void jumpToOid(target, true);
 }
@@ -358,6 +360,7 @@ async function loadRefs() {
     sidebar.setRecent(recent);
     sidebar.setWorktrees(worktrees);
     sidebar.setSubmodules(subs);
+    sidebar.setFavorites(favoritesOf());
     banner.update(repoState);
     filterBar.branchNames = refs.filter((b) => b.kind !== "tag").map((b) => b.name);
     updateStatus();
@@ -414,6 +417,7 @@ setInterval(() => void pollAskpass(), 300);
 /** The watcher counters that the view shows; changes after a write operation of the app are expected. */
 let watchSeen: { repo: number; files: number } | null = null;
 let watchQuietUntil = 0;
+let filesChangedWhileQuiet = false;
 
 async function pollWatch() {
   if (!view || busy > 0 || document.hidden || !settings.autoRefresh) return;
@@ -421,7 +425,22 @@ async function pollWatch() {
   if (!c) return;
   const before = watchSeen;
   watchSeen = c;
-  if (!before || Date.now() < watchQuietUntil || busy > 0) return;
+  if (!before) return;
+  if (Date.now() < watchQuietUntil || busy > 0) {
+    // The operation itself changed these files, but a file can also change on disk in this time. The
+    // local changes load once more after the quiet time; that is cheap. Ref changes stay ignored here,
+    // because a graph reload after each operation costs much on a large repository.
+    if (c.files !== before.files) filesChangedWhileQuiet = true;
+    return;
+  }
+  if (filesChangedWhileQuiet && c.files === before.files && c.repo === before.repo) {
+    filesChangedWhileQuiet = false;
+    await loadLocalChanges();
+    const f = commitPanel.activeFile();
+    if (diffSource === "local" && f) void showLocalDiff(f);
+    return;
+  }
+  filesChangedWhileQuiet = false;
   if (c.repo !== before.repo) {
     const r = await api.refresh().catch(() => null);
     if (r) {
@@ -718,7 +737,7 @@ async function resetTo(oid: string) {
 }
 
 /** Selected rows are sorted top to bottom (newest first). */
-async function rewriteSelected(kind: "squash" | "drop" | "reword", rows: Row[]) {
+async function rewriteSelected(kind: "squash" | "drop" | "reword" | "author", rows: Row[]) {
   const oldest = rows[rows.length - 1];
   let range;
   try {
@@ -737,6 +756,20 @@ async function rewriteSelected(kind: "squash" | "drop" | "reword", rows: Row[]) 
     if (!(await confirmDialog("Drop commits", `Drop ${sel.size} commit(s) from ${currentBranch()}? You can undo this right after.`, "Drop", true))) return;
     plan = range.entries.map((e) => ({ oid: e.oid, action: sel.has(e.oid) ? "drop" : "pick" }));
     what = `Drop ${sel.size} commit(s)`;
+  } else if (kind === "author") {
+    const chosen = range.entries.filter((e) => sel.has(e.oid));
+    const first = chosen[0];
+    const r = await formDialog(
+      chosen.length > 1 ? `Edit the author of ${chosen.length} commits` : `Edit the author of ${short(first.oid)}`,
+      [{ key: "author", label: "Author", value: `${first.author} <${first.authorEmail}>`, placeholder: "Name <email>" }],
+      "Save",
+      "The author date and the committer stay. The commits after them get new hashes.",
+    );
+    if (!r) return;
+    const author = String(r.author).trim();
+    if (!/^[^<>]+<[^<>]+>$/.test(author)) return toast("Write the author as: Name <email>", "error");
+    plan = range.entries.map((e) => (sel.has(e.oid) ? { oid: e.oid, action: "pick", author } : { oid: e.oid, action: "pick" }));
+    what = "Edit author";
   } else if (kind === "reword") {
     const entry = range.entries.find((e) => e.oid === rows[0].oid)!;
     const message = await messageDialog(`Edit the message of ${short(entry.oid)}`, entry.message, "Save");
@@ -990,12 +1023,32 @@ async function deleteUnversioned(files: LocalFile[]) {
   await runOp({ op: "deleteUnversioned", paths }, "Deleting files");
 }
 
-async function commitFiles(files: LocalFile[], message: string, amend: boolean, list: string | null, push = false) {
+/** Keeps a commit message in the history, newest first. */
+function rememberMessage(message: string) {
+  const m = message.trim();
+  if (!m) return;
+  settings.messageHistory = [m, ...settings.messageHistory.filter((x) => x !== m)].slice(0, 30);
+  save();
+}
+
+commitPanel.onMessageHistory = (anchor) => {
+  const items: MenuItem[] = settings.messageHistory.length
+    ? settings.messageHistory.map((m) => {
+        const first = m.split("\n")[0];
+        return { label: first.length > 70 ? first.slice(0, 69) + "…" : first, action: () => commitPanel.setMessage(m) };
+      })
+    : [{ label: "No recent messages", disabled: true, action: () => {} }];
+  menuBelow(anchor, [{ header: "Recent Commit Messages" }, ...items]);
+};
+
+async function commitFiles(files: LocalFile[], message: string, amend: boolean, list: string | null, push = false, signOff = false) {
   if (!message.trim()) {
     toast("Enter a commit message.", "error");
     commitPanel.focusMessage();
     return;
   }
+  const warnings = commitPanel.messageWarnings;
+  if (warnings.length && !(await confirmDialog("Commit message", `${warnings.join(" ")} Commit anyway?`, "Commit"))) return;
   const conflicts = files.filter((f) => f.change.status === "U");
   if (conflicts.length && !(await confirmDialog("Conflicts", `${conflicts.length} file(s) had conflicts. Commit them as they are in the working tree?`, "Commit"))) return;
   if (amend && view?.headOid) {
@@ -1027,8 +1080,9 @@ async function commitFiles(files: LocalFile[], message: string, amend: boolean, 
   // A renamed file in part: the old path is removed whole.
   const paths = [...localPaths(whole), ...files.filter((f) => commitPanel.partialContent(f.key) !== null && f.change.old_path).map((f) => f.change.old_path!)];
   if ((partial.length || hunks.length) && repoState?.operation === "merge") return toast("A merge is in progress: commit whole files to finish it.", "error");
-  const out = await runOp({ op: "commit", paths, unversioned, partial, hunks, message, amend }, amend ? "Amending" : "Committing");
+  const out = await runOp({ op: "commit", paths, unversioned, partial, hunks, message, amend, signOff }, amend ? "Amending" : "Committing");
   if (out?.result.ok) {
+    rememberMessage(message);
     commitPanel.committed(list);
     if (list && !amend) await changeListOp({ op: "saveMessage", id: list, message: "" });
     if (out.head) void jumpToOid(out.head, true);
@@ -1043,7 +1097,7 @@ commitPanel.onNewChangeList = () => void newChangeList();
 commitPanel.onMove = (paths, to) => void changeListOp({ op: "move", paths, to });
 commitPanel.onSaveMessage = (id, message) => void api.changeListOp({ op: "saveMessage", id, message }).catch(() => {});
 commitPanel.onAmendToggle = () => api.headMessage().catch(() => "");
-commitPanel.onCommit = (files, message, amend, list, push) => void commitFiles(files, message, amend, list, push);
+commitPanel.onCommit = (files, message, amend, list, push, signOff) => void commitFiles(files, message, amend, list, push, signOff);
 
 // ---- push and update ----
 
@@ -1333,6 +1387,7 @@ async function rowMenu(r: Row, e: MouseEvent) {
     { label: multi ? `Cherry-Pick ${selected.length} Commits` : "Cherry-Pick", action: () => void runOp({ op: "cherryPick", oids: [...selected].reverse().map((s) => s.oid) }, "Cherry-picking") },
     { label: multi ? `Revert ${selected.length} Commits` : "Revert Commit", action: () => void runOp({ op: "revert", oids: selected.map((s) => s.oid) }, "Reverting") },
     { label: "Edit Commit Message…", disabled: multi, action: () => void rewriteSelected("reword", [r]) },
+    { label: multi ? `Edit Author of ${selected.length} Commits…` : "Edit Author…", action: () => void rewriteSelected("author", selected) },
     { label: multi ? `Squash ${selected.length} Commits…` : "Squash Commits… (select 2 or more)", disabled: !multi, action: () => void rewriteSelected("squash", selected) },
     { label: multi ? `Drop ${selected.length} Commits…` : "Drop Commit…", action: () => void rewriteSelected("drop", selected.length ? selected : [r]) },
     { label: "Interactively Rebase from Here…", disabled: multi, action: () => void interactiveRebase(r) },
@@ -1370,6 +1425,8 @@ sidebar.onContextMenu = (b, e) => {
     { separator: true },
     { label: `Merge into ${cur ?? "current"}`, disabled: isCurrent || !cur, action: () => void mergeIntoCurrent(b.name, b.name) },
     { label: `Rebase ${cur ?? "current"} onto ${b.name}…`, disabled: isCurrent || !cur, action: () => void rebaseCurrentOnto(b.name, b.name) },
+    { label: `Compare Branches: ${cur ?? "HEAD"} and ${b.name}…`, disabled: isCurrent, action: () => compareBranches(cur ?? "HEAD", b.name) },
+    { label: "Compare with the Working Tree…", action: () => compareBranches(b.name, WORKTREE) },
     {
       label: `Compare with ${current ? current.name : "HEAD"}`,
       disabled: !view?.headOid || b.oid === view?.headOid,
@@ -1391,6 +1448,7 @@ sidebar.onContextMenu = (b, e) => {
     { separator: true },
     { label: "Rename…", disabled: b.kind !== "local", action: () => void renameBranch(b) },
     { label: b.kind === "tag" ? "Delete Tag…" : "Delete…", disabled: b.kind === "remote" || isCurrent, action: () => void deleteBranch(b) },
+    { label: sidebar.isFavorite(b) ? "Remove from Favorites" : "Add to Favorites", action: () => toggleFavorite(b) },
     { label: "Copy Name", action: () => void copyText(b.name) },
     { label: "Copy Revision Number", action: () => void copyText(b.oid) },
   ]);
@@ -1528,6 +1586,41 @@ async function manageRemotes() {
     remove: (r) => removeRemote(r.name),
   });
 }
+
+/** Opens Compare Branches. The right side can be the working tree. */
+function compareBranches(left: string, right: string) {
+  const names = [
+    ...refs.filter((b) => b.kind === "local").map((b) => b.name),
+    ...refs.filter((b) => b.kind === "remote").map((b) => b.name),
+    ...refs.filter((b) => b.kind === "tag").map((b) => b.name),
+  ];
+  const head = currentBranch() ?? "HEAD";
+  if (!names.includes(head)) names.unshift(head);
+  for (const n of [left, right]) if (n !== WORKTREE && !names.includes(n)) names.unshift(n);
+  void openCompare(left, right, {
+    refs: names,
+    head,
+    compareRefs: api.compareRefs,
+    changes: async (l, r) => (await api.compare(l, r)).changes,
+    pair: api.filePair,
+    showInLog: (oid) => void jumpToOid(oid, true),
+  });
+}
+
+/** The favorite refs of the active repository. Without a choice yet, main and master are favorites. */
+function favoritesOf(): string[] {
+  const root = view?.root ?? "";
+  return settings.favorites[root] ?? ["refs/heads/main", "refs/heads/master"];
+}
+
+function toggleFavorite(b: BranchInfo) {
+  if (!view) return;
+  const cur = favoritesOf();
+  settings.favorites[view.root] = cur.includes(b.full) ? cur.filter((x) => x !== b.full) : [...cur, b.full];
+  save();
+  sidebar.setFavorites(favoritesOf());
+}
+sidebar.onToggleFavorite = toggleFavorite;
 
 sidebar.onRemoteMenu = (remote, e) =>
   showMenu(e.clientX, e.clientY, [

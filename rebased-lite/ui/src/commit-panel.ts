@@ -4,6 +4,7 @@
 import type { Change, ChangeListView, LocalChanges } from "./api";
 import { statusName } from "./changes-panel";
 import { h } from "./dom";
+import { save, settings } from "./settings";
 
 /** A file row: a tracked change in a changelist, or an unversioned file. */
 export interface LocalFile {
@@ -21,6 +22,28 @@ export function fileKey(list: string, path: string, split: boolean): string {
 }
 
 const UNVERSIONED = "Unversioned Files";
+
+/** Problems of a commit message, from the settings. Comment lines (#) do not count. */
+export function messageWarnings(message: string, template: string | null): string[] {
+  const lines = message.split("\n").filter((l) => !l.startsWith("#"));
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  if (!lines.join("").trim()) return [];
+  const out: string[] = [];
+  const subject = lines[0];
+  if (settings.subjectLimit > 0 && subject.length > settings.subjectLimit) {
+    out.push(`The subject has ${subject.length} characters. Keep it at ${settings.subjectLimit} or fewer.`);
+  }
+  if (settings.blankAfterSubject && lines.length > 1 && lines[1].trim()) out.push("Put a blank line after the subject.");
+  if (settings.bodyLimit > 0) {
+    const long = lines.slice(1).map((l, i) => [i + 2, l.length]).filter(([, n]) => n > settings.bodyLimit);
+    if (long.length) out.push(`Line${long.length > 1 ? "s" : ""} ${long.map(([i]) => i).join(", ")} ${long.length > 1 ? "are" : "is"} longer than ${settings.bodyLimit} characters.`);
+  }
+  if (template) {
+    const strip = (t: string) => t.split("\n").filter((l) => !l.startsWith("#")).join("\n").trim();
+    if (strip(template) && strip(template) === strip(message)) out.push("The message is the commit template. Write your own message.");
+  }
+  return out;
+}
 
 export class CommitPanel {
   readonly el: HTMLElement;
@@ -50,12 +73,19 @@ export class CommitPanel {
   onListMenu: (list: ChangeListView, e: MouseEvent) => void = () => {};
   onUnversionedMenu: (e: MouseEvent) => void = () => {};
   onMove: (paths: string[], to: string) => void = () => {};
-  onCommit: (files: LocalFile[], message: string, amend: boolean, list: string | null, push: boolean) => void = () => {};
+  onCommit: (files: LocalFile[], message: string, amend: boolean, list: string | null, push: boolean, signOff: boolean) => void = () => {};
   onSaveMessage: (list: string, message: string) => void = () => {};
   onAmendToggle: (on: boolean) => Promise<string> = async () => "";
   onRefresh: () => void = () => {};
   onRollback: (files: LocalFile[]) => void = () => {};
   onNewChangeList: () => void = () => {};
+  /** Shows the recent commit messages below the anchor. */
+  onMessageHistory: (anchor: HTMLElement) => void = () => {};
+  private signOff: HTMLInputElement;
+  private warnings: HTMLElement;
+  /** The text of commit.template, for an empty message. */
+  private template: string | null = null;
+  private historyBtn: HTMLButtonElement;
 
   constructor() {
     const refresh = h("button", { class: "icon-button", title: "Refresh the local changes" }, "⟳");
@@ -81,7 +111,11 @@ export class CommitPanel {
     this.tree = h("div", { class: "commit-tree", tabIndex: 0 });
     this.tree.addEventListener("keydown", (e) => this.onKey(e));
     this.message = h("textarea", { class: "commit-message", placeholder: "Commit message", spellcheck: true, rows: 5 });
-    this.message.addEventListener("input", () => this.scheduleSave());
+    this.message.addEventListener("input", () => {
+      this.scheduleSave();
+      this.checkMessage();
+    });
+    this.warnings = h("div", { class: "commit-warnings", hidden: true });
     this.message.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -89,7 +123,17 @@ export class CommitPanel {
       } else if (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey) && e.altKey) {
         e.preventDefault();
         this.commit(true);
+      } else if (e.code === "KeyM" && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        this.onMessageHistory(this.historyBtn);
       }
+    });
+    this.historyBtn = h("button", { class: "icon-button commit-history", title: "Recent commit messages (Ctrl+M in the message)" }, "🕘");
+    this.historyBtn.addEventListener("click", () => this.onMessageHistory(this.historyBtn));
+    this.signOff = h("input", { type: "checkbox", checked: settings.signOff });
+    this.signOff.addEventListener("change", () => {
+      settings.signOff = this.signOff.checked;
+      save();
     });
     this.amend = h("input", { type: "checkbox" });
     this.amend.addEventListener("change", () => void this.toggleAmend());
@@ -107,10 +151,13 @@ export class CommitPanel {
         "div",
         { class: "commit-bottom" },
         this.message,
+        this.warnings,
         h(
           "div",
           { class: "commit-actions" },
           h("label", { class: "commit-amend", title: "Change the last commit" }, this.amend, "Amend"),
+          h("label", { class: "commit-amend", title: "Add \"Signed-off-by\" with your name, as git commit -s" }, this.signOff, "Sign-off"),
+          this.historyBtn,
           this.summary,
           h("span", { class: "spacer" }),
           this.commitBtn,
@@ -211,6 +258,36 @@ export class CommitPanel {
     this.updateTarget();
   }
 
+  /** Puts a message into the message field, for example from the history. */
+  setMessage(text: string) {
+    this.message.value = text;
+    this.scheduleSave();
+    this.checkMessage();
+    this.message.focus();
+  }
+
+  /** Sets the commit template; an empty message field gets it. */
+  setTemplate(t: string | null) {
+    this.template = t && t.trim() ? t : null;
+    if (!this.message.value && this.template && !this.amend.checked) this.message.value = this.template;
+    this.checkMessage();
+  }
+
+  /** The warnings of the current message. */
+  get messageWarnings(): string[] {
+    return messageWarnings(this.message.value, this.template);
+  }
+
+  checkMessage() {
+    const w = this.messageWarnings;
+    this.warnings.hidden = !w.length;
+    this.warnings.replaceChildren(...w.map((x) => h("div", {}, "⚠ ", x)));
+  }
+
+  get messageText(): string {
+    return this.message.value;
+  }
+
   focusMessage() {
     this.message.focus();
   }
@@ -303,7 +380,8 @@ export class CommitPanel {
     if (!this.amend.checked && t !== this.target) {
       this.flushSave();
       this.target = t;
-      this.message.value = this.data?.lists.find((l) => l.id === t)?.comment ?? "";
+      this.message.value = this.data?.lists.find((l) => l.id === t)?.comment || this.template || "";
+      this.checkMessage();
     }
     this.target = t;
     this.updateSummary();
@@ -331,9 +409,11 @@ export class CommitPanel {
     clearTimeout(this.saveTimer);
     this.saveTimer = 0;
     const l = this.data?.lists.find((x) => x.id === this.target);
-    if (!l || this.amend.checked || l.comment === this.message.value) return;
-    l.comment = this.message.value;
-    this.onSaveMessage(l.id, this.message.value);
+    // The template alone is no draft.
+    const value = this.message.value === this.template ? "" : this.message.value;
+    if (!l || this.amend.checked || l.comment === value) return;
+    l.comment = value;
+    this.onSaveMessage(l.id, value);
   }
 
   private async toggleAmend() {
@@ -351,7 +431,7 @@ export class CommitPanel {
   private commit(push: boolean) {
     if (this.commitBtn.disabled) return;
     const files = this.files.filter((f) => this.included.has(f.key));
-    this.onCommit(files, this.message.value, this.amend.checked, this.target, push);
+    this.onCommit(files, this.message.value, this.amend.checked, this.target, push, this.signOff.checked);
   }
 
   /** Called by the owner after a successful commit. */
@@ -359,7 +439,8 @@ export class CommitPanel {
     this.partial.clear();
     const wasAmend = this.amend.checked;
     this.amend.checked = false;
-    this.message.value = wasAmend ? this.draftBeforeAmend : "";
+    this.message.value = wasAmend ? this.draftBeforeAmend : this.template ?? "";
+    this.checkMessage();
     const l = this.data?.lists.find((x) => x.id === list);
     if (l && !wasAmend) l.comment = "";
     this.updateSummary();
