@@ -200,6 +200,10 @@ pub struct OpOutcome {
     /// Submodules whose checked-out commit is not the recorded commit after an operation that moved HEAD.
     #[serde(rename = "staleSubmodules")]
     pub stale_submodules: Vec<String>,
+    /// The kind of the failure when the operation did not succeed.
+    #[serde(rename = "errorKind", skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub error_kind: Option<crate::errors::ErrorKind>,
 }
 
 #[derive(Serialize)]

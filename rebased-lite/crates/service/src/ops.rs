@@ -301,6 +301,13 @@ impl Service {
         } else {
             Vec::new()
         };
-        Ok(OpOutcome { result, view, head, stale_submodules })
+        let error_kind = (!result.ok).then(|| {
+            if result.conflicts.is_empty() {
+                crate::errors::classify(&result.message)
+            } else {
+                crate::errors::ErrorKind::Conflict
+            }
+        });
+        Ok(OpOutcome { result, view, head, stale_submodules, error_kind })
     }
 }

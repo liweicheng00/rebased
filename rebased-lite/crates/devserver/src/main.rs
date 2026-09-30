@@ -115,7 +115,7 @@ fn handle(stream: TcpStream, service: &Service, dist: &std::path::Path) -> std::
         }
         let (status, text) = match service.dispatch(cmd, &body) {
             Ok(json) => (200, json),
-            Err(e) => (400, serde_json_string(&e)),
+            Err(e) => (400, rebased_service::errors::error_json(&e).to_string()),
         };
         if log {
             eprintln!("end   {cmd} {status} {} ms", t.elapsed().as_millis());

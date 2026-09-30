@@ -6,6 +6,7 @@
 
 pub mod askpass;
 pub mod config;
+pub mod errors;
 pub mod events;
 mod dispatch;
 pub mod history;

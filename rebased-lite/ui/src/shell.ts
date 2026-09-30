@@ -1,5 +1,6 @@
 // The components of the window, the layout, the theme and the status bar.
 
+import { ApiError, errorHint } from "./api";
 import { ChangesPanel } from "./changes-panel";
 import { CommitPanel } from "./commit-panel";
 import { menuBelow } from "./context-menu";
@@ -8,6 +9,7 @@ import { DiffView, setMonacoTheme } from "./diff-view";
 import { dragResize, h } from "./dom";
 import { FilterBar } from "./filter-bar";
 import { LogView } from "./log-view";
+import { toast } from "./notify";
 import { OpBanner } from "./op-banner";
 import { save, settings } from "./settings";
 import { Sidebar } from "./sidebar";
@@ -139,8 +141,12 @@ export async function task<T>(label: string, fn: () => Promise<T>): Promise<T | 
     statusRight.className = "sb-right";
     return r;
   } catch (e) {
-    statusRight.textContent = String(e).replace(/^Error: /, "");
+    const message = String(e).replace(/^Error: /, "");
+    statusRight.textContent = message;
     statusRight.className = "sb-right error";
+    // A failure that the user must fix outside the app gets a notification with what to do.
+    const hint = e instanceof ApiError ? errorHint(e.kind) : "";
+    if (hint) toast(`${message}\n${hint}`, "error");
     return undefined;
   } finally {
     app.busy--;

@@ -366,6 +366,7 @@ get_file_pair(left: Rev, right: Rev | "WORKTREE", change: Change): { left?: Blob
 | commit 訊息檢查（v0.6） | 完成。標題超過 72 字、標題後沒有空行、內文行超過 72 字時，訊息欄下方顯示警告；有警告時 commit 前會先詢問。上限可在 Settings → Commit 修改。空的訊息欄會放入 `commit.template` 的內容，只有範本時會先詢問。註解行（#）不計算，也不會進入 commit（部分 commit 也用 `git stripspace` 移除）。 |
 | 比較分支（v0.6） | 完成。分支或 tag 的右鍵選單可開啟比較視窗：列出兩邊各自多出的 commit（`git log A..B`）、變更的檔案與 diff。檔案可以比較兩端點，或從共同祖先比較到右邊。右邊可以是工作目錄。 |
 | 架構整理 R1–R2（v0.6） | service 拆成 types、session、view、queries、ops、dispatch；git 的改寫、Undo、拓撲各自一個模組。每個開啟的 repo 有自己的鎖，git 子行程在鎖外執行；命令可以用 `root` 指定 repo，所以分頁切換前送出的命令仍讀自己的 repo。實測：git/git 跑 blame 時，同一個和另一個 repo 的 `watch_state` 都在 1 ms 內回應。 |
+| 架構整理 R3–R5（v0.6） | Tauri 只剩一個 `call` 指令轉給 `dispatch`；回傳型別由 ts-rs 從 Rust 產生到 `ui/src/bindings`。前端 `main.ts` 拆成 `state`、`shell` 與各功能模組。git 路徑與 Local History 上限存在使用者設定目錄的 `settings.json`，收藏分支存在 repo 的 git 目錄。watcher 與 askpass 改用事件推送（Tauri `emit`、dev server SSE），只留 3 秒的備援輪詢。錯誤有種類（auth、rejected、conflict、locked、network、notFound），前端依種類提示處理方式。 |
 | 8.3 資源量測 | 見下表。 |
 
 資源量測（Linux x86_64、Xvfb、WebKitGTK 軟體繪圖，git/git）：

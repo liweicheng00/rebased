@@ -6,6 +6,7 @@
 import type { Action } from "./bindings/Action";
 import type { BackendSettings } from "./bindings/BackendSettings";
 import type { Event as BackendEvent } from "./bindings/Event";
+import type { ErrorKind } from "./bindings/ErrorKind";
 import type { Blame } from "./bindings/Blame";
 import type { BranchInfo } from "./bindings/BranchInfo";
 import type { ChangeListView } from "./bindings/ChangeListView";
@@ -39,6 +40,7 @@ import type { Change as ChangeResult } from "./bindings/Change";
 export type {
   Action,
   BackendEvent,
+  ErrorKind,
   BackendSettings,
   Blame,
   BranchInfo,
@@ -109,14 +111,40 @@ async function call<T>(cmd: string, args?: unknown): Promise<T> {
   }
 }
 
+/** A failed command, with the kind of the failure from the backend. */
+export class ApiError extends Error {
+  constructor(message: string, readonly kind: ErrorKind) {
+    super(message);
+  }
+}
+
+/** What the user can do after a failure of this kind, or "" when the message says enough. */
+export function errorHint(kind: ErrorKind | undefined): string {
+  switch (kind) {
+    case "auth":
+      return "Check the user name and the password or token, or the SSH key of this remote.";
+    case "network":
+      return "Check the network connection and the URL of the remote.";
+    case "locked":
+      return "Another git program uses the repository. When it has ended, delete the .lock file that the message names.";
+    default:
+      return "";
+  }
+}
+
 async function callNow<T>(cmd: string, args?: unknown): Promise<T> {
   if (inTauri) {
     const { invoke } = await import("@tauri-apps/api/core");
-    return invoke<T>("call", { cmd, body: args ?? {} });
+    try {
+      return await invoke<T>("call", { cmd, body: args ?? {} });
+    } catch (e) {
+      const f = e as { error?: string; kind?: ErrorKind };
+      throw new ApiError(f.error ?? String(e), f.kind ?? "other");
+    }
   }
   const res = await fetch(`/api/${cmd}`, { method: "POST", body: JSON.stringify(args ?? {}) });
   const body = await res.json();
-  if (!res.ok) throw new Error(body.error ?? res.statusText);
+  if (!res.ok) throw new ApiError(body.error ?? res.statusText, body.kind ?? "other");
   return body as T;
 }
 

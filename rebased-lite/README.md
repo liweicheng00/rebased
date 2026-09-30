@@ -147,6 +147,9 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   backend has them before the window opens. The favorite branches are in the git directory of each
   repository. The other settings are in the storage of the window.
   The keys in the commit message field and in dialogs stay fixed.
+- **Errors**: the backend gives each failure a kind (authentication, rejected push, conflict, locked
+  repository, network, not found). A failure that you must fix outside the app, such as a password,
+  the network or a `.lock` file of another git program, gets a notification that says what to do.
 - **Other**: context menus, Refresh, Fetch, column choice and resize, resizable panels,
   light, dark or system theme, and a status bar.
 

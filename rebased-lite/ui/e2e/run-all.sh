@@ -44,6 +44,7 @@ fresh rem && run remotes "$work/rem"
 fresh sf && run small-features "$work/sf"
 fresh cm && run commit-message "$work/cm"
 fresh cmp && run compare-branches "$work/cmp"
+fresh err && run errors "$work/err"
 if [ -n "$large" ]; then
   run large-repo "$large"
   run collapse "$large"

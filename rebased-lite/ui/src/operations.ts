@@ -1,6 +1,6 @@
 // Write operations: runOp, Undo, and the branch, tag, merge, rebase, reset and rewrite flows.
 
-import { api, type BranchInfo, inTauri, type Op, type OpOutcome, pickFolder, type PlanEntry, type Row, type Submodule, type Worktree } from "./api";
+import { api, type BranchInfo, errorHint, inTauri, type Op, type OpOutcome, pickFolder, type PlanEntry, type Row, type Submodule, type Worktree } from "./api";
 import { showBranchSwitcher } from "./branch-switcher";
 import { mergeFile } from "./conflicts";
 import { showMenu } from "./context-menu";
@@ -31,7 +31,8 @@ export async function runOp(op: Op, label: string, errorAction?: { label: string
     }
     statusRight.textContent = r.message;
   } else {
-    toast(r.message, "error", errorAction);
+    const hint = errorHint(outcome.errorKind);
+    toast(hint ? `${r.message}\n${hint}` : r.message, "error", errorAction);
     statusRight.textContent = r.message;
     statusRight.className = "sb-right error";
   }

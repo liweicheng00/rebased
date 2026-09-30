@@ -7,11 +7,11 @@ use tauri::{Emitter, Manager, State};
 
 /// Runs a command of the service by name, as the dev server does. The command runs off the UI thread,
 /// because git can take a while on a large repository. `body` holds the arguments, and "root" names the
-/// repository of the command.
+/// repository of the command. A failure is `{ error, kind }`.
 #[tauri::command(async)]
-fn call(state: State<'_, Service>, cmd: String, body: Value) -> Result<Value, String> {
-    let out = state.dispatch(&cmd, &body.to_string())?;
-    serde_json::from_str(&out).map_err(|e| e.to_string())
+fn call(state: State<'_, Service>, cmd: String, body: Value) -> Result<Value, Value> {
+    let out = state.dispatch(&cmd, &body.to_string()).map_err(|e| rebased_service::errors::error_json(&e))?;
+    serde_json::from_str(&out).map_err(|e| rebased_service::errors::error_json(&e.to_string()))
 }
 
 /// The repository path given on the command line, if any.
