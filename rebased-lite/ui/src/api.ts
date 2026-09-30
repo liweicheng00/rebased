@@ -1,5 +1,77 @@
 // Calls a backend command: through Tauri inside the app, or through the dev server in a browser.
 
+// The types of the command results come from the Rust types (ts-rs); see crates/*/src. The request
+// types (RevSpec, LogFilter, ViewSettings, Op, ChangeListOp) stay here, because the front end builds them
+// and many of their fields have defaults.
+import type { Action } from "./bindings/Action";
+import type { Blame } from "./bindings/Blame";
+import type { BranchInfo } from "./bindings/BranchInfo";
+import type { ChangeListView } from "./bindings/ChangeListView";
+import type { CommitInfo } from "./bindings/CommitInfo";
+import type { El } from "./bindings/El";
+import type { FileContent } from "./bindings/FileContent";
+import type { HistoryEntry } from "./bindings/HistoryEntry";
+import type { Hunk } from "./bindings/Hunk";
+import type { LocalChanges } from "./bindings/LocalChanges";
+import type { MergeSides } from "./bindings/MergeSides";
+import type { OpOutcome } from "./bindings/OpOutcome";
+import type { OpResult } from "./bindings/OpResult";
+import type { OutgoingCommit } from "./bindings/OutgoingCommit";
+import type { PlanEntry } from "./bindings/PlanEntry";
+import type { Prompt } from "./bindings/Prompt";
+import type { PushInfo } from "./bindings/PushInfo";
+import type { RecentBranch } from "./bindings/RecentBranch";
+import type { RefLabel } from "./bindings/RefLabel";
+import type { RemoteInfo } from "./bindings/RemoteInfo";
+import type { RepoState } from "./bindings/RepoState";
+import type { Revision } from "./bindings/Revision";
+import type { RewriteRange } from "./bindings/RewriteRange";
+import type { Row } from "./bindings/Row";
+import type { Stash } from "./bindings/Stash";
+import type { StashDetail } from "./bindings/StashDetail";
+import type { Submodule } from "./bindings/Submodule";
+import type { UndoAction } from "./bindings/UndoAction";
+import type { ViewResult } from "./bindings/ViewResult";
+import type { Worktree } from "./bindings/Worktree";
+import type { Change as ChangeResult } from "./bindings/Change";
+export type {
+  Action,
+  Blame,
+  BranchInfo,
+  ChangeListView,
+  CommitInfo,
+  El,
+  FileContent,
+  HistoryEntry,
+  Hunk,
+  LocalChanges,
+  MergeSides,
+  OpOutcome,
+  OpResult,
+  OutgoingCommit,
+  PlanEntry,
+  Prompt,
+  PushInfo,
+  RecentBranch,
+  RefLabel,
+  RemoteInfo,
+  RepoState,
+  Revision,
+  RewriteRange,
+  Row,
+  Stash,
+  StashDetail,
+  Submodule,
+  UndoAction,
+  ViewResult,
+  Worktree,
+};
+export type LocalRevision = Revision;
+export type AskpassPrompt = Prompt;
+export type PlanAction = Action;
+/** A changed file. `rightRev` is client side only: a right revision that differs from the compared one. */
+export type Change = ChangeResult & { rightRev?: RevSpec };
+
 export type RevSpec = { commit: string } | { parentOf: string } | "worktree";
 
 export interface LogFilter {
@@ -8,121 +80,6 @@ export interface LogFilter {
   text: string;
   path: string;
   since: string;
-}
-
-export interface ViewResult {
-  root: string;
-  head: string | null;
-  headOid: string | null;
-  totalCommits: number;
-  rowCount: number;
-  filtered: boolean;
-  collapsed: boolean;
-  recommendedWidth: number;
-  loadMs: number;
-}
-
-/** One drawing element; see `El` in crates/service. `j` is the row an arrow jumps to. */
-export interface El {
-  k: "n" | "e";
-  p: number;
-  o: number;
-  d: "u" | "d";
-  a: boolean;
-  t: boolean;
-  s: boolean;
-  c: number;
-  j?: number;
-  /** Rows [upper, lower] of a collapsed branch; clicking the edge expands it. */
-  x?: [number, number];
-}
-
-export interface RefLabel {
-  name: string;
-  kind: "head" | "local" | "remote" | "tag" | "other";
-}
-
-export interface Row {
-  row: number;
-  oid: string;
-  refs: RefLabel[];
-  subject: string;
-  author: string;
-  authorEmail: string;
-  authorTime: number;
-  isHead: boolean;
-  elements: El[];
-}
-
-export interface BranchInfo {
-  name: string;
-  full: string;
-  kind: "local" | "remote" | "tag";
-  oid: string;
-  current: boolean;
-  upstream: string | null;
-  ahead: number;
-  behind: number;
-  subject: string;
-}
-
-export interface Change {
-  status: string;
-  path: string;
-  old_path: string | null;
-  /** Client side only: a right revision for this file that differs from the compared revision. */
-  rightRev?: RevSpec;
-}
-
-/** A version of a file in Local History. */
-export interface LocalRevision {
-  time: number;
-  path: string;
-  /** Null when the file did not exist at this time. */
-  blob: string | null;
-  /** Why the version was made, for example "Before Rollback". Empty for a change on disk. */
-  label: string;
-}
-
-export interface FileContent {
-  text: string | null;
-  binary: boolean;
-  size: number;
-  missing: boolean;
-  /** Why the content is special, for example a submodule or a Git LFS object that is not downloaded. */
-  note?: string;
-}
-
-export interface RemoteInfo {
-  name: string;
-  fetchUrl: string;
-  /** Set only when it differs from the fetch URL. */
-  pushUrl: string | null;
-}
-
-export interface Submodule {
-  path: string;
-  /** The commit that the repository records. */
-  recorded: string;
-  /** The checked-out commit. Null when the submodule is not initialized. */
-  current: string | null;
-  state: "uninitialized" | "clean" | "otherCommit" | "conflict";
-  dirty: boolean;
-  url: string | null;
-}
-
-export interface CommitInfo {
-  oid: string;
-  parents: string[];
-  subject: string;
-  body: string;
-  author: string;
-  author_email: string;
-  author_time: number;
-  committer: string;
-  committer_email: string;
-  commit_time: number;
-  refs: RefLabel[];
 }
 
 export const inTauri = "__TAURI_INTERNALS__" in window;
@@ -148,41 +105,12 @@ async function call<T>(cmd: string, args?: unknown): Promise<T> {
   }
 }
 
-/** Commands that only read: sending them again is safe. */
-const READS = new Set([
-  "refs", "recent_branches", "worktrees", "repo_state", "submodules", "remotes", "local_changes", "watch_state", "stashes",
-  "stash_detail", "rows", "commit", "find", "compare", "file_pair", "head_message", "push_info", "merge_sides", "file_history",
-  "blame", "commit_template", "compare_refs", "local_history", "local_history_content", "askpass_pending", "rewrite_range",
-]);
-
 async function callNow<T>(cmd: string, args?: unknown): Promise<T> {
   if (inTauri) {
     const { invoke } = await import("@tauri-apps/api/core");
-    return invoke<T>(cmd, args === undefined ? {} : { args });
+    return invoke<T>("call", { cmd, body: args ?? {} });
   }
-  // The dev server: a read that gets no answer is sent once more. A lost HTTP answer then does not leave
-  // a part of the window empty. The app itself uses IPC, not HTTP.
-  const post = async (timeout: number) => {
-    const ctl = new AbortController();
-    const t = timeout ? setTimeout(() => ctl.abort(), timeout) : 0;
-    try {
-      return await fetch(`/api/${cmd}`, { method: "POST", body: JSON.stringify(args ?? {}), signal: ctl.signal });
-    } finally {
-      clearTimeout(t);
-    }
-  };
-  let res: Response;
-  if (READS.has(cmd)) {
-    try {
-      res = await post(8000);
-    } catch (e) {
-      if (!(e instanceof DOMException && e.name === "AbortError")) throw e;
-      console.warn(`The command ${cmd} got no answer in 8 s; it is sent again`);
-      res = await post(0);
-    }
-  } else {
-    res = await post(0);
-  }
+  const res = await fetch(`/api/${cmd}`, { method: "POST", body: JSON.stringify(args ?? {}) });
   const body = await res.json();
   if (!res.ok) throw new Error(body.error ?? res.statusText);
   return body as T;
@@ -193,77 +121,6 @@ export interface ViewSettings {
   showLongEdges: boolean;
   collapseLinear: boolean;
   filter: LogFilter;
-}
-
-export interface RepoState {
-  operation: "none" | "merge" | "rebase" | "cherry-pick" | "revert";
-  branch: string | null;
-  head: string | null;
-  conflicts: string[];
-  changedFiles: number;
-  /** The commit where an interactive rebase stopped for editing. */
-  editing: string | null;
-  /** The branch that a rebase in progress rewrites. */
-  rebasing: string | null;
-}
-
-export interface OpResult {
-  ok: boolean;
-  message: string;
-  conflicts: string[];
-  /** The steps that undo the operation. Empty when it cannot be undone. */
-  undo: UndoAction[];
-}
-
-export type UndoAction =
-  | { kind: "reset"; to: string; expectedHead: string; mode: "keep" | "soft" | "mixed" }
-  | { kind: "checkout"; target: string; detach: boolean; expectedHead: string }
-  | { kind: "createRef"; name: string; oid: string }
-  | { kind: "deleteRef"; name: string; expected: string }
-  | { kind: "renameBranch"; from: string; to: string }
-  | { kind: "stashStore"; oid: string; message: string };
-
-export interface OpOutcome {
-  result: OpResult;
-  view: ViewResult;
-  head: string | null;
-  /** Submodules that are not at the recorded commit after the operation moved HEAD. */
-  staleSubmodules: string[];
-}
-
-export type PlanAction = "pick" | "reword" | "edit" | "squash" | "fixup" | "drop";
-
-export interface PlanEntry {
-  oid: string;
-  action: PlanAction;
-  message?: string;
-  /** A new author, as "Name <email>". */
-  author?: string;
-}
-
-export interface RewriteRange {
-  base: string;
-  entries: { oid: string; subject: string; message: string; author: string; authorEmail: string }[];
-  published: boolean;
-}
-
-export interface Worktree {
-  path: string;
-  head: string | null;
-  branch: string | null;
-  detached: boolean;
-  bare: boolean;
-  locked: boolean;
-  prunable: boolean;
-  current: boolean;
-  main: boolean;
-}
-
-export interface RecentBranch {
-  name: string;
-  oid: string;
-  subject: string;
-  time: number;
 }
 
 export type Op =
@@ -311,100 +168,6 @@ export type Op =
   | { op: "resolveSide"; paths: string[]; side: "ours" | "theirs" }
   | { op: "applyFileChanges"; from: string; to: string; paths: string[]; reverse: boolean }
   | { op: "getFromRevision"; rev: string; paths: string[] };
-
-export interface AskpassPrompt {
-  id: number;
-  text: string;
-  secret: boolean;
-  confirm: boolean;
-}
-
-export interface HistoryEntry {
-  oid: string;
-  parents: string[];
-  subject: string;
-  author: string;
-  time: number;
-  status: string;
-  path: string;
-  oldPath: string | null;
-}
-
-export interface Blame {
-  commits: { oid: string; author: string; time: number; summary: string; uncommitted: boolean }[];
-  lines: number[];
-}
-
-export interface MergeSides {
-  path: string;
-  base: { text: string | null; label: string };
-  ours: { text: string | null; label: string };
-  theirs: { text: string | null; label: string };
-  binary: boolean;
-}
-
-export interface Stash {
-  index: number;
-  oid: string;
-  message: string;
-  branch: string | null;
-  time: number;
-}
-
-export interface StashDetail {
-  oid: string;
-  base: string;
-  untrackedOid: string | null;
-  changes: Change[];
-  untracked: string[];
-}
-
-export interface OutgoingCommit {
-  oid: string;
-  subject: string;
-  author: string;
-  time: number;
-}
-
-export interface PushInfo {
-  branch: string;
-  remotes: string[];
-  remote: string | null;
-  remoteBranch: string;
-  upstream: string | null;
-  newBranch: boolean;
-  outgoing: OutgoingCommit[];
-  behind: number;
-}
-
-export interface ChangeListView {
-  id: string;
-  name: string;
-  comment: string;
-  active: boolean;
-  changes: Change[];
-}
-
-export interface LocalChanges {
-  lists: ChangeListView[];
-  unversioned: string[];
-  conflicts: string[];
-  head: string | null;
-  /** The hunks of the files that are in more than one changelist, by path. */
-  hunks: Record<string, Hunk[]>;
-}
-
-/** A change of a local file, from `git diff -U0 HEAD`. */
-export interface Hunk {
-  id: string;
-  oldStart: number;
-  oldLines: number;
-  /** The first added line in the working tree. With no added lines, the line after which it removes. */
-  newStart: number;
-  newLines: number;
-  /** The changelist of the hunk. */
-  list: string;
-}
 
 export type ChangeListOp =
   | { op: "create"; name: string; comment?: string; makeActive?: boolean; paths?: string[] }

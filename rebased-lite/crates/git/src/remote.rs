@@ -6,6 +6,8 @@ use crate::{GitError, Repo, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct OutgoingCommit {
     pub oid: String,
@@ -15,6 +17,8 @@ pub struct OutgoingCommit {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct PushInfo {
     pub branch: String,
@@ -32,6 +36,8 @@ pub struct PushInfo {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteInfo {
     pub name: String,
@@ -289,6 +295,8 @@ impl Repo {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct RefComparison {
     pub left: String,

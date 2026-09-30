@@ -1,0 +1,5 @@
+# ts-rs writes the TypeScript types of the command results to the front end when the tests run.
+# JSON has no 64-bit integers, so the large integers are TypeScript numbers.
+[env]
+TS_RS_EXPORT_DIR = { value = "ui/src/bindings", relative = true }
+TS_RS_LARGE_INT = "number"

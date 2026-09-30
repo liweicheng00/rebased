@@ -16,6 +16,8 @@ const SOCKET_ENV: &str = "REBASED_ASKPASS_SOCKET";
 const TIMEOUT: Duration = Duration::from_secs(300);
 
 #[derive(Clone, Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Prompt {
     pub id: u64,

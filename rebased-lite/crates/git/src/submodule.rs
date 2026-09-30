@@ -10,6 +10,8 @@ use serde::Serialize;
 use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum SubmoduleState {
     /// `git submodule init` and `update` did not run yet.
@@ -23,6 +25,8 @@ pub enum SubmoduleState {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Submodule {
     pub path: String,

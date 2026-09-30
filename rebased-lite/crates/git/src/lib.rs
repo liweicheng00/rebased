@@ -100,6 +100,8 @@ pub(crate) fn unhex(s: &str) -> Option<[u8; 20]> {
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 pub struct CommitDetails {
     pub oid: String,
     pub subject: String,
@@ -110,6 +112,8 @@ pub struct CommitDetails {
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 pub struct Change {
     /// A, M, D, R, C, T
     pub status: char,
@@ -126,6 +130,8 @@ pub enum Rev {
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 pub struct FileContent {
     pub text: Option<String>,
     pub binary: bool,
@@ -133,6 +139,7 @@ pub struct FileContent {
     pub missing: bool,
     /// Why the content is special, for example a submodule or a Git LFS object that is not downloaded.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub note: Option<String>,
 }
 
@@ -258,10 +265,13 @@ impl Repo {
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 pub struct BranchInfo {
     pub name: String,
     pub full: String,
     /// local, remote or tag
+    #[ts(type = "\"local\" | \"remote\" | \"tag\"")]
     pub kind: &'static str,
     pub oid: String,
     pub current: bool,
@@ -297,6 +307,8 @@ impl LogFilter {
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 pub struct CommitFull {
     pub oid: String,
     pub parents: Vec<String>,

@@ -49,6 +49,8 @@ struct Store {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangeListView {
     pub id: String,
@@ -59,6 +61,8 @@ pub struct ChangeListView {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalChanges {
     pub lists: Vec<ChangeListView>,

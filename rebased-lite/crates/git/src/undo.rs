@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 /// How Undo moves the branch back.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum UndoMode {
     /// The files of the undone commits change back; local changes stay (`git reset --keep`).
@@ -18,6 +20,8 @@ pub enum UndoMode {
 
 /// One step of an Undo. Each step checks that the repository did not change since the operation.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum UndoAction {
     Reset { to: String, expected_head: String, mode: UndoMode },

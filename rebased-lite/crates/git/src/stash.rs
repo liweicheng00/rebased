@@ -5,6 +5,8 @@ use crate::{parse_name_status, Change, GitError, Repo, Result};
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Stash {
     pub index: usize,
@@ -16,6 +18,8 @@ pub struct Stash {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct StashDetail {
     pub oid: String,

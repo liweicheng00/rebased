@@ -7,9 +7,12 @@ use crate::{GitError, Repo, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct RepoState {
     /// none, merge, rebase, cherry-pick, revert
+    #[ts(type = "\"none\" | \"merge\" | \"rebase\" | \"cherry-pick\" | \"revert\"")]
     pub operation: &'static str,
     pub branch: Option<String>,
     pub head: Option<String>,
@@ -23,6 +26,8 @@ pub struct RepoState {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct OpResult {
     pub ok: bool,

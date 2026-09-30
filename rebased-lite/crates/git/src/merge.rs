@@ -5,6 +5,8 @@ use crate::{GitError, Repo, Result, MAX_TEXT_SIZE};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct MergeSide {
     /// None when the side does not have the file (it was deleted or never existed there).
@@ -13,6 +15,8 @@ pub struct MergeSide {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct MergeSides {
     pub path: String,

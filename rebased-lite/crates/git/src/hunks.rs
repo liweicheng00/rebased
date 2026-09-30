@@ -9,6 +9,8 @@ use crate::{Repo, Result};
 use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Hunk {
     pub id: String,

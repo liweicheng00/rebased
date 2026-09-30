@@ -24,6 +24,8 @@ pub struct WatchState {
 }
 
 #[derive(Serialize, Clone, Copy)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 pub struct WatchCounters {
     pub repo: u64,
     pub files: u64,

@@ -5,6 +5,8 @@ use serde::Serialize;
 use std::collections::HashMap;
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryEntry {
     pub oid: String,
@@ -20,6 +22,8 @@ pub struct HistoryEntry {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct BlameCommit {
     pub oid: String,
@@ -31,6 +35,8 @@ pub struct BlameCommit {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Blame {
     pub commits: Vec<BlameCommit>,

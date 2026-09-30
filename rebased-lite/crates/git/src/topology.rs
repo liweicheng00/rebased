@@ -8,8 +8,11 @@ use std::collections::HashMap;
 
 
 #[derive(Clone, Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 pub struct RefLabel {
     pub name: String,
+    #[ts(type = "\"head\" | \"local\" | \"remote\" | \"tag\" | \"other\"")]
     pub kind: &'static str,
 }
 

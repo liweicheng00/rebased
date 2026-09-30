@@ -4,6 +4,8 @@ use crate::{GitError, Repo, Result};
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Worktree {
     pub path: String,
@@ -19,6 +21,8 @@ pub struct Worktree {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct RecentBranch {
     pub name: String,

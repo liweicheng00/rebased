@@ -23,6 +23,8 @@ pub const MAX_BULK_FILES: usize = 200;
 const PRUNE_EVERY: usize = 500;
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Limits {
     /// Versions older than this are removed.
@@ -52,6 +54,8 @@ struct Line {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Revision {
     pub time: i64,
@@ -62,6 +66,8 @@ pub struct Revision {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Content {
     pub text: Option<String>,

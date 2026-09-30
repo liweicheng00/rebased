@@ -183,6 +183,10 @@ npm --prefix ui run dev                            # UI on http://localhost:5173
 
 ## Test
 
+The TypeScript types of the command results in `ui/src/bindings/` come from the Rust types (ts-rs).
+`cargo test` writes them again; commit the changed files with the Rust change. Check that they are
+current with `cargo test -q export_bindings && git diff --exit-code ui/src/bindings`.
+
 ```sh
 cargo test
 npm --prefix ui run typecheck

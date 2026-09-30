@@ -10,6 +10,8 @@ use crate::{GitError, Repo, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum Action {
     Pick,
@@ -23,15 +25,19 @@ pub enum Action {
 
 /// One line of a rewrite plan, oldest commit first.
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct PlanEntry {
     pub oid: String,
     pub action: Action,
     /// New message for reword, or the combined message for the first commit of a squash group.
     #[serde(default)]
+    #[ts(optional)]
     pub message: Option<String>,
     /// A new author, as "Name <email>". The author date stays.
     #[serde(default)]
+    #[ts(optional)]
     pub author: Option<String>,
 }
 
@@ -49,6 +55,8 @@ pub fn parse_author(s: &str) -> Result<(String, String)> {
 
 /// The commits from `base` (exclusive) to HEAD, oldest first, ready for a rewrite.
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct RewriteRange {
     pub base: String,
@@ -58,6 +66,8 @@ pub struct RewriteRange {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct RangeCommit {
     pub oid: String,

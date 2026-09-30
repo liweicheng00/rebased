@@ -28,6 +28,8 @@ pub struct OpenArgs {
 }
 
 #[derive(Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct ViewResult {
     pub root: String,
@@ -43,23 +45,31 @@ pub struct ViewResult {
 
 /// One drawing element. `k`: n=node, e=edge. `d`: u/d direction. `j`: row an arrow jumps to.
 #[derive(Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 pub struct El {
+    #[ts(type = "\"n\" | \"e\"")]
     pub k: char,
     pub p: usize,
     pub o: usize,
+    #[ts(type = "\"u\" | \"d\"")]
     pub d: char,
     pub a: bool,
     pub t: bool,
     pub s: bool,
     pub c: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub j: Option<usize>,
     /// Rows (upper, lower) of a collapsed fragment; clicking the edge expands it.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub x: Option<[usize; 2]>,
 }
 
 #[derive(Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Row {
     pub row: usize,
@@ -100,6 +110,8 @@ pub struct CompareRefsArgs {
 }
 
 #[derive(Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 pub struct CompareResult {
     pub changes: Vec<Change>,
 }
@@ -114,6 +126,8 @@ pub struct FilePairArgs {
 }
 
 #[derive(Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 pub struct FilePair {
     pub left: FileContent,
     pub right: FileContent,
@@ -130,6 +144,8 @@ pub struct FindArgs {
 }
 
 #[derive(Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct FindResult {
     pub oid: Option<String>,
@@ -175,6 +191,8 @@ pub struct PushInfoArgs {
 }
 
 #[derive(Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 pub struct OpOutcome {
     pub result: OpResult,
     pub view: ViewResult,
@@ -185,6 +203,8 @@ pub struct OpOutcome {
 }
 
 #[derive(Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitInfo {
     #[serde(flatten)]

@@ -9,3 +9,4 @@ description = "Reads repository data through the git CLI for Rebased Lite"
 rebased-graph = { path = "../graph" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+ts-rs = "12"
