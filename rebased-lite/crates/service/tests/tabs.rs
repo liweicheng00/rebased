@@ -53,3 +53,30 @@ fn tabs() {
     // A closed repository opens again on activate.
     assert_eq!(s.activate(args(&b)).unwrap().total_commits, 3);
 }
+
+#[test]
+fn commands_name_their_repository() {
+    let (a, b) = (repo("scope-a", 1), repo("scope-b", 4));
+    let s = Service::default();
+    s.open(args(&a)).unwrap();
+    s.open(args(&b)).unwrap();
+    std::fs::write(a.join("f.txt"), "local\n").unwrap();
+    let body = |p: &Path| serde_json::json!({ "root": p.to_string_lossy() }).to_string();
+    // B is active; a command with the root of A reads A.
+    let changes: serde_json::Value = serde_json::from_str(&s.dispatch("local_changes", &body(&a)).unwrap()).unwrap();
+    assert_eq!(changes["lists"][0]["changes"].as_array().unwrap().len(), 1);
+    let view: serde_json::Value = serde_json::from_str(&s.dispatch("refresh", &body(&a)).unwrap()).unwrap();
+    assert_eq!(view["totalCommits"], 1);
+    // The active tab stays B, and a command without a root uses it.
+    let view: serde_json::Value = serde_json::from_str(&s.dispatch("refresh", "").unwrap()).unwrap();
+    assert_eq!(view["totalCommits"], 4);
+    // An operation on A reloads A and leaves B active.
+    let op = serde_json::json!({ "root": a.to_string_lossy(), "op": "rollback", "paths": ["f.txt"] }).to_string();
+    let out: serde_json::Value = serde_json::from_str(&s.dispatch("run_op", &op).unwrap()).unwrap();
+    assert_eq!(out["result"]["ok"], true, "{out}");
+    assert_eq!(out["view"]["totalCommits"], 1);
+    assert_eq!(s.refresh().unwrap().total_commits, 4);
+    // A repository that is not open is an error, not the active one.
+    let other = serde_json::json!({ "root": "/no/such/repo" }).to_string();
+    assert!(s.dispatch("local_changes", &other).is_err());
+}

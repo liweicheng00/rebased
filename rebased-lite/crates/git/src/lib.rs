@@ -32,6 +32,7 @@ impl std::error::Error for GitError {}
 
 pub type Result<T> = std::result::Result<T, GitError>;
 
+#[derive(Clone, Debug)]
 pub struct Repo {
     pub root: PathBuf,
 }

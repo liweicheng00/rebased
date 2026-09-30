@@ -127,7 +127,18 @@ export interface CommitInfo {
 
 export const inTauri = "__TAURI_INTERNALS__" in window;
 
+/** The repository of the active tab. Each command names it, so an answer that arrives after a tab
+ * switch still belongs to the tab that asked. */
+let repoRoot: string | null = null;
+
+export function setRepoRoot(root: string | null) {
+  repoRoot = root;
+}
+
 async function call<T>(cmd: string, args?: unknown): Promise<T> {
+  if (repoRoot && (args === undefined || (typeof args === "object" && args !== null && !Array.isArray(args)))) {
+    args = { root: repoRoot, ...(args as object | undefined) };
+  }
   // A command that does not answer leaves a part of the window empty; the warning names it.
   const slow = setTimeout(() => console.error(`The command ${cmd} has not answered after 10 s`), 10000);
   try {

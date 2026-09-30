@@ -289,7 +289,7 @@ impl Service {
         if result.ok && result.undo.is_empty() {
             result.undo = plan.actions(&repo, pre_head.clone(), pre_branch);
         }
-        let view = self.refresh()?;
+        let view = self.refresh_at(&root)?;
         let head = view.head_oid.clone();
         let stale_submodules = if moves_head && head != pre_head {
             repo.submodules()

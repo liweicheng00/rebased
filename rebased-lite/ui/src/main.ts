@@ -4,6 +4,7 @@ import {
   initialPath,
   inTauri,
   pickFile,
+  setRepoRoot,
   pickFolder,
   type BranchInfo,
   type Change,
@@ -291,6 +292,7 @@ async function closeTab(root: string) {
     return;
   }
   settings.activeTab = null;
+  setRepoRoot(null);
   save();
   const next = settings.tabs[Math.min(i, settings.tabs.length - 1)];
   if (next) await switchTab(next);
@@ -306,6 +308,7 @@ async function closeTab(root: string) {
 
 /** Shows the repository of the active tab. `state` restores the filter and the selection of a tab. */
 async function showRepo(r: ViewResult, state: TabState | null) {
+  setRepoRoot(r.root);
   settings.activeTab = r.root;
   save();
   renderTabs();

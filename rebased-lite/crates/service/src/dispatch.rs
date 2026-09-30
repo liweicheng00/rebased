@@ -6,6 +6,15 @@ use serde::Deserialize;
 impl Service {
     /// Dispatches a command by name; used by the dev server.
     pub fn dispatch(&self, cmd: &str, body: &str) -> Result<String> {
+        // A command can name its repository with "root"; without it, the command uses the active tab.
+        // Then a command that a tab sent before a tab switch still reads its own repository.
+        let mut value: serde_json::Value = serde_json::from_str(if body.trim().is_empty() { "{}" } else { body }).map_err(err)?;
+        let root = value.as_object_mut().and_then(|o| o.remove("root")).and_then(|r| r.as_str().map(std::path::PathBuf::from));
+        let body = value.to_string();
+        self.scoped(root, || self.dispatch_scoped(cmd, &body))
+    }
+
+    fn dispatch_scoped(&self, cmd: &str, body: &str) -> Result<String> {
         fn parse<T: for<'de> Deserialize<'de>>(b: &str) -> Result<T> {
             serde_json::from_str(if b.trim().is_empty() { "{}" } else { b }).map_err(err)
         }
