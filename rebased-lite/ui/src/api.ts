@@ -4,6 +4,7 @@
 // types (RevSpec, LogFilter, ViewSettings, Op, ChangeListOp) stay here, because the front end builds them
 // and many of their fields have defaults.
 import type { Action } from "./bindings/Action";
+import type { BackendSettings } from "./bindings/BackendSettings";
 import type { Blame } from "./bindings/Blame";
 import type { BranchInfo } from "./bindings/BranchInfo";
 import type { ChangeListView } from "./bindings/ChangeListView";
@@ -36,6 +37,7 @@ import type { Worktree } from "./bindings/Worktree";
 import type { Change as ChangeResult } from "./bindings/Change";
 export type {
   Action,
+  BackendSettings,
   Blame,
   BranchInfo,
   ChangeListView,
@@ -183,8 +185,13 @@ export const api = {
   /** Makes an open repository active, for a tab switch; opens it when it is not open. */
   activate: (path: string, view: ViewSettings) => call<ViewResult>("activate", { path, ...view }),
   close: (path: string) => call<null>("close", { path }),
-  /** Sets the git program and returns its version. Empty means git from PATH. */
-  setGitProgram: (path: string) => call<string>("set_git_program", { path }),
+  /** The version of a git program; it changes nothing. Empty means git from PATH. */
+  gitVersion: (path: string) => call<string>("git_version", { path }),
+  backendSettings: () => call<BackendSettings>("backend_settings"),
+  /** Applies and saves the settings of the backend; returns the version of the git program. */
+  setBackendSettings: (s: BackendSettings) => call<string>("set_backend_settings", s),
+  favorites: () => call<string[] | null>("favorites"),
+  setFavorites: (refs: string[]) => call<null>("set_favorites", { refs }),
   setView: (view: ViewSettings) => call<ViewResult>("set_view", view),
   refresh: () => call<ViewResult>("refresh"),
   fetch: () => call<ViewResult>("fetch"),
@@ -208,7 +215,6 @@ export const api = {
   stashes: () => call<Stash[]>("stashes"),
   localHistory: (path: string) => call<LocalRevision[]>("local_history", { path }),
   localHistoryContent: (blob: string | null) => call<Omit<FileContent, "size">>("local_history_content", { blob }),
-  setLocalHistoryLimits: (days: number, maxMb: number) => call<null>("set_local_history_limits", { days, maxMb }),
   submodules: () => call<Submodule[]>("submodules"),
   remotes: () => call<RemoteInfo[]>("remotes"),
   commitTemplate: () => call<string | null>("commit_template"),

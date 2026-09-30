@@ -3,7 +3,7 @@
 import { api, type BranchInfo, inTauri, type LogFilter, pickFolder, type RecentBranch, setRepoRoot, type Submodule, type ViewResult, type Worktree } from "./api";
 import { h } from "./dom";
 import { emptyFilter } from "./filter-bar";
-import { favoritesOf } from "./remotes";
+import { loadFavorites } from "./remotes";
 import { clearCompare } from "./selection";
 import { addRecent, save, settings } from "./settings";
 import { authors, banner, commitPanel, fetchBtn, filterBar, localHistoryBtn, log, mod, pushBtn, refreshBtn, sidebar, stashPanel, statusRight, tabBar, tabCommit, tabStash, task, updateBtn, updateStatus } from "./shell";
@@ -155,7 +155,7 @@ export async function loadRefs() {
     sidebar.setRecent(app.recent);
     sidebar.setWorktrees(app.worktrees);
     sidebar.setSubmodules(subs);
-    sidebar.setFavorites(favoritesOf());
+    await loadFavorites();
     banner.update(app.repoState);
     filterBar.branchNames = app.refs.filter((b) => b.kind !== "tag").map((b) => b.name);
     updateStatus();

@@ -22,7 +22,7 @@ pub const MAX_BULK_FILES: usize = 200;
 /// The store removes old versions after this number of new versions.
 const PRUNE_EVERY: usize = 500;
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[derive(ts_rs::TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]

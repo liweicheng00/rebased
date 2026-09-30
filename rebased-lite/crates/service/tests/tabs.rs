@@ -80,3 +80,17 @@ fn commands_name_their_repository() {
     let other = serde_json::json!({ "root": "/no/such/repo" }).to_string();
     assert!(s.dispatch("local_changes", &other).is_err());
 }
+
+#[test]
+fn favorites_are_stored_in_the_repository() {
+    let a = repo("favorites", 1);
+    let s = Service::default();
+    s.open(args(&a)).unwrap();
+    assert_eq!(s.favorites().unwrap(), None);
+    s.set_favorites(vec!["refs/heads/main".into(), "refs/tags/v1".into()]).unwrap();
+    assert_eq!(s.favorites().unwrap().unwrap(), ["refs/heads/main", "refs/tags/v1"]);
+    // Another service, as after a restart, reads the same favorites.
+    let t = Service::default();
+    t.open(args(&a)).unwrap();
+    assert_eq!(t.favorites().unwrap().unwrap().len(), 2);
+}

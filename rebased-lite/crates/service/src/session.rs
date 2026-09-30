@@ -1,7 +1,7 @@
 //! The open repositories, one per tab.
 
 use crate::view::{build_full, build_view, View};
-use crate::{askpass, err, history, watch, OpenArgs, PathArgs, Result, Service, ViewArgs, ViewResult};
+use crate::{askpass, config, err, history, watch, OpenArgs, PathArgs, Result, Service, ViewArgs, ViewResult};
 use rebased_git::{CommitDetails, Repo, Topology};
 use rebased_graph::linear::PermanentLinearGraph;
 use std::collections::HashMap;
@@ -40,7 +40,11 @@ impl Service {
     /// A service whose git commands ask for credentials through `helper`, the executable of the app. The
     /// executable must call [`askpass::run_helper_if_requested`] first in `main`.
     pub fn with_askpass(helper: &Path) -> Service {
-        Service { askpass: askpass::Askpass::start(helper).ok(), ..Service::default() }
+        let config_dir = config::config_dir();
+        let settings = config::load(&config_dir);
+        // A git program that does not work any more falls back to git from PATH.
+        let _ = rebased_git::set_git_program(&settings.git_path);
+        Service { askpass: askpass::Askpass::start(helper).ok(), config_dir, settings: Mutex::new(settings), ..Service::default() }
     }
 
     pub fn askpass_pending(&self) -> Vec<askpass::Prompt> {
@@ -58,9 +62,27 @@ impl Service {
         self.load(repo, args.view, false)
     }
 
-    /// Sets the git program for all repositories and returns its version. Empty means `git` from PATH.
-    pub fn set_git_program(&self, args: PathArgs) -> Result<String> {
-        rebased_git::set_git_program(&args.path).map_err(err)
+    /// The version of a git program, for the Test button of the settings. It changes nothing.
+    pub fn git_version(&self, args: PathArgs) -> Result<String> {
+        rebased_git::git_version(&args.path).map_err(err)
+    }
+
+    pub fn backend_settings(&self) -> Result<config::BackendSettings> {
+        Ok(self.settings.lock().unwrap().clone())
+    }
+
+    /// Applies and saves the settings. A git program that is not git is refused and nothing changes.
+    /// Returns the version of the git program.
+    pub fn set_backend_settings(&self, mut s: config::BackendSettings) -> Result<String> {
+        let version = rebased_git::set_git_program(&s.git_path).map_err(err)?;
+        let sessions: Vec<_> = self.session.lock().unwrap().map.values().cloned().collect();
+        for session in sessions {
+            session.lock().unwrap().history.set_limits(s.history);
+        }
+        s.stored = true;
+        config::save(&self.config_dir, &s)?;
+        *self.settings.lock().unwrap() = s;
+        Ok(version)
     }
 
     /// Makes an open repository the active one, for a tab switch. A repository that is not open yet is
@@ -105,7 +127,7 @@ impl Service {
             _ => (None, None),
         };
         let history = history
-            .unwrap_or_else(|| Arc::new(history::LocalHistory::open(&repo.root, &repo.git_dir(), *self.history_limits.lock().unwrap())));
+            .unwrap_or_else(|| Arc::new(history::LocalHistory::open(&repo.root, &repo.git_dir(), self.settings.lock().unwrap().history)));
         let watcher =
             kept.or_else(|| watch::RepoWatcher::start(&repo.root, &repo.git_dir(), &repo.common_dir(), Some(history.clone())).ok());
         let mut s = Session { repo, topo, full, settings, view, details: HashMap::new(), head_node, watcher, history };

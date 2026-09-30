@@ -63,3 +63,9 @@ for (const a of [
   },
   { id: "settings", label: "Settings", defaults: [isMac ? "Mod+Comma" : "Mod+Alt+S"], run: () => void openSettings() },
 ] as KeyAction[]) keymap.add(a);
+
+window.addEventListener("keydown", (e) => {
+  // An open dialog handles its own keys.
+  if (document.querySelector(".overlay, .merge-overlay")) return;
+  keymap.handle(e);
+});

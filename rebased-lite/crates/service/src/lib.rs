@@ -5,6 +5,7 @@
 //! table of commands by name.
 
 pub mod askpass;
+pub mod config;
 mod dispatch;
 pub mod history;
 mod ops;
@@ -30,5 +31,7 @@ fn err(e: impl std::fmt::Display) -> String {
 pub struct Service {
     session: Mutex<session::Sessions>,
     askpass: Option<std::sync::Arc<askpass::Askpass>>,
-    history_limits: Mutex<history::Limits>,
+    /// The directory of settings.json; None keeps the settings in memory only, as in tests.
+    config_dir: Option<std::path::PathBuf>,
+    settings: Mutex<config::BackendSettings>,
 }

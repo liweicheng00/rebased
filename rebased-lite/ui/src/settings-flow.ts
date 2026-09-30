@@ -1,6 +1,6 @@
 // The Settings dialog and the settings that the backend needs.
 
-import { api, pickFile } from "./api";
+import { api, type BackendSettings, pickFile } from "./api";
 import { applyDiffSettings } from "./diff-view";
 import { keymap } from "./keyboard";
 import { toast } from "./notify";
@@ -20,30 +20,45 @@ export function scheduleAutoFetch() {
   }
 }
 
-/** Applies the settings that live outside the front end: the git program and the Local History limits. */
+/** The settings that the backend keeps in its settings file. The front end keeps a copy for the dialog.
+ * An old front end kept them in the browser storage; the first start moves them to the backend. */
 export async function applyBackendSettings() {
-  if (settings.gitPath) {
+  let b: BackendSettings;
+  try {
+    b = await api.backendSettings();
+  } catch {
+    return;
+  }
+  const local = { gitPath: settings.gitPath, history: { days: settings.historyDays, maxMb: settings.historyMaxMb } };
+  const changedLocally = local.gitPath !== "" || local.history.days !== b.history.days || local.history.maxMb !== b.history.maxMb;
+  if (!b.stored && changedLocally) {
     try {
-      await api.setGitProgram(settings.gitPath);
+      await api.setBackendSettings({ ...local, stored: true });
+      b = { ...local, stored: true };
     } catch (e) {
-      toast(`The git program in the settings does not work; git from PATH runs instead. ${String(e).replace(/^Error: /, "")}`, "error");
+      toast(`The git program of the old settings does not work; git from PATH runs instead. ${String(e).replace(/^Error: /, "")}`, "error");
     }
   }
-  await api.setLocalHistoryLimits(settings.historyDays, settings.historyMaxMb).catch(() => {});
+  settings.gitPath = b.gitPath;
+  settings.historyDays = b.history.days;
+  settings.historyMaxMb = b.history.maxMb;
+  save();
 }
 
 export async function openSettings() {
-  const next = await openSettingsDialog({ keymap, testGit: (p) => api.setGitProgram(p).finally(() => api.setGitProgram(settings.gitPath).catch(() => {})), pickFile: () => pickFile("Git executable") });
+  const next = await openSettingsDialog({ keymap, testGit: (p) => api.gitVersion(p), pickFile: () => pickFile("Git executable") });
   if (!next) return;
   const gitChanged = next.gitPath !== settings.gitPath;
-  const historyChanged = next.historyDays !== settings.historyDays || next.historyMaxMb !== settings.historyMaxMb;
-  if (gitChanged) {
+  const backendChanged = gitChanged || next.historyDays !== settings.historyDays || next.historyMaxMb !== settings.historyMaxMb;
+  if (backendChanged) {
     try {
-      const version = await api.setGitProgram(next.gitPath);
+      const version = await api.setBackendSettings({ gitPath: next.gitPath, history: { days: next.historyDays, maxMb: next.historyMaxMb }, stored: true });
       statusRight.textContent = `git ${version}`;
     } catch (e) {
       toast(String(e).replace(/^Error: /, ""), "error");
       next.gitPath = settings.gitPath;
+      next.historyDays = settings.historyDays;
+      next.historyMaxMb = settings.historyMaxMb;
     }
   }
   Object.assign(settings, next);
@@ -51,14 +66,7 @@ export async function openSettings() {
   applyTheme();
   applyDiffSettings();
   scheduleAutoFetch();
-  if (historyChanged) await api.setLocalHistoryLimits(settings.historyDays, settings.historyMaxMb).catch(() => {});
   if (gitChanged && app.view) void refresh();
 }
-
-window.addEventListener("keydown", (e) => {
-  // An open dialog handles its own keys.
-  if (document.querySelector(".overlay, .merge-overlay")) return;
-  keymap.handle(e);
-});
 
 settingsBtn.addEventListener("click", () => void openSettings());

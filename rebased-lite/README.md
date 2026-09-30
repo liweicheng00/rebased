@@ -140,7 +140,11 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   refresh, auto fetch every N minutes, the git executable (with a Test button that shows its
   version), the diff font size and family, the diff options, the Local History limits, and the
   keymap. In the keymap, click a key and press the new one; an action can have several keys. A key
-  that two actions use is marked red. The settings are stored in the browser storage of the app.
+  that two actions use is marked red. The git program and the Local History limits are in
+  `settings.json` in the configuration directory (`~/.config/rebased-lite` on Linux,
+  `~/Library/Application Support/rebased-lite` on macOS, `%APPDATA%\rebased-lite` on Windows), so the
+  backend has them before the window opens. The favorite branches are in the git directory of each
+  repository. The other settings are in the storage of the window.
   The keys in the commit message field and in dialogs stay fixed.
 - **Other**: context menus, Refresh, Fetch, column choice and resize, resizable panels,
   light, dark or system theme, and a status bar.
@@ -193,6 +197,10 @@ cargo build --release -p rebased-lite
 cargo run -p rebased-devserver -- ui/dist 5174   # commands on 127.0.0.1:5174
 npm --prefix ui run dev                            # UI on http://localhost:5173/?repo=/path/to/repo
 ```
+
+Set `REBASED_LITE_CONFIG_DIR` to a scratch directory for the dev server of the UI tests, so the tests
+do not change your own `settings.json`.
+
 
 ## Test
 

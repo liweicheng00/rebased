@@ -81,18 +81,33 @@ export function compareBranches(leftRef: string, rightRef: string) {
   });
 }
 
-/** The favorite refs of the active repository. Without a choice yet, main and master are favorites. */
+/** The favorite refs of the active repository, from its git dir. */
+let favorites: string[] = [];
+
 export function favoritesOf(): string[] {
+  return favorites;
+}
+
+/** Loads the favorites of the active repository. Without a choice yet, main and master are favorites.
+ * An old front end kept the favorites in the browser storage; they move to the repository. */
+export async function loadFavorites() {
   const root = app.view?.root ?? "";
-  return settings.favorites[root] ?? ["refs/heads/main", "refs/heads/master"];
+  const stored = await api.favorites().catch(() => null);
+  const old = settings.favorites[root];
+  favorites = stored ?? old ?? ["refs/heads/main", "refs/heads/master"];
+  if (!stored && old) {
+    await api.setFavorites(old).catch(() => {});
+    delete settings.favorites[root];
+    save();
+  }
+  sidebar.setFavorites(favorites);
 }
 
 export function toggleFavorite(b: BranchInfo) {
   if (!app.view) return;
-  const cur = favoritesOf();
-  settings.favorites[app.view.root] = cur.includes(b.full) ? cur.filter((x) => x !== b.full) : [...cur, b.full];
-  save();
-  sidebar.setFavorites(favoritesOf());
+  favorites = favorites.includes(b.full) ? favorites.filter((x) => x !== b.full) : [...favorites, b.full];
+  sidebar.setFavorites(favorites);
+  void api.setFavorites(favorites).catch((e) => toast(String(e).replace(/^Error: /, ""), "error"));
 }
 sidebar.onToggleFavorite = toggleFavorite;
 

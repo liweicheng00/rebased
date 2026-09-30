@@ -57,13 +57,19 @@ pub fn git_command() -> Command {
     Command::new(if p.is_empty() { "git" } else { p.as_str() })
 }
 
-/// Sets the git program. Empty means `git` from PATH. Returns its version, for example "2.45.1". The
-/// program must answer `--version` like git, else the setting does not change.
-pub fn set_git_program(program: &str) -> Result<String> {
+/// The version of a git program, for example "2.45.1". Empty means `git` from PATH. A program that does
+/// not answer `--version` like git is an error.
+pub fn git_version(program: &str) -> Result<String> {
     let candidate = if program.trim().is_empty() { "git" } else { program.trim() };
     let out = Command::new(candidate).arg("--version").output().map_err(|e| GitError(format!("cannot run {candidate}: {e}")))?;
     let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    let version = text.strip_prefix("git version ").ok_or_else(|| GitError(format!("{candidate} is not git: {text}")))?.to_string();
+    Ok(text.strip_prefix("git version ").ok_or_else(|| GitError(format!("{candidate} is not git: {text}")))?.to_string())
+}
+
+/// Sets the git program. Empty means `git` from PATH. Returns its version. A program that is not git is
+/// refused, and the setting does not change.
+pub fn set_git_program(program: &str) -> Result<String> {
+    let version = git_version(program)?;
     *GIT_PROGRAM.write().unwrap() = program.trim().to_string();
     Ok(version)
 }

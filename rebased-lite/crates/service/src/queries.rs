@@ -82,13 +82,21 @@ impl Service {
         Ok(h.content(args.blob.as_deref()))
     }
 
-    pub fn set_local_history_limits(&self, limits: history::Limits) -> Result<()> {
-        *self.history_limits.lock().unwrap() = limits;
-        let sessions: Vec<_> = self.session.lock().unwrap().map.values().cloned().collect();
-        for s in sessions {
-            s.lock().unwrap().history.set_limits(limits);
-        }
-        Ok(())
+    /// The favorite branches and tags of the repository, as full ref names. None until the user chooses
+    /// favorites. They are in the common git dir, so all worktrees share them.
+    pub fn favorites(&self) -> Result<Option<Vec<String>>> {
+        self.with_repo(|r| {
+            let path = r.common_dir().join("rebased-lite").join("favorites.json");
+            Ok(std::fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok()))
+        })
+    }
+
+    pub fn set_favorites(&self, refs: Vec<String>) -> Result<()> {
+        self.with_repo(|r| {
+            let dir = r.common_dir().join("rebased-lite");
+            std::fs::create_dir_all(&dir).map_err(err)?;
+            std::fs::write(dir.join("favorites.json"), serde_json::to_vec_pretty(&refs).map_err(err)?).map_err(err)
+        })
     }
 
     pub fn commit_template(&self) -> Result<Option<String>> {
