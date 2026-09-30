@@ -270,6 +270,16 @@ pub enum Op {
     ResolveSide { paths: Vec<String>, side: Side },
     ApplyFileChanges { from: String, to: String, paths: Vec<String>, #[serde(default)] reverse: bool },
     GetFromRevision { rev: String, paths: Vec<String> },
+    AddRemote { name: String, url: String },
+    RemoveRemote { name: String },
+    RenameRemote { from: String, to: String },
+    SetRemoteUrl { name: String, url: String, #[serde(default)] push_url: String },
+    FetchRemote { name: String },
+    PushTag { remote: String, tag: String },
+    /// Deletes a branch or a tag on a remote; `name` is a full ref.
+    DeleteRemoteRef { remote: String, name: String },
+    /// Sets the tracked branch; no upstream stops the tracking.
+    SetUpstream { branch: String, upstream: Option<String> },
     /// Rolls back the hunks of one changelist of a file that is in more than one changelist.
     RollbackHunks { path: String, ids: Vec<String> },
     /// Initializes the submodules and checks out their recorded commits. No paths means all submodules.
@@ -787,6 +797,10 @@ impl Service {
         Ok(())
     }
 
+    pub fn remotes(&self) -> Result<Vec<rebased_git::remote::RemoteInfo>> {
+        self.with(|s| s.repo.remote_details().map_err(err))
+    }
+
     pub fn submodules(&self) -> Result<Vec<rebased_git::submodule::Submodule>> {
         self.with(|s| s.repo.submodules().map_err(err))
     }
@@ -880,6 +894,14 @@ impl Service {
             Op::ApplyFileChanges { from, to, paths, reverse } => repo.apply_file_changes(&from, &to, &paths, reverse),
             Op::GetFromRevision { rev, paths } => repo.get_from_revision(&rev, &paths),
             Op::UpdateSubmodules { paths } => repo.update_submodules(&paths),
+            Op::AddRemote { name, url } => repo.add_remote(&name, &url),
+            Op::RemoveRemote { name } => repo.remove_remote(&name),
+            Op::RenameRemote { from, to } => repo.rename_remote(&from, &to),
+            Op::SetRemoteUrl { name, url, push_url } => repo.set_remote_url(&name, &url, &push_url),
+            Op::FetchRemote { name } => repo.fetch_remote(&name),
+            Op::PushTag { remote, tag } => repo.push_tag(&remote, &tag),
+            Op::DeleteRemoteRef { remote, name } => repo.delete_remote_ref(&remote, &name),
+            Op::SetUpstream { branch, upstream } => repo.set_upstream(&branch, upstream.as_deref()),
             Op::RollbackHunks { path, ids } => repo.rollback_hunks(&path, &ids),
             Op::RevertLocalHistory { path, blob } => history
                 .revert(&path, blob.as_deref())
@@ -968,6 +990,7 @@ impl Service {
             }
             "head_message" => serde_json::to_string(&self.head_message()?),
             "submodules" => serde_json::to_string(&self.submodules()?),
+            "remotes" => serde_json::to_string(&self.remotes()?),
             "local_history" => serde_json::to_string(&self.local_history(parse(body)?)?),
             "local_history_content" => serde_json::to_string(&self.local_history_content(parse(body)?)?),
             "set_local_history_limits" => serde_json::to_string(&self.set_local_history_limits(parse(body)?)?),

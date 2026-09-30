@@ -23,6 +23,8 @@ export class Sidebar {
   onOpenSubmodule: (s: Submodule) => void = () => {};
   onSubmoduleMenu: (s: Submodule, e: MouseEvent) => void = () => {};
   onUpdateSubmodules: () => void = () => {};
+  /** The context menu of a remote group. */
+  onRemoteMenu: (remote: string, e: MouseEvent) => void = () => {};
 
   constructor() {
     this.search = h("input", { class: "sidebar-search", placeholder: "Search branches and tags", spellcheck: false });
@@ -97,6 +99,12 @@ export class Sidebar {
         else this.collapsed.add(title);
         this.render();
       });
+      if (title.startsWith("Remote: ")) {
+        header.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          this.onRemoteMenu(title.slice("Remote: ".length), e);
+        });
+      }
       frag.append(header);
       if (!open) continue;
       for (const b of items) frag.append(this.item(b, title.startsWith("Remote") ? b.name.slice(b.name.indexOf("/") + 1) : b.name));

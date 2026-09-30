@@ -93,6 +93,13 @@ export interface FileContent {
   note?: string;
 }
 
+export interface RemoteInfo {
+  name: string;
+  fetchUrl: string;
+  /** Set only when it differs from the fetch URL. */
+  pushUrl: string | null;
+}
+
 export interface Submodule {
   path: string;
   /** The commit that the repository records. */
@@ -130,12 +137,41 @@ async function call<T>(cmd: string, args?: unknown): Promise<T> {
   }
 }
 
+/** Commands that only read: sending them again is safe. */
+const READS = new Set([
+  "refs", "recent_branches", "worktrees", "repo_state", "submodules", "remotes", "local_changes", "watch_state", "stashes",
+  "stash_detail", "rows", "commit", "find", "compare", "file_pair", "head_message", "push_info", "merge_sides", "file_history",
+  "blame", "local_history", "local_history_content", "askpass_pending", "rewrite_range",
+]);
+
 async function callNow<T>(cmd: string, args?: unknown): Promise<T> {
   if (inTauri) {
     const { invoke } = await import("@tauri-apps/api/core");
     return invoke<T>(cmd, args === undefined ? {} : { args });
   }
-  const res = await fetch(`/api/${cmd}`, { method: "POST", body: JSON.stringify(args ?? {}) });
+  // The dev server: a read that gets no answer is sent once more. A lost HTTP answer then does not leave
+  // a part of the window empty. The app itself uses IPC, not HTTP.
+  const post = async (timeout: number) => {
+    const ctl = new AbortController();
+    const t = timeout ? setTimeout(() => ctl.abort(), timeout) : 0;
+    try {
+      return await fetch(`/api/${cmd}`, { method: "POST", body: JSON.stringify(args ?? {}), signal: ctl.signal });
+    } finally {
+      clearTimeout(t);
+    }
+  };
+  let res: Response;
+  if (READS.has(cmd)) {
+    try {
+      res = await post(8000);
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === "AbortError")) throw e;
+      console.warn(`The command ${cmd} got no answer in 8 s; it is sent again`);
+      res = await post(0);
+    }
+  } else {
+    res = await post(0);
+  }
   const body = await res.json();
   if (!res.ok) throw new Error(body.error ?? res.statusText);
   return body as T;
@@ -235,6 +271,14 @@ export type Op =
   | { op: "rewrite"; base: string; plan: PlanEntry[]; what: string }
   | { op: "undo"; actions: UndoAction[] }
   | { op: "updateSubmodules"; paths: string[] }
+  | { op: "addRemote"; name: string; url: string }
+  | { op: "removeRemote"; name: string }
+  | { op: "renameRemote"; from: string; to: string }
+  | { op: "setRemoteUrl"; name: string; url: string; pushUrl: string }
+  | { op: "fetchRemote"; name: string }
+  | { op: "pushTag"; remote: string; tag: string }
+  | { op: "deleteRemoteRef"; remote: string; name: string }
+  | { op: "setUpstream"; branch: string; upstream: string | null }
   | { op: "rollbackHunks"; path: string; ids: string[] }
   | { op: "revertLocalHistory"; path: string; blob: string | null }
   | { op: "addWorktree"; path: string; branch: string; newBranch: boolean; at: string }
@@ -390,6 +434,7 @@ export const api = {
   localHistoryContent: (blob: string | null) => call<Omit<FileContent, "size">>("local_history_content", { blob }),
   setLocalHistoryLimits: (days: number, maxMb: number) => call<null>("set_local_history_limits", { days, maxMb }),
   submodules: () => call<Submodule[]>("submodules"),
+  remotes: () => call<RemoteInfo[]>("remotes"),
   fileHistory: (path: string) => call<HistoryEntry[]>("file_history", { path }),
   blame: (path: string, rev: RevSpec) => call<Blame>("blame", { path, rev }),
   mergeSides: (path: string) => call<MergeSides>("merge_sides", { path }),

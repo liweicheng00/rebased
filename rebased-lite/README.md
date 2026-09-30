@@ -85,6 +85,11 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   "New". A rejected push offers Update. Update fetches the tracked branch and merges or rebases,
   with the local changes stashed and restored. The Commit tab has "Commit and Push". The branch
   menu pushes any local branch.
+- **Remotes**: the Fetch menu fetches all remotes or one remote, and opens Manage Remotes: add,
+  edit (name, URL, push URL), fetch and remove a remote. The group of a remote in the Branches tab
+  has the same actions in its context menu. A local branch can set, change or stop its tracked
+  branch. A remote branch can be deleted on the remote. A tag can be pushed to a remote or deleted
+  there; the local tag stays.
 - **Passwords and passphrases**: when git or ssh needs a user name, a password, an SSH key
   passphrase or a host key confirmation, a dialog asks for it (the app is the `GIT_ASKPASS` and
   `SSH_ASKPASS` program). "Remember" keeps the answer until the app closes; a git credential

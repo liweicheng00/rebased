@@ -50,6 +50,7 @@ const check = (what, ok) => { console.log(ok ? "ok  " : "FAIL", what); if (!ok) 
 await page.goto(`http://127.0.0.1:5174/?repo=${encodeURIComponent(repo)}`);
 await page.waitForSelector(".log-row", { timeout: 30000 });
 await page.click(".tb-button:has-text('Fetch')");
+await page.click(".menu-item:has-text('Fetch All Remotes')");
 await page.waitForSelector(".credential-prompt", { timeout: 20000 });
 check("git asks for the user name", (await page.textContent(".credential-prompt")).startsWith("Username for 'http://127.0.0.1:"));
 await page.fill(".dialog input.dialog-input", "ada");
@@ -70,6 +71,7 @@ check("the branch shows in the sidebar", (await page.textContent(".sidebar-list"
 git(bare, "branch", "second-branch", "main");
 git(bare, "update-server-info");
 await page.click(".tb-button:has-text('Fetch')");
+await page.click(".menu-item:has-text('Fetch All Remotes')");
 await page.waitForSelector(".credential-prompt", { timeout: 20000 });
 await page.fill(".dialog input.dialog-input", "ada");
 await page.click(".dialog-buttons button:has-text('OK')");

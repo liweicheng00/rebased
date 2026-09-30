@@ -40,6 +40,7 @@ fresh sm && run submodules "$work/sm"
 fresh pcl && run partial-changelists "$work/pcl"
 fresh tabs && run tabs "$work/tabs"
 fresh set && run settings "$work/set"
+fresh rem && run remotes "$work/rem"
 if [ -n "$large" ]; then
   run large-repo "$large"
   run collapse "$large"

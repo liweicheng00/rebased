@@ -34,7 +34,7 @@ await page.goto(`http://127.0.0.1:5174/?repo=${encodeURIComponent(repo)}`);
 await page.waitForSelector(".log-row", { timeout: 30000 });
 await page.click(".log-row >> nth=0");
 await page.waitForSelector(".editor.modified .view-line");
-check("the default diff font is 12px", (await editorFontSize()) === "12px");
+await within("the default diff font is 12px", async () => (await editorFontSize()) === "12px");
 
 // Diff font size.
 await openSettings();

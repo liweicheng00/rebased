@@ -31,6 +31,15 @@ pub struct PushInfo {
     pub behind: usize,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteInfo {
+    pub name: String,
+    pub fetch_url: String,
+    /// Set only when it differs from the fetch URL.
+    pub push_url: Option<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum UpdateMode {
@@ -176,6 +185,78 @@ impl Repo {
                 Ok(OpResult { ok: true, message, conflicts: Vec::new(), undo: Vec::new() })
             }
             Err((_, e)) => Ok(self.stopped(what, e)),
+        }
+    }
+
+    fn write(&self, args: &[&str], done: String) -> Result<OpResult> {
+        self.git_write(args, &[]).map_err(|(out, e)| GitError(if out.is_empty() { e } else { format!("{e}\n{out}") }))?;
+        Ok(OpResult::ok_msg(done))
+    }
+
+    /// The remotes with their URLs.
+    pub fn remote_details(&self) -> Result<Vec<RemoteInfo>> {
+        let mut out = Vec::new();
+        for name in self.remotes()? {
+            let fetch_url = self.config(&format!("remote.{name}.url")).unwrap_or_default();
+            let push_url = self.config(&format!("remote.{name}.pushurl")).filter(|p| *p != fetch_url);
+            out.push(RemoteInfo { name, fetch_url, push_url });
+        }
+        Ok(out)
+    }
+
+    pub fn add_remote(&self, name: &str, url: &str) -> Result<OpResult> {
+        self.write(&["remote", "add", "--", safe(name)?, safe(url)?], format!("Added remote {name}"))
+    }
+
+    pub fn remove_remote(&self, name: &str) -> Result<OpResult> {
+        self.write(&["remote", "remove", safe(name)?], format!("Removed remote {name} and its remote branches"))
+    }
+
+    pub fn rename_remote(&self, from: &str, to: &str) -> Result<OpResult> {
+        self.write(&["remote", "rename", safe(from)?, safe(to)?], format!("Renamed remote {from} to {to}"))
+    }
+
+    /// Sets the URL of a remote. An empty push URL removes the separate push URL.
+    pub fn set_remote_url(&self, name: &str, url: &str, push_url: &str) -> Result<OpResult> {
+        let name = safe(name)?;
+        self.git_write(&["remote", "set-url", "--", name, safe(url)?], &[]).map_err(|(_, e)| GitError(e))?;
+        if push_url.trim().is_empty() {
+            let _ = self.git_write(&["config", "--unset-all", &format!("remote.{name}.pushurl")], &[]);
+        } else {
+            self.git_write(&["remote", "set-url", "--push", "--", name, safe(push_url.trim())?], &[]).map_err(|(_, e)| GitError(e))?;
+        }
+        Ok(OpResult::ok_msg(format!("Changed the URL of {name}")))
+    }
+
+    /// Fetches one remote, and removes its remote branches that are gone.
+    pub fn fetch_remote(&self, name: &str) -> Result<OpResult> {
+        self.write(&["fetch", "--prune", safe(name)?], format!("Fetched {name}"))
+    }
+
+    /// Pushes a tag to a remote.
+    pub fn push_tag(&self, remote: &str, tag: &str) -> Result<OpResult> {
+        let spec = format!("refs/tags/{}:refs/tags/{tag}", safe(tag)?);
+        self.write(&["push", safe(remote)?, &spec], format!("Pushed tag {tag} to {remote}"))
+    }
+
+    /// Deletes a tag or a branch on a remote. `name` is a full ref, for example `refs/tags/v1`.
+    pub fn delete_remote_ref(&self, remote: &str, name: &str) -> Result<OpResult> {
+        if !name.starts_with("refs/tags/") && !name.starts_with("refs/heads/") {
+            return Err(GitError(format!("{name} is not a branch or a tag")));
+        }
+        let short = name.trim_start_matches("refs/tags/").trim_start_matches("refs/heads/");
+        self.write(&["push", safe(remote)?, "--delete", name], format!("Deleted {short} from {remote}"))
+    }
+
+    /// Sets the tracked branch of a local branch, for example `origin/main`. None stops the tracking.
+    pub fn set_upstream(&self, branch: &str, upstream: Option<&str>) -> Result<OpResult> {
+        let branch = safe(branch)?;
+        match upstream {
+            Some(u) => {
+                let arg = format!("--set-upstream-to={}", safe(u)?);
+                self.write(&["branch", &arg, branch], format!("{branch} now tracks {u}"))
+            }
+            None => self.write(&["branch", "--unset-upstream", branch], format!("{branch} tracks no branch now")),
         }
     }
 }

@@ -113,3 +113,52 @@ fn new_branch_force_push_and_conflict() {
     assert_eq!(repo.state().unwrap().operation, "rebase");
     assert!(repo.continue_or_abort(true).unwrap().ok);
 }
+
+#[test]
+fn manage_remotes_tags_and_tracking() {
+    let (origin, _seed, mine) = setup("manage");
+    let repo = Repo::open(&mine).unwrap();
+    git(&mine, &["config", "commit.gpgsign", "false"]);
+    let details = repo.remote_details().unwrap();
+    assert_eq!(details.len(), 1);
+    assert_eq!(details[0].name, "origin");
+    assert_eq!(details[0].fetch_url, origin.to_str().unwrap());
+    assert!(details[0].push_url.is_none());
+
+    // Add a second remote, fetch only it, rename it, give it a push URL, and remove it.
+    let backup = origin.parent().unwrap().join("backup.git");
+    git(origin.parent().unwrap(), &["clone", "-q", "--bare", origin.to_str().unwrap(), backup.to_str().unwrap()]);
+    assert!(repo.add_remote("backup", backup.to_str().unwrap()).unwrap().ok);
+    assert!(repo.fetch_remote("backup").unwrap().ok);
+    assert!(!git(&mine, &["branch", "-r", "--list", "backup/main"]).is_empty());
+    repo.rename_remote("backup", "mirror").unwrap();
+    assert!(!git(&mine, &["branch", "-r", "--list", "mirror/main"]).is_empty());
+    repo.set_remote_url("mirror", backup.to_str().unwrap(), "/elsewhere.git").unwrap();
+    let mirror = repo.remote_details().unwrap().into_iter().find(|r| r.name == "mirror").unwrap();
+    assert_eq!(mirror.push_url.as_deref(), Some("/elsewhere.git"));
+    repo.set_remote_url("mirror", backup.to_str().unwrap(), "").unwrap();
+    assert!(repo.remote_details().unwrap().into_iter().find(|r| r.name == "mirror").unwrap().push_url.is_none());
+    repo.remove_remote("mirror").unwrap();
+    assert_eq!(repo.remote_details().unwrap().len(), 1);
+    assert!(repo.add_remote("-x", "y").is_err());
+
+    // Push a tag, then delete it on the remote; the local tag stays.
+    git(&mine, &["tag", "v1"]);
+    repo.push_tag("origin", "v1").unwrap();
+    assert!(!git(&origin, &["tag", "-l", "v1"]).is_empty());
+    repo.delete_remote_ref("origin", "refs/tags/v1").unwrap();
+    assert!(git(&origin, &["tag", "-l", "v1"]).is_empty());
+    assert!(!git(&mine, &["tag", "-l", "v1"]).is_empty());
+
+    // A pushed branch can be deleted on the remote.
+    git(&mine, &["push", "-q", "origin", "main:refs/heads/topic"]);
+    repo.delete_remote_ref("origin", "refs/heads/topic").unwrap();
+    assert!(git(&origin, &["branch", "--list", "topic"]).is_empty());
+    assert!(repo.delete_remote_ref("origin", "main").is_err());
+
+    // Stop tracking, then track again.
+    repo.set_upstream("main", None).unwrap();
+    assert!(repo.push_info(None).unwrap().upstream.is_none());
+    repo.set_upstream("main", Some("origin/main")).unwrap();
+    assert_eq!(repo.push_info(None).unwrap().upstream.as_deref(), Some("origin/main"));
+}

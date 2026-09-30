@@ -12,6 +12,7 @@ import {
   type OpOutcome,
   type LogFilter,
   type PlanEntry,
+  type RemoteInfo,
   type Submodule,
   type UndoAction,
   type RecentBranch,
@@ -27,6 +28,7 @@ import { openMergeTool } from "./merge-view";
 import { openLocalHistory } from "./local-history-view";
 import { isMac, Keymap, type KeyAction } from "./keymap";
 import { openSettingsDialog } from "./settings-dialog";
+import { openRemotesDialog } from "./remotes-dialog";
 import { openHistory } from "./history-view";
 import { confirmDialog, conflictsDialog, credentialDialog, formDialog, interactiveRebaseDialog, messageDialog, pushDialog, resetDialog, updateDialog } from "./dialogs";
 import { toast } from "./notify";
@@ -69,7 +71,7 @@ const authors = new Set<string>();
 
 const openBtn = h("button", { class: "tb-button", title: `Open a repository (${mod}O)` }, "📂 Open ▾");
 const refreshBtn = h("button", { class: "tb-button", title: `Reload commits and branches (${mod}R)`, disabled: true }, "⟳ Refresh");
-const fetchBtn = h("button", { class: "tb-button", title: "Fetch all remotes", disabled: true }, "⇣ Fetch");
+const fetchBtn = h("button", { class: "tb-button", title: "Fetch all remotes, or one remote", disabled: true }, "⇣ Fetch ▾");
 const updateBtn = h("button", { class: "tb-button", title: `Update the current branch: fetch, then merge or rebase (${mod}T)`, disabled: true }, "↧ Update");
 const pushBtn = h("button", { class: "tb-button", title: `Push the current branch (${mod}⇧K)`, disabled: true }, "↥ Push");
 const localHistoryBtn = h("button", { class: "tb-button", title: "Local History: the recent versions of changed files", disabled: true }, "🕘 Local History");
@@ -1364,6 +1366,7 @@ sidebar.onContextMenu = (b, e) => {
     { separator: true },
     { label: "Push…", disabled: b.kind !== "local", action: () => void pushBranch(b.name) },
     { label: "Update", disabled: !isCurrent || !b.upstream, action: () => void updateBranch() },
+    ...remoteRefItems(b),
     { separator: true },
     { label: `Merge into ${cur ?? "current"}`, disabled: isCurrent || !cur, action: () => void mergeIntoCurrent(b.name, b.name) },
     { label: `Rebase ${cur ?? "current"} onto ${b.name}…`, disabled: isCurrent || !cur, action: () => void rebaseCurrentOnto(b.name, b.name) },
@@ -1468,7 +1471,123 @@ openBtn.addEventListener("click", () =>
   ]),
 );
 refreshBtn.addEventListener("click", () => void refresh());
-fetchBtn.addEventListener("click", () => void fetchAll());
+fetchBtn.addEventListener("click", async () => {
+  const remotes = await api.remotes().catch(() => []);
+  menuBelow(fetchBtn, [
+    { label: "Fetch All Remotes", shortcut: keymap.shortcut("fetch"), disabled: !remotes.length, action: () => void fetchAll() },
+    ...(remotes.length > 1 ? [{ separator: true } as MenuItem, ...remotes.map((r) => ({ label: `Fetch ${r.name}`, action: () => void fetchRemote(r.name) }) as MenuItem)] : []),
+    { separator: true },
+    { label: "Manage Remotes…", action: () => void manageRemotes() },
+  ]);
+});
+
+// ---- remotes ----
+
+async function fetchRemote(name: string) {
+  await runOp({ op: "fetchRemote", name }, `Fetching ${name}`);
+}
+
+async function addRemote() {
+  const r = await formDialog("Add Remote", [
+    { key: "name", label: "Name", value: refs.some((b) => b.kind === "remote") ? "" : "origin", placeholder: "origin" },
+    { key: "url", label: "URL", placeholder: "https://github.com/owner/repo.git or git@host:owner/repo.git" },
+    { key: "fetch", label: "Fetch it now", type: "checkbox", value: true },
+  ], "Add");
+  if (!r || !String(r.name).trim() || !String(r.url).trim()) return;
+  const name = String(r.name).trim();
+  const out = await runOp({ op: "addRemote", name, url: String(r.url).trim() }, `Adding ${name}`);
+  if (out?.result.ok && r.fetch) await fetchRemote(name);
+}
+
+async function editRemote(remote: RemoteInfo) {
+  const r = await formDialog(`Edit Remote ${remote.name}`, [
+    { key: "name", label: "Name", value: remote.name },
+    { key: "url", label: "URL", value: remote.fetchUrl },
+    { key: "pushUrl", label: "Push URL (empty: the same as the URL)", value: remote.pushUrl ?? "" },
+  ], "Save");
+  if (!r) return;
+  const name = String(r.name).trim();
+  const url = String(r.url).trim();
+  const pushUrl = String(r.pushUrl).trim();
+  if (url !== remote.fetchUrl || pushUrl !== (remote.pushUrl ?? "")) await runOp({ op: "setRemoteUrl", name: remote.name, url, pushUrl }, `Changing ${remote.name}`);
+  if (name && name !== remote.name) await runOp({ op: "renameRemote", from: remote.name, to: name }, `Renaming ${remote.name}`);
+}
+
+async function removeRemote(name: string) {
+  if (!(await confirmDialog("Remove remote", `Remove the remote ${name}? Its remote branches go away from the log. The repository on the server does not change.`, "Remove", true))) return;
+  await runOp({ op: "removeRemote", name }, `Removing ${name}`);
+}
+
+async function manageRemotes() {
+  if (!view) return;
+  await openRemotesDialog({
+    load: api.remotes,
+    add: addRemote,
+    edit: editRemote,
+    fetch: (r) => fetchRemote(r.name),
+    remove: (r) => removeRemote(r.name),
+  });
+}
+
+sidebar.onRemoteMenu = (remote, e) =>
+  showMenu(e.clientX, e.clientY, [
+    { label: `Fetch ${remote}`, action: () => void fetchRemote(remote) },
+    {
+      label: "Edit Remote…",
+      action: async () => {
+        const r = (await api.remotes()).find((x) => x.name === remote);
+        if (r) await editRemote(r);
+      },
+    },
+    { label: "Remove Remote…", action: () => void removeRemote(remote) },
+    { separator: true },
+    { label: "Manage Remotes…", action: () => void manageRemotes() },
+  ]);
+
+/** Chooses the tracked branch of a local branch from the remote branches. */
+async function setTracked(b: BranchInfo) {
+  const remotes = refs.filter((x) => x.kind === "remote").map((x) => x.name);
+  if (!remotes.length) return toast("There are no remote branches. Fetch or add a remote first.", "error");
+  const guess = b.upstream ?? remotes.find((x) => x.endsWith(`/${b.name}`)) ?? remotes[0];
+  const r = await formDialog(`Tracked Branch of ${b.name}`, [{ key: "upstream", label: "Remote branch", type: "select", value: guess, options: remotes.map((x) => [x, x]) }], "Set");
+  if (r) await runOp({ op: "setUpstream", branch: b.name, upstream: String(r.upstream) }, `Setting the tracked branch of ${b.name}`);
+}
+
+/** Remote actions of a branch or a tag, for its context menu. */
+function remoteRefItems(b: BranchInfo): MenuItem[] {
+  const remotes = [...new Set(refs.filter((x) => x.kind === "remote").map((x) => x.name.split("/")[0]))];
+  if (b.kind === "local") {
+    return [
+      { label: b.upstream ? `Change Tracked Branch (${b.upstream})…` : "Set Tracked Branch…", action: () => void setTracked(b) },
+      { label: "Stop Tracking", disabled: !b.upstream, action: () => void runOp({ op: "setUpstream", branch: b.name, upstream: null }, `Stop tracking for ${b.name}`) },
+    ];
+  }
+  if (b.kind === "remote") {
+    const slash = b.name.indexOf("/");
+    const remote = b.name.slice(0, slash);
+    const branch = b.name.slice(slash + 1);
+    return [
+      { label: `Fetch ${remote}`, action: () => void fetchRemote(remote) },
+      {
+        label: "Delete from Remote…",
+        action: async () => {
+          if (!(await confirmDialog("Delete remote branch", `Delete the branch ${branch} on ${remote}? Other people lose it too when they fetch.`, "Delete", true))) return;
+          await runOp({ op: "deleteRemoteRef", remote, name: `refs/heads/${branch}` }, `Deleting ${b.name}`);
+        },
+      },
+    ];
+  }
+  return remotes.flatMap((remote) => [
+    { label: `Push Tag to ${remote}`, action: () => void runOp({ op: "pushTag", remote, tag: b.name }, `Pushing ${b.name}`) } as MenuItem,
+    {
+      label: `Delete Tag from ${remote}…`,
+      action: async () => {
+        if (!(await confirmDialog("Delete remote tag", `Delete the tag ${b.name} on ${remote}? The local tag stays.`, "Delete", true))) return;
+        await runOp({ op: "deleteRemoteRef", remote, name: `refs/tags/${b.name}` }, `Deleting ${b.name} from ${remote}`);
+      },
+    } as MenuItem,
+  ]);
+}
 viewBtn.addEventListener("click", () => {
   const flip = (key: "intelliSort" | "showLongEdges", reload: boolean) => () => {
     settings[key] = !settings[key];

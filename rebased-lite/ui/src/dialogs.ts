@@ -63,16 +63,23 @@ export async function confirmDialog(title: string, message: string, okLabel: str
 export interface Field {
   key: string;
   label: string;
-  type?: "text" | "checkbox" | "textarea";
+  type?: "text" | "checkbox" | "textarea" | "select";
   value?: string | boolean;
+  /** The choices of a select field: value and label. */
+  options?: [string, string][];
   placeholder?: string;
   browse?: () => Promise<string | null>;
 }
 
 /** A small form. Resolves with the field values, or null on Cancel. */
 export async function formDialog(title: string, fields: Field[], okLabel: string, note?: string): Promise<Record<string, string | boolean> | null> {
-  const inputs = new Map<string, HTMLInputElement | HTMLTextAreaElement>();
+  const inputs = new Map<string, HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>();
   const rows = fields.map((f) => {
+    if (f.type === "select") {
+      const sel = h("select", { class: "dialog-input" }, ...(f.options ?? []).map(([v, l]) => h("option", { value: v, selected: v === f.value }, l)));
+      inputs.set(f.key, sel);
+      return h("label", { class: "dialog-field" }, h("span", {}, f.label), sel);
+    }
     if (f.type === "checkbox") {
       const input = h("input", { type: "checkbox", checked: !!f.value });
       inputs.set(f.key, input);
