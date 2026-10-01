@@ -532,3 +532,5 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .compare-files { flex: 1; border-right: none; }
 .compare-file { grid-template-columns: 14px auto minmax(0, 1fr); }
 .compare-file .rebase-author { overflow: hidden; text-overflow: ellipsis; }
+.merged-row { grid-template-columns: auto auto auto minmax(0, 1fr) auto; cursor: pointer; }
+.merged-name { white-space: nowrap; }

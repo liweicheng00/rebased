@@ -2,6 +2,7 @@
 //! the same way IntelliJ does. See `docs/rebased-lite/design-spec.md`, chapters 3 and 6.
 
 pub mod changelist;
+pub mod cleanup;
 pub mod history;
 pub mod hunks;
 pub mod merge;
@@ -64,6 +65,14 @@ pub fn git_version(program: &str) -> Result<String> {
     let out = Command::new(candidate).arg("--version").output().map_err(|e| GitError(format!("cannot run {candidate}: {e}")))?;
     let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
     Ok(text.strip_prefix("git version ").ok_or_else(|| GitError(format!("{candidate} is not git: {text}")))?.to_string())
+}
+
+/// True when the git program that the settings choose has at least this version (major, minor).
+pub fn git_at_least(min: (u32, u32)) -> bool {
+    let program = GIT_PROGRAM.read().unwrap().clone();
+    let Ok(v) = git_version(&program) else { return false };
+    let mut parts = v.split(|c: char| !c.is_ascii_digit()).map(|s| s.parse::<u32>().unwrap_or(0));
+    (parts.next().unwrap_or(0), parts.next().unwrap_or(0)) >= min
 }
 
 /// Sets the git program. Empty means `git` from PATH. Returns its version. A program that is not git is

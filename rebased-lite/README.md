@@ -106,6 +106,11 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   has the same actions in its context menu. A local branch can set, change or stop its tracked
   branch. A remote branch can be deleted on the remote. A tag can be pushed to a remote or deleted
   there; the local tag stays.
+- **Delete Merged Branches**: the context menu of the Local group, a branch, or a remote deletes the
+  local branches whose work is on the branch that they track. A preview lists the branches, and the
+  user can keep some. With Git 2.56 or later, git finds them with `git branch --delete-merged`. With
+  an older git, Rebased Lite applies the same rules. Undo creates the branches again with their
+  tracked branches.
 - **Passwords and passphrases**: when git or ssh needs a user name, a password, an SSH key
   passphrase or a host key confirmation, a dialog asks for it (the app is the `GIT_ASKPASS` and
   `SSH_ASKPASS` program). "Remember" keeps the answer until the app closes; a git credential
@@ -217,6 +222,9 @@ cargo test
 npm --prefix ui run typecheck
 npm --prefix ui test          # line diff and three-way merge chunks
 ```
+
+Set `REBASED_NEW_GIT` to a git 2.56 or later, and `crates/git/tests/cleanup.rs` also runs
+`git branch --delete-merged`. Without it, the test checks the rules of Rebased Lite only.
 
 `cargo test -p rebased-graph` compares the graph output with the IntelliJ golden files.
 

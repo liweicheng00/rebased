@@ -4,4 +4,4 @@ import type { UndoMode } from "./UndoMode";
 /**
  * One step of an Undo. Each step checks that the repository did not change since the operation.
  */
-export type UndoAction = { "kind": "reset", to: string, expectedHead: string, mode: UndoMode, } | { "kind": "checkout", target: string, detach: boolean, expectedHead: string, } | { "kind": "createRef", name: string, oid: string, } | { "kind": "deleteRef", name: string, expected: string, } | { "kind": "renameBranch", from: string, to: string, } | { "kind": "stashStore", oid: string, message: string, };
+export type UndoAction = { "kind": "reset", to: string, expectedHead: string, mode: UndoMode, } | { "kind": "checkout", target: string, detach: boolean, expectedHead: string, } | { "kind": "createRef", name: string, oid: string, } | { "kind": "deleteRef", name: string, expected: string, } | { "kind": "renameBranch", from: string, to: string, } | { "kind": "stashStore", oid: string, message: string, } | { "kind": "setConfig", key: string, values: Array<string>, };

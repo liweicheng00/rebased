@@ -1,6 +1,6 @@
 // Modal dialogs: forms, confirmations, the reset dialog, the message editor and the interactive rebase editor.
 
-import type { PlanAction, PlanEntry, PushInfo, RewriteRange } from "./api";
+import type { MergedBranches, PlanAction, PlanEntry, PushInfo, RewriteRange } from "./api";
 import { formatDate, h } from "./dom";
 
 interface DialogButton {
@@ -27,6 +27,8 @@ function modal(title: string, body: Node[], buttons: DialogButton[], wide = fals
         close(null);
       } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey || (e.target as HTMLElement).tagName !== "TEXTAREA")) {
         if ((e.target as HTMLElement).tagName === "SELECT" || (e.target as HTMLElement).tagName === "BUTTON") return;
+        // A field that uses Enter itself.
+        if ((e.target as HTMLElement).dataset.enter === "own") return;
         e.preventDefault();
         close(primary.value);
       }
@@ -378,4 +380,96 @@ export async function credentialDialog(prompt: { text: string; secret: boolean; 
   ];
   const r = await modal(prompt.secret ? "Password" : "Git needs an answer", body, [{ label: "OK", value: "ok", primary: true }]);
   return r === "ok" ? { answer: input.value, remember: remember.checked } : null;
+}
+
+/** Delete Merged Branches: a preview of the branches for the tracked-branch patterns. The user can keep
+ * some. Resolves with the patterns of the shown preview and the kept branches, or null on Cancel. */
+export async function deleteMergedDialog(
+  patterns: string,
+  load: (upstreams: string[]) => Promise<MergedBranches>,
+): Promise<{ upstreams: string[]; keep: string[] } | null> {
+  const input = h("input", { class: "dialog-input merged-patterns", type: "text", value: patterns, spellcheck: false, "data-enter": "own" });
+  const list = h("div", { class: "push-commits merged-list" });
+  const summary = h("p", { class: "dialog-note merged-summary" });
+  const how = h("p", { class: "dialog-note" });
+  let shown: { upstreams: string[]; names: string[] } = { upstreams: [], names: [] };
+  const boxes = new Map<string, HTMLInputElement>();
+  const count = () => {
+    const n = [...boxes.values()].filter((b) => b.checked).length;
+    summary.textContent = shown.names.length ? `${n} of ${shown.names.length} branch(es) will be deleted. Undo creates them again.` : "";
+  };
+  let seq = 0;
+  const reload = async () => {
+    const upstreams = input.value.split(/\s+/).filter(Boolean);
+    const mine = ++seq;
+    let r: MergedBranches;
+    try {
+      r = await load(upstreams);
+    } catch (e) {
+      if (mine !== seq) return;
+      shown = { upstreams: [], names: [] };
+      boxes.clear();
+      list.replaceChildren(h("div", { class: "muted danger-text" }, String(e).replace(/^Error: /, "")));
+      count();
+      return;
+    }
+    if (mine !== seq) return;
+    shown = { upstreams, names: r.branches.map((b) => b.name) };
+    how.textContent = r.native
+      ? "Git finds the branches with git branch --delete-merged."
+      : "Your git is older than 2.56, so Rebased Lite applies the rules of git branch --delete-merged itself.";
+    boxes.clear();
+    list.replaceChildren(
+      ...(r.branches.length
+        ? r.branches.map((b) => {
+            const box = h("input", { type: "checkbox", checked: true });
+            box.addEventListener("change", count);
+            boxes.set(b.name, box);
+            return h(
+              "label",
+              { class: "push-commit merged-row", title: b.oid },
+              box,
+              h("b", { class: "merged-name" }, b.name),
+              h("span", { class: "muted-inline" }, "→ " + b.upstream),
+              h("span", { class: "rebase-subject" }, b.subject),
+              h("code", { class: "rebase-hash" }, b.oid.slice(0, 8)),
+            );
+          })
+        : [h("div", { class: "muted" }, upstreams.length ? "No local branch is merged into its tracked branch." : "Type at least one pattern.")]),
+    );
+    count();
+  };
+  let timer = 0;
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(() => void reload(), 300);
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    clearTimeout(timer);
+    void reload();
+  });
+  await reload();
+  const body = [
+    h(
+      "label",
+      { class: "dialog-field" },
+      h("span", {}, "Tracked branches"),
+      input,
+    ),
+    h(
+      "p",
+      { class: "dialog-note" },
+      "A local branch is deleted when its work is on the branch that it tracks. Give a branch (origin/main), a remote (origin, for its HEAD), or a glob (origin/** or ** for all). Separate patterns with spaces.",
+    ),
+    list,
+    summary,
+    how,
+  ];
+  const r = await modal("Delete Merged Branches", body, [{ label: "Delete", value: "ok", danger: true }], true);
+  if (r !== "ok" || !shown.names.length) return null;
+  const keep = shown.names.filter((n) => !boxes.get(n)?.checked);
+  if (keep.length === shown.names.length) return null;
+  return { upstreams: shown.upstreams, keep };
 }

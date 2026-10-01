@@ -104,6 +104,11 @@ pub struct CompareArgs {
 }
 
 #[derive(Deserialize)]
+pub struct MergedBranchesArgs {
+    pub upstreams: Vec<String>,
+}
+
+#[derive(Deserialize)]
 pub struct CompareRefsArgs {
     pub left: String,
     pub right: String,

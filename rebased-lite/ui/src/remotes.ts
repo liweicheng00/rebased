@@ -6,7 +6,7 @@ import { menuBelow, type MenuItem, showMenu } from "./context-menu";
 import { confirmDialog, formDialog } from "./dialogs";
 import { keymap } from "./keyboard";
 import { toast } from "./notify";
-import { currentBranch, runOp } from "./operations";
+import { currentBranch, deleteMergedBranches, runOp } from "./operations";
 import { openRemotesDialog } from "./remotes-dialog";
 import { jumpToOid, reloadView } from "./repo";
 import { collapse } from "./selection";
@@ -122,6 +122,7 @@ sidebar.onRemoteMenu = (remote, e) =>
       },
     },
     { label: "Remove Remote…", action: () => void removeRemote(remote) },
+    { label: `Delete Branches Merged into ${remote}…`, action: () => void deleteMergedBranches(`${remote}/**`) },
     { separator: true },
     { label: "Manage Remotes…", action: () => void manageRemotes() },
   ]);

@@ -34,6 +34,8 @@ pub enum UndoAction {
     RenameBranch { from: String, to: String },
     /// Puts a dropped stash back.
     StashStore { oid: String, message: String },
+    /// Gives a config key its values again. No values removes the key.
+    SetConfig { key: String, values: Vec<String> },
 }
 
 
@@ -92,6 +94,10 @@ impl Repo {
                 UndoAction::DeleteRef { name, expected } => self.git_write(&["update-ref", "-d", safe(name)?, safe(expected)?], &[]),
                 UndoAction::RenameBranch { from, to } => self.git_write(&["branch", "-m", safe(from)?, safe(to)?], &[]),
                 UndoAction::StashStore { oid, message: m } => self.git_write(&["stash", "store", "-m", m, safe(oid)?], &[]),
+                UndoAction::SetConfig { key, values } => {
+                    let _ = self.git_write(&["config", "--unset-all", safe(key)?], &[]);
+                    values.iter().try_for_each(|v| self.git_write(&["config", "--add", key, v], &[]).map(|_| ())).map(|_| String::new())
+                }
             };
             r.map_err(|(_, e)| GitError(format!("Undo stopped: {e}")))?;
         }

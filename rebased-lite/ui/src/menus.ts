@@ -6,7 +6,7 @@ import { menuBelow, type MenuItem, showMenu } from "./context-menu";
 import { copyText } from "./dom";
 import { showHistory } from "./history-flow";
 import { keymap } from "./keyboard";
-import { addWorktree, checkoutBranch, checkoutCommit, currentBranch, deleteBranch, interactiveRebase, mergeIntoCurrent, newBranch, newTag, rebaseCurrentOnto, renameBranch, resetTo, rewriteSelected, runOp } from "./operations";
+import { addWorktree, checkoutBranch, checkoutCommit, currentBranch, deleteBranch, deleteMergedBranches, interactiveRebase, mergeIntoCurrent, newBranch, newTag, rebaseCurrentOnto, renameBranch, resetTo, rewriteSelected, runOp } from "./operations";
 import { compareBranches, fetchRemote, manageRemotes, remoteRefItems, toggleFavorite } from "./remotes";
 import { askForRepo, fetchAll, jumpToOid, openRepo, refresh } from "./repo";
 import { collapse, compare, comparedCommits, compareWithWorktree, fileChangesAction, openFile, short, showSelection } from "./selection";
@@ -64,6 +64,7 @@ async function rowMenu(r: Row, e: MouseEvent) {
 }
 log.onContextMenu = (r, e) => void rowMenu(r, e);
 
+sidebar.onLocalMenu = (e) => showMenu(e.clientX, e.clientY, [{ label: "Delete Merged Branches…", action: () => void deleteMergedBranches() }]);
 sidebar.onNavigate = (b) => void jumpToOid(b.oid, true);
 sidebar.onToggleFilter = (b) => filterBar.toggleBranch(b.name);
 sidebar.onContextMenu = (b, e) => {
@@ -104,6 +105,14 @@ sidebar.onContextMenu = (b, e) => {
     { separator: true },
     { label: "Rename…", disabled: b.kind !== "local", action: () => void renameBranch(b) },
     { label: b.kind === "tag" ? "Delete Tag…" : "Delete…", disabled: b.kind === "remote" || isCurrent, action: () => void deleteBranch(b) },
+    ...(b.kind === "tag"
+      ? []
+      : [
+          {
+            label: b.kind === "remote" ? `Delete Branches Merged into ${b.name}…` : "Delete Merged Branches…",
+            action: () => void deleteMergedBranches(b.kind === "remote" ? b.name : "**"),
+          },
+        ]),
     { label: sidebar.isFavorite(b) ? "Remove from Favorites" : "Add to Favorites", action: () => toggleFavorite(b) },
     { label: "Copy Name", action: () => void copyText(b.name) },
     { label: "Copy Revision Number", action: () => void copyText(b.oid) },

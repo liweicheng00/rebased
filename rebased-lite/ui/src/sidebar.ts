@@ -30,6 +30,8 @@ export class Sidebar {
   onUpdateSubmodules: () => void = () => {};
   /** The context menu of a remote group. */
   onRemoteMenu: (remote: string, e: MouseEvent) => void = () => {};
+  /** The context menu of the Local group header. */
+  onLocalMenu: (e: MouseEvent) => void = () => {};
 
   constructor() {
     this.search = h("input", { class: "sidebar-search", placeholder: "Search branches and tags", spellcheck: false });
@@ -120,6 +122,12 @@ export class Sidebar {
         else this.collapsed.add(title);
         this.render();
       });
+      if (title === "Local") {
+        header.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          this.onLocalMenu(e);
+        });
+      }
       if (title.startsWith("Remote: ")) {
         header.addEventListener("contextmenu", (e) => {
           e.preventDefault();

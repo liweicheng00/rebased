@@ -66,6 +66,7 @@ impl Service {
             "rewrite_range" => serde_json::to_string(&self.rewrite_range(parse(body)?)?),
             "run_op" => serde_json::to_string(&self.run_op(parse(body)?)?),
             "compare" => serde_json::to_string(&self.compare(parse(body)?)?),
+            "merged_branches" => serde_json::to_string(&self.merged_branches(parse(body)?)?),
             "compare_refs" => serde_json::to_string(&self.compare_refs(parse(body)?)?),
             "file_pair" => serde_json::to_string(&self.file_pair(parse(body)?)?),
             _ => return Err(format!("unknown command {cmd}")),

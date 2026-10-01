@@ -4,7 +4,7 @@ import { api, type BranchInfo, errorHint, inTauri, type Op, type OpOutcome, pick
 import { showBranchSwitcher } from "./branch-switcher";
 import { mergeFile } from "./conflicts";
 import { showMenu } from "./context-menu";
-import { confirmDialog, formDialog, interactiveRebaseDialog, messageDialog, resetDialog } from "./dialogs";
+import { confirmDialog, deleteMergedDialog, formDialog, interactiveRebaseDialog, messageDialog, resetDialog } from "./dialogs";
 import { copyText } from "./dom";
 import { toast } from "./notify";
 import { applyView, jumpToOid, loadRefs, openRepo } from "./repo";
@@ -187,6 +187,12 @@ export async function deleteBranch(b: BranchInfo) {
       await runOp({ op: "deleteBranch", name: b.name, force: true }, "Deleting branch");
     }
   }
+}
+
+/** Delete Merged Branches. The patterns name the tracked branches; `**` means all of them. */
+export async function deleteMergedBranches(patterns = "**") {
+  const choice = await deleteMergedDialog(patterns, (upstreams) => api.mergedBranches(upstreams));
+  if (choice) await runOp({ op: "deleteMerged", ...choice }, "Deleting merged branches");
 }
 
 export async function renameBranch(b: BranchInfo) {

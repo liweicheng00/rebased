@@ -17,6 +17,7 @@ import type { HistoryEntry } from "./bindings/HistoryEntry";
 import type { Hunk } from "./bindings/Hunk";
 import type { LocalChanges } from "./bindings/LocalChanges";
 import type { MergeSides } from "./bindings/MergeSides";
+import type { MergedBranches } from "./bindings/MergedBranches";
 import type { OpOutcome } from "./bindings/OpOutcome";
 import type { OpResult } from "./bindings/OpResult";
 import type { OutgoingCommit } from "./bindings/OutgoingCommit";
@@ -52,6 +53,7 @@ export type {
   Hunk,
   LocalChanges,
   MergeSides,
+  MergedBranches,
   OpOutcome,
   OpResult,
   OutgoingCommit,
@@ -181,6 +183,7 @@ export type Op =
   | { op: "pushTag"; remote: string; tag: string }
   | { op: "deleteRemoteRef"; remote: string; name: string }
   | { op: "setUpstream"; branch: string; upstream: string | null }
+  | { op: "deleteMerged"; upstreams: string[]; keep: string[] }
   | { op: "rollbackHunks"; path: string; ids: string[] }
   | { op: "revertLocalHistory"; path: string; blob: string | null }
   | { op: "addWorktree"; path: string; branch: string; newBranch: boolean; at: string }
@@ -252,6 +255,7 @@ export const api = {
   mergeSides: (path: string) => call<MergeSides>("merge_sides", { path }),
   stashDetail: (index: number) => call<StashDetail>("stash_detail", { index }),
   pushInfo: (branch?: string) => call<PushInfo>("push_info", { branch: branch ?? null }),
+  mergedBranches: (upstreams: string[]) => call<MergedBranches>("merged_branches", { upstreams }),
   compareRefs: (left: string, right: string) =>
     call<{ left: string; right: string; base: string | null; onlyLeft: OutgoingCommit[]; onlyRight: OutgoingCommit[] }>("compare_refs", { left, right }),
   compare: (left: RevSpec, right: RevSpec) => call<{ changes: Change[] }>("compare", { left, right }),

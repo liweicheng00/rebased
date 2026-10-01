@@ -70,6 +70,8 @@ pub enum Op {
     PushTag { remote: String, tag: String },
     /// Deletes a branch or a tag on a remote; `name` is a full ref.
     DeleteRemoteRef { remote: String, name: String },
+    /// Deletes the local branches whose work is on their tracked branch, except the kept ones.
+    DeleteMerged { upstreams: Vec<String>, #[serde(default)] keep: Vec<String> },
     /// Sets the tracked branch; no upstream stops the tracking.
     SetUpstream { branch: String, upstream: Option<String> },
     /// Rolls back the hunks of one changelist of a file that is in more than one changelist.
@@ -276,6 +278,7 @@ impl Service {
             Op::PushTag { remote, tag } => repo.push_tag(&remote, &tag),
             Op::DeleteRemoteRef { remote, name } => repo.delete_remote_ref(&remote, &name),
             Op::SetUpstream { branch, upstream } => repo.set_upstream(&branch, upstream.as_deref()),
+            Op::DeleteMerged { upstreams, keep } => repo.delete_merged(&upstreams, &keep),
             Op::RollbackHunks { path, ids } => repo.rollback_hunks(&path, &ids),
             Op::RevertLocalHistory { path, blob } => history
                 .revert(&path, blob.as_deref())

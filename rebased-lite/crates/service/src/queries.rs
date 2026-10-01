@@ -1,6 +1,6 @@
 //! The read commands.
 
-use crate::{err, history, watch, BlameArgs, BlobArgs, CompareArgs, CompareRefsArgs, CompareResult, FilePair, FilePairArgs, IndexArgs, OidArgs, PathArgs, PushInfoArgs, Result, RevSpec, Service};
+use crate::{err, history, watch, BlameArgs, BlobArgs, CompareArgs, CompareRefsArgs, MergedBranchesArgs, CompareResult, FilePair, FilePairArgs, IndexArgs, OidArgs, PathArgs, PushInfoArgs, Result, RevSpec, Service};
 use rebased_git::changelist::{ChangeListOp, LocalChanges};
 use rebased_git::history::{Blame, HistoryEntry};
 use rebased_git::merge::MergeSides;
@@ -134,6 +134,11 @@ impl Service {
     /// The commits that each of two refs has and the other has not.
     pub fn compare_refs(&self, args: CompareRefsArgs) -> Result<rebased_git::remote::RefComparison> {
         self.with_repo(|r| r.compare_refs(&args.left, &args.right).map_err(err))
+    }
+
+    /// The local branches that Delete Merged Branches deletes.
+    pub fn merged_branches(&self, args: MergedBranchesArgs) -> Result<rebased_git::cleanup::MergedBranches> {
+        self.with_repo(|r| r.merged_branches(&args.upstreams).map_err(err))
     }
 
     pub fn compare(&self, args: CompareArgs) -> Result<CompareResult> {
