@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../../ui/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm --prefix ../../ui run dev",
-    "beforeBuildCommand": "npm --prefix ../../ui run build"
+    "beforeDevCommand": "npm --prefix ../ui run dev",
+    "beforeBuildCommand": "npm --prefix ../ui run build"
   },
   "app": {
     "windows": [{ "title": "Rebased Lite", "width": 1400, "height": 900, "minWidth": 600, "minHeight": 400 }],
@@ -16,6 +16,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.png"]
+    "icon": ["icons/icon.png", "icons/icon.icns"]
   }
 }

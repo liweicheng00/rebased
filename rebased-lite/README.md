@@ -204,6 +204,15 @@ cargo build --release -p rebased-lite
 ./target/release/rebased-lite /path/to/repo
 ```
 
+### A macOS app and a disk image
+
+On macOS, `scripts/build-dmg.sh` builds `Rebased Lite.app` and a `.dmg` in
+`target/release/bundle/`. Add `--universal` for one app that runs on Apple silicon and on Intel.
+The app is not signed, so it opens on the Mac that built it. Other Macs need a signature.
+
+An app that starts from Finder does not get the `PATH` of your shell. It uses `/usr/bin/git`. To use
+another git, for example Homebrew git, set the git program in Settings.
+
 ## Develop in a browser
 
 ```sh
