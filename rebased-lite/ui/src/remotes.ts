@@ -12,7 +12,7 @@ import { jumpToOid, reloadView } from "./repo";
 import { collapse } from "./selection";
 import { save, settings } from "./settings";
 import { openSettings } from "./settings-flow";
-import { log, sidebar, toggleSidebar, viewBtn } from "./shell";
+import { log, sidebar, toggleDiff, toggleSidebar, viewBtn } from "./shell";
 import { app } from "./state";
 
 export async function fetchRemote(name: string) {
@@ -194,6 +194,7 @@ viewBtn.addEventListener("click", () => {
     { label: "Hash", checked: settings.showHash, action: col("showHash") },
     { separator: true },
     { label: "Branches Panel", checked: settings.showSidebar, shortcut: keymap.shortcut("branches"), action: toggleSidebar },
+    { label: "Diff Panel", checked: settings.showDiff, shortcut: keymap.shortcut("diffPanel"), action: () => toggleDiff() },
     { label: "Go to HEAD", disabled: !app.view?.headOid, action: () => app.view?.headOid && void jumpToOid(app.view.headOid, true) },
     { separator: true },
     { label: "Settings…", shortcut: keymap.shortcut("settings"), action: () => void openSettings() },

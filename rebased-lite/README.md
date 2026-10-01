@@ -106,6 +106,9 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   has the same actions in its context menu. A local branch can set, change or stop its tracked
   branch. A remote branch can be deleted on the remote. A tag can be pushed to a remote or deleted
   there; the local tag stays.
+- **Diff panel**: View > Diff Panel, the ✕ button of the diff, or Mod+2 hides and shows the diff
+  panel below the log. The log then uses all the height. The panel keeps the size that it had. A
+  double click on a changed file shows the panel again. "Show Diff" in the context menu also shows it.
 - **Delete Merged Branches**: the context menu of the Local group, a branch, or a remote deletes the
   local branches whose work is on the branch that they track. A preview lists the branches, and the
   user can keep some. With Git 2.56 or later, git finds them with `git branch --delete-merged`. With

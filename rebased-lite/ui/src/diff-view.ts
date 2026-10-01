@@ -51,6 +51,7 @@ export class DiffView {
   onBlame: (path: string, rev: RevSpec) => Promise<Blame> = () => Promise.reject(new Error("no blame"));
   onBlameClick: (oid: string) => void = () => {};
   onHistory: (path: string) => void = () => {};
+  onHide: () => void = () => {};
   /** Local changes only: which changes go into the next commit. */
   private selectable: { excluded: Set<string>; onChange: (excluded: Set<string>, content: string | null) => void } | null = null;
   private hunkDeco: string[] = [];
@@ -103,6 +104,7 @@ export class DiffView {
       toggle("Side by side", "sideBySide", "Show the two versions side by side, or in one column"),
       toggle("Ignore whitespace", "ignoreWhitespace", "Ignore leading and trailing whitespace changes"),
       toggle("Collapse unchanged", "collapseUnchanged", "Hide unchanged regions"),
+      btn("✕", "Hide the diff panel", () => this.onHide()),
     );
     this.notice = h("div", { class: "diff-notice" });
     this.host = h("div", { class: "diff-host" });

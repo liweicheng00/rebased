@@ -87,7 +87,9 @@ export function applyLayout() {
   top.style.gridTemplateColumns = `${settings.showSidebar ? `${settings.sidebarWidth}px 4px` : "0 0"} minmax(300px, 1fr) 4px ${settings.rightWidth}px`;
   leftPane.hidden = !settings.showSidebar;
   sideGrip.hidden = !settings.showSidebar;
-  workspace.style.gridTemplateRows = `${1 - settings.diffRatio}fr 5px ${settings.diffRatio}fr`;
+  workspace.style.gridTemplateRows = settings.showDiff ? `${1 - settings.diffRatio}fr 5px ${settings.diffRatio}fr` : "1fr 0 0";
+  diffGrip.hidden = !settings.showDiff;
+  diff.el.hidden = !settings.showDiff;
   right.style.gridTemplateRows = `${settings.detailsRatio}fr 5px ${1 - settings.detailsRatio}fr`;
 }
 
@@ -170,6 +172,19 @@ export function updateStatus() {
   filterBar.setInfo(app.view.filtered ? `${app.view.rowCount.toLocaleString()} of ${app.view.totalCommits.toLocaleString()}` : "");
   if (!app.busy) statusRight.textContent = `loaded in ${app.view.loadMs} ms`;
 }
+
+/** Shows or hides the diff panel. The panel comes back with the size that it had. */
+export function toggleDiff(show = !settings.showDiff) {
+  if (show === settings.showDiff) return;
+  settings.showDiff = show;
+  save();
+  applyLayout();
+}
+diff.onHide = () => toggleDiff(false);
+// A double click on a changed file shows the panel again.
+document.addEventListener("dblclick", (e) => {
+  if ((e.target as HTMLElement).closest(".change, .cl-file")) toggleDiff(true);
+});
 
 export function toggleSidebar() {
   settings.showSidebar = !settings.showSidebar;

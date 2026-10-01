@@ -21,6 +21,8 @@ export interface Settings {
   sidebarWidth: number;
   rightWidth: number;
   diffRatio: number;
+  /** The diff panel below the log is shown. Its size (diffRatio) stays while it is hidden. */
+  showDiff: boolean;
   detailsRatio: number;
   authorWidth: number;
   dateWidth: number;
@@ -73,6 +75,7 @@ const DEFAULTS: Settings = {
   sidebarWidth: 280,
   rightWidth: 360,
   diffRatio: 0.42,
+  showDiff: true,
   detailsRatio: 0.55,
   authorWidth: 150,
   dateWidth: 125,

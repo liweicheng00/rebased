@@ -7,7 +7,7 @@ import { undoLast } from "./operations";
 import { askForRepo, fetchAll, refresh, switchTab } from "./repo";
 import { settings } from "./settings";
 import { openSettings } from "./settings-flow";
-import { changes, commitPanel, diff, filterBar, showLeftTab, statusRight, toggleSidebar } from "./shell";
+import { changes, commitPanel, diff, filterBar, showLeftTab, statusRight, toggleDiff, toggleSidebar } from "./shell";
 import { app } from "./state";
 import { pushBranch, updateBranch } from "./sync";
 
@@ -44,6 +44,7 @@ for (const a of [
       else toggleSidebar();
     },
   },
+  { id: "diffPanel", label: "Diff Panel", defaults: ["Mod+2"], run: () => toggleDiff() },
   { id: "localHistory", label: "Local History", defaults: [], run: () => app.view && showLocalHistory("") },
   { id: "nextTab", label: "Next Tab", defaults: ["Mod+PageDown"], run: () => nextTab(1) },
   { id: "previousTab", label: "Previous Tab", defaults: ["Mod+PageUp"], run: () => nextTab(-1) },

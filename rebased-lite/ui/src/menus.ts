@@ -11,7 +11,7 @@ import { compareBranches, fetchRemote, manageRemotes, remoteRefItems, toggleFavo
 import { askForRepo, fetchAll, jumpToOid, openRepo, refresh } from "./repo";
 import { collapse, compare, comparedCommits, compareWithWorktree, fileChangesAction, openFile, short, showSelection } from "./selection";
 import { settings } from "./settings";
-import { changes, fetchBtn, filterBar, log, openBtn, refreshBtn, sidebar } from "./shell";
+import { changes, fetchBtn, filterBar, log, openBtn, refreshBtn, sidebar, toggleDiff } from "./shell";
 import { app } from "./state";
 import { pushBranch, updateBranch } from "./sync";
 
@@ -123,7 +123,14 @@ changes.onContextMenu = (files, e) => {
   const commits = !!comparedCommits() && files.every((f) => !f.rightRev);
   const plural = files.length > 1 ? ` (${files.length} files)` : "";
   showMenu(e.clientX, e.clientY, [
-    { label: "Show Diff", disabled: files.length !== 1, action: () => void openFile(app.changeList.indexOf(c)) },
+    {
+      label: "Show Diff",
+      disabled: files.length !== 1,
+      action: () => {
+        toggleDiff(true);
+        void openFile(app.changeList.indexOf(c));
+      },
+    },
     { label: "Show History", disabled: files.length !== 1 || c.status === "D", action: () => showHistory(c.path) },
     { separator: true },
     { label: `Revert Selected Changes${plural}`, disabled: !commits, action: () => void fileChangesAction(files, "revert") },
