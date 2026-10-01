@@ -383,11 +383,12 @@ export async function credentialDialog(prompt: { text: string; secret: boolean; 
 }
 
 /** Delete Merged Branches: a preview of the branches for the tracked-branch patterns. The user can keep
- * some. Resolves with the patterns of the shown preview and the kept branches, or null on Cancel. */
+ * some. Resolves with the patterns of the shown preview, the kept branches and the branches to delete,
+ * or null on Cancel. */
 export async function deleteMergedDialog(
   patterns: string,
   load: (upstreams: string[]) => Promise<MergedBranches>,
-): Promise<{ upstreams: string[]; keep: string[] } | null> {
+): Promise<{ upstreams: string[]; keep: string[]; expected: string[] } | null> {
   const input = h("input", { class: "dialog-input merged-patterns", type: "text", value: patterns, spellcheck: false, "data-enter": "own" });
   const list = h("div", { class: "push-commits merged-list" });
   const summary = h("p", { class: "dialog-note merged-summary" });
@@ -471,5 +472,5 @@ export async function deleteMergedDialog(
   if (r !== "ok" || !shown.names.length) return null;
   const keep = shown.names.filter((n) => !boxes.get(n)?.checked);
   if (keep.length === shown.names.length) return null;
-  return { upstreams: shown.upstreams, keep };
+  return { upstreams: shown.upstreams, keep, expected: shown.names.filter((n) => !keep.includes(n)) };
 }

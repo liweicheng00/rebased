@@ -32,7 +32,9 @@ export async function runOp(op: Op, label: string, errorAction?: { label: string
     statusRight.textContent = r.message;
   } else {
     const hint = errorHint(outcome.errorKind);
-    toast(hint ? `${r.message}\n${hint}` : r.message, "error", errorAction);
+    // An operation that stopped halfway can still have Undo steps for the part that it did.
+    app.lastUndo = r.undo.length ? { actions: r.undo, message: r.message } : app.lastUndo;
+    toast(hint ? `${r.message}\n${hint}` : r.message, "error", errorAction ?? (r.undo.length ? { label: "Undo", run: () => void undoLast() } : undefined));
     statusRight.textContent = r.message;
     statusRight.className = "sb-right error";
   }

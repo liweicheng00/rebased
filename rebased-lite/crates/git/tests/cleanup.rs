@@ -66,40 +66,88 @@ fn setup(name: &str) -> PathBuf {
     mine
 }
 
+fn strings(v: &[&str]) -> Vec<String> {
+    v.iter().map(|s| s.to_string()).collect()
+}
+
+fn names(repo: &Repo, up: &[String], native: bool) -> Vec<String> {
+    repo.merged_branches_with(up, native).unwrap().branches.into_iter().map(|b| b.name).collect()
+}
+
 fn check(native: bool) {
     let mine = setup(if native { "native" } else { "rules" });
     let repo = Repo::open(&mine).unwrap();
-    let up = vec!["origin".to_string(), "stack-a".to_string()];
+    let up = strings(&["origin", "stack-a"]);
     let found = repo.merged_branches_with(&up, native).unwrap();
-    let names: Vec<&str> = found.branches.iter().map(|b| b.name.as_str()).collect();
-    assert_eq!(names, ["stack-a", "topic-done"], "native: {native}");
+    let listed: Vec<&str> = found.branches.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(listed, ["stack-a", "topic-done"], "native: {native}");
     assert_eq!(found.branches[1].upstream, "origin/main");
     assert_eq!(found.branches[1].subject, "Done");
 
     // A glob of the tracked branches. stack-b does not match, so it stays, and stack-a stays with it.
-    let glob = repo.merged_branches_with(&["origin/*".to_string()], native).unwrap();
-    assert_eq!(glob.branches.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["topic-done"]);
+    assert_eq!(names(&repo, &strings(&["origin/*"]), native), ["topic-done"]);
 
     // The user keeps stack-a.
-    let r = repo.delete_merged_with(&up, &["stack-a".to_string()], native).unwrap();
+    let r = repo.delete_merged_with(&up, &strings(&["stack-a"]), &strings(&["topic-done"]), native).unwrap();
     assert!(r.ok && r.message == "Deleted merged branch topic-done", "{}", r.message);
     assert!(git(&mine, &["branch", "--list", "topic-done"]).is_empty());
     assert!(!git(&mine, &["branch", "--list", "stack-a"]).is_empty());
     repo.apply_undo(&r.undo).unwrap();
     assert!(!git(&mine, &["branch", "--list", "topic-done"]).is_empty());
     assert_eq!(git(&mine, &["rev-parse", "--abbrev-ref", "topic-done@{upstream}"]), "origin/main");
+    // Undo writes the local config only: the global value of the branch does not come into the repository.
+    let local = Command::new("git").arg("-C").arg(&mine).args(["config", "--local", "--get-all", "branch.topic-done.description"]).output().unwrap();
+    assert!(local.stdout.is_empty());
+
+    // A list that changed since the user saw it deletes nothing.
+    let err = repo.delete_merged_with(&up, &[], &strings(&["topic-done"]), native).unwrap_err();
+    assert!(err.0.contains("changed since the list was made"), "{}", err.0);
+    assert!(!git(&mine, &["branch", "--list", "topic-done"]).is_empty());
+
+    // A delete that fails still gives Undo steps for what it did.
+    let lock = mine.join(".git/refs/heads/topic-done.lock");
+    std::fs::write(&lock, "").unwrap();
+    let r = repo.delete_merged_with(&up, &[], &strings(&["stack-a", "topic-done"]), native).unwrap();
+    assert!(!r.ok, "{}", r.message);
+    std::fs::remove_file(&lock).unwrap();
+    repo.apply_undo(&r.undo).unwrap();
+    assert!(!git(&mine, &["branch", "--list", "topic-done"]).is_empty() && !git(&mine, &["branch", "--list", "stack-a"]).is_empty());
+    assert_eq!(git(&mine, &["rev-parse", "--abbrev-ref", "stack-b@{upstream}"]), "stack-a");
 
     // Both: stack-b loses its tracked branch, and Undo gives it back.
-    let r = repo.delete_merged_with(&up, &[], native).unwrap();
+    let r = repo.delete_merged_with(&up, &[], &strings(&["stack-a", "topic-done"]), native).unwrap();
     assert_eq!(r.message, "Deleted 2 merged branches");
     assert!(git(&mine, &["branch", "--list", "stack-a", "topic-done"]).is_empty());
     assert!(no_upstream(&mine, "stack-b"));
     // Nothing is left to delete.
-    let again = repo.delete_merged_with(&["origin".to_string()], &[], native).unwrap();
+    let again = repo.delete_merged_with(&strings(&["origin"]), &[], &[], native).unwrap();
     assert!(again.ok && again.undo.is_empty() && again.message == "No merged branch to delete");
     repo.apply_undo(&r.undo).unwrap();
     assert_eq!(git(&mine, &["rev-parse", "--abbrev-ref", "stack-b@{upstream}"]), "stack-a");
     assert_eq!(git(&mine, &["rev-parse", "--abbrev-ref", "stack-a@{upstream}"]), "origin/main");
+
+    // The tracked-branch check goes one level, as in git: stack-c keeps stack-b, not stack-a.
+    assert_eq!(names(&repo, &strings(&["origin", "stack-a", "stack-b"]), native), ["stack-a", "topic-done"]);
+
+    // A branch with the name of a tag.
+    git(&mine, &["branch", "-q", "--track", "v1", "origin/main"]);
+    git(&mine, &["tag", "v1", "origin/main"]);
+    assert_eq!(names(&repo, &strings(&["origin"]), native), ["topic-done", "v1"]);
+    let r = repo.delete_merged_with(&strings(&["origin"]), &strings(&["topic-done"]), &strings(&["v1"]), native).unwrap();
+    assert!(r.ok, "{}", r.message);
+    assert!(git(&mine, &["branch", "--list", "v1"]).is_empty());
+    repo.apply_undo(&r.undo).unwrap();
+    assert_eq!(git(&mine, &["config", "branch.v1.merge"]), "refs/heads/main");
+
+    // The push check reads the push refspecs only, as in git 2.56: with `:` a push no longer updates
+    // origin/own, so own is merged.
+    git(&mine, &["config", "remote.origin.push", ":"]);
+    assert!(names(&repo, &strings(&["origin/*"]), native).contains(&"own".to_string()));
+    git(&mine, &["config", "remote.origin.push", "HEAD"]);
+    assert!(names(&repo, &strings(&["origin/*"]), native).contains(&"own".to_string()));
+    git(&mine, &["config", "--unset-all", "remote.origin.push"]);
+    git(&mine, &["config", "push.default", "nothing"]);
+    assert!(!names(&repo, &strings(&["origin/*"]), native).contains(&"own".to_string()));
 }
 
 fn no_upstream(dir: &Path, branch: &str) -> bool {
@@ -109,6 +157,10 @@ fn no_upstream(dir: &Path, branch: &str) -> bool {
 
 #[test]
 fn delete_merged_branches() {
+    // A global value of a branch, which Undo must not copy into the repository.
+    let global = std::env::temp_dir().join(format!("rebased-lite-cleanup-global-{}", std::process::id()));
+    std::fs::write(&global, "[branch \"topic-done\"]\n\tdescription = global\n").unwrap();
+    std::env::set_var("GIT_CONFIG_GLOBAL", &global);
     check(false);
     if let Ok(program) = std::env::var("REBASED_NEW_GIT") {
         assert!(rebased_git::set_git_program(&program).is_ok());

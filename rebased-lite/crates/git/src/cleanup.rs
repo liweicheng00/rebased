@@ -6,8 +6,14 @@
 //! - its tracked branch does not exist,
 //! - a worktree has it checked out,
 //! - a push of the branch updates its tracked branch (the usual `main` that tracks `origin/main`),
-//! - it is the tracked branch of a local branch that stays, or
+//! - it is the tracked branch of a local branch that does not match the rules, or
 //! - `branch.<name>.deleteMerged` is false.
+//!
+//! These rules are the rules of git 2.56. Two of them can surprise:
+//! - The check of the tracked branch goes one level only. Git keeps B when A has its own work and
+//!   tracks B, but it can delete C when B tracks C. Git then clears the tracked branch of B.
+//! - The push check reads `remote.<name>.push` and the fetch refspecs only. With a push refspec such
+//!   as `:` or `HEAD`, `main` that tracks `origin/main` can be deleted when it has no own commits.
 
 use crate::undo::UndoAction;
 use crate::ops::{safe, OpResult};
@@ -130,9 +136,22 @@ fn apply_refspecs(specs: &[String], name: &str) -> Option<String> {
 }
 
 impl Repo {
+    /// The config of all scopes, for the rules.
     fn config_all(&self) -> Config {
+        self.config_scope(&[])
+    }
+
+    /// The `branch.*` config of the repository only, for Undo: Undo writes to this file.
+    fn config_local(&self) -> Config {
+        self.config_scope(&["--local"]).into_iter().filter(|(k, _)| k.starts_with("branch.")).collect()
+    }
+
+    fn config_scope(&self, scope: &[&str]) -> Config {
         let mut map = Config::new();
-        let out = self.git(&["config", "-z", "--get-regexp", r"^(branch|remote)\."]).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default();
+        let mut args = vec!["config"];
+        args.extend_from_slice(scope);
+        args.extend(["-z", "--get-regexp", r"^(branch|remote)\."]);
+        let out = self.git(&args).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default();
         for entry in out.split('\0').filter(|e| !e.is_empty()) {
             let (k, v) = entry.split_once('\n').unwrap_or((entry, ""));
             map.entry(k.to_string()).or_default().push(v.to_string());
@@ -141,7 +160,7 @@ impl Repo {
     }
 
     fn cleanup_locals(&self) -> Result<Vec<Local>> {
-        let out = self.git(&["for-each-ref", "--format=%(refname:short)%00%(objectname)%00%(upstream)%00%(worktreepath)%00%(contents:subject)", "refs/heads"])?;
+        let out = self.git(&["for-each-ref", "--format=%(refname:lstrip=2)%00%(objectname)%00%(upstream)%00%(worktreepath)%00%(contents:subject)", "refs/heads"])?;
         Ok(String::from_utf8_lossy(&out)
             .lines()
             .filter_map(|l| {
@@ -251,8 +270,18 @@ impl Repo {
         Ok(args)
     }
 
-    fn native_dry_run(&self, upstreams: &[String]) -> Result<Vec<String>> {
-        let args = Self::delete_merged_args(upstreams, &[], true)?;
+    /// The branches that a delete removes now. `only` limits the branches that the rules look at.
+    fn plan(&self, upstreams: &[String], only: Option<&[String]>, native: bool) -> Result<Vec<String>> {
+        match only {
+            // Without names, git looks at all branches.
+            Some([]) => Ok(Vec::new()),
+            _ if native => self.native_dry_run(upstreams, only.unwrap_or(&[])),
+            _ => self.find_merged(upstreams, only),
+        }
+    }
+
+    fn native_dry_run(&self, upstreams: &[String], branches: &[String]) -> Result<Vec<String>> {
+        let args = Self::delete_merged_args(upstreams, branches, true)?;
         let out = self.git_write(&args, &[]).map_err(|(_, e)| GitError(e))?;
         let mut names: Vec<String> = out
             .lines()
@@ -273,7 +302,7 @@ impl Repo {
         if upstreams.is_empty() {
             return Ok(MergedBranches { branches: Vec::new(), native });
         }
-        let names = if native { self.native_dry_run(upstreams)? } else { self.find_merged(upstreams, None)? };
+        let names = self.plan(upstreams, None, native)?;
         let locals: HashMap<String, Local> = self.cleanup_locals()?.into_iter().map(|l| (l.name.clone(), l)).collect();
         let branches = names
             .into_iter()
@@ -285,61 +314,71 @@ impl Repo {
         Ok(MergedBranches { branches, native })
     }
 
-    /// Deletes the merged branches, except the branches in `keep`. The rules apply again, so a branch
-    /// that changed since the preview stays. A kept branch also keeps the branch that it tracks.
-    /// Undo creates the branches again and restores their config.
-    pub fn delete_merged(&self, upstreams: &[String], keep: &[String]) -> Result<OpResult> {
-        self.delete_merged_with(upstreams, keep, crate::git_at_least(NATIVE_VERSION))
+    /// Deletes the merged branches, except the branches in `keep`. A kept branch can keep the branch
+    /// that it tracks. `expected` is the list that the user saw. When the rules now give another list,
+    /// for example after a fetch, nothing is deleted. Undo creates the deleted branches again and
+    /// restores their config, also after a delete that failed part of the way.
+    pub fn delete_merged(&self, upstreams: &[String], keep: &[String], expected: &[String]) -> Result<OpResult> {
+        self.delete_merged_with(upstreams, keep, expected, crate::git_at_least(NATIVE_VERSION))
     }
 
-    pub fn delete_merged_with(&self, upstreams: &[String], keep: &[String], native: bool) -> Result<OpResult> {
+    pub fn delete_merged_with(&self, upstreams: &[String], keep: &[String], expected: &[String], native: bool) -> Result<OpResult> {
         if upstreams.is_empty() {
             return Err(GitError("Give at least one tracked branch".into()));
         }
-        let before_config = self.config_all();
+        let before_config = self.config_local();
         let before: HashMap<String, String> = self.cleanup_locals()?.into_iter().map(|l| (l.name, l.oid)).collect();
         // Only the names limit the branches, so all other branches go in when the user keeps some.
-        let branches: Vec<String> = if keep.is_empty() { Vec::new() } else { before.keys().filter(|n| !keep.contains(n)).cloned().collect() };
+        let mut branches: Vec<String> = if keep.is_empty() { Vec::new() } else { before.keys().filter(|n| !keep.contains(n)).cloned().collect() };
+        branches.sort();
         let only = (!keep.is_empty()).then_some(branches.as_slice());
-        if native && only.is_some_and(<[String]>::is_empty) {
-            // Nothing to look at. Without names, git looks at all branches.
-        } else if native {
+        let mut names = self.plan(upstreams, only, native)?;
+        names.sort();
+        let mut want = expected.to_vec();
+        want.sort();
+        if names != want {
+            return Err(GitError("The merged branches changed since the list was made. Look at the list again".into()));
+        }
+        if names.is_empty() {
+            return Ok(OpResult::ok_msg("No merged branch to delete"));
+        }
+        let run = if native {
             let args = Self::delete_merged_args(upstreams, &branches, false)?;
-            self.git_write(&args, &[]).map_err(|(_, e)| GitError(e))?;
+            self.git_write(&args, &[]).map(|_| ())
         } else {
-            let names = self.find_merged(upstreams, only)?;
-            if !names.is_empty() {
-                let mut args = vec!["branch", "-D", "--"];
-                args.extend(names.iter().map(String::as_str));
-                self.git_write(&args, &[]).map_err(|(_, e)| GitError(e))?;
-                // A staying branch whose tracked branch is gone tracks nothing, as git does.
-                let gone: HashSet<String> = names.iter().map(|n| format!("refs/heads/{n}")).collect();
-                for l in self.cleanup_locals()? {
-                    if gone.contains(&l.upstream) {
-                        let _ = self.git_write(&["config", "--unset", &format!("branch.{}.merge", l.name)], &[]);
-                        let _ = self.git_write(&["config", "--unset", &format!("branch.{}.remote", l.name)], &[]);
-                    }
+            let mut args = vec!["branch", "-D", "--"];
+            args.extend(names.iter().map(String::as_str));
+            let r = self.git_write(&args, &[]).map(|_| ());
+            // A staying branch whose tracked branch is gone tracks nothing, as git does.
+            let gone: HashSet<String> = names.iter().filter(|n| self.resolve(&format!("refs/heads/{n}")).is_none()).map(|n| format!("refs/heads/{n}")).collect();
+            for l in self.cleanup_locals()? {
+                if gone.contains(&l.upstream) {
+                    let _ = self.git_write(&["config", "--unset", &format!("branch.{}.merge", l.name)], &[]);
+                    let _ = self.git_write(&["config", "--unset", &format!("branch.{}.remote", l.name)], &[]);
                 }
             }
-        }
+            r
+        };
+        // Undo comes from the state before and after, so it also covers a delete that stopped halfway.
         let after: HashSet<String> = self.cleanup_locals()?.into_iter().map(|l| l.name).collect();
         let mut deleted: Vec<(&String, &String)> = before.iter().filter(|(n, _)| !after.contains(*n)).collect();
         deleted.sort();
-        if deleted.is_empty() {
-            return Ok(OpResult::ok_msg("No merged branch to delete"));
-        }
         let mut undo: Vec<UndoAction> =
             deleted.iter().map(|(n, oid)| UndoAction::CreateRef { name: format!("refs/heads/{n}"), oid: (*oid).clone() }).collect();
-        let after_config = self.config_all();
+        let after_config = self.config_local();
         for (k, v) in &before_config {
-            if k.starts_with("branch.") && after_config.get(k) != Some(v) {
+            if after_config.get(k) != Some(v) {
                 undo.push(UndoAction::SetConfig { key: k.clone(), values: v.clone() });
             }
         }
-        for k in after_config.keys().filter(|k| k.starts_with("branch.") && !before_config.contains_key(*k)) {
+        for k in after_config.keys().filter(|k| !before_config.contains_key(*k)) {
             undo.push(UndoAction::SetConfig { key: k.clone(), values: Vec::new() });
         }
         let n = deleted.len();
+        if let Err((_, e)) = run {
+            let message = if n == 0 { e } else { format!("{e}\n{n} of {} branches were deleted. Undo creates them again", names.len()) };
+            return Ok(OpResult { ok: false, message, conflicts: Vec::new(), undo });
+        }
         let message = if n == 1 { format!("Deleted merged branch {}", deleted[0].0) } else { format!("Deleted {n} merged branches") };
         Ok(OpResult { ok: true, message, conflicts: Vec::new(), undo })
     }

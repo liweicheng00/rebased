@@ -71,8 +71,21 @@ check("Enter in the pattern field does not delete", has("done-1") && has("done-2
 await page.fill(".merged-patterns", "origin/main");
 await page.press(".merged-patterns", "Enter");
 await within("an exact branch works", async () => (await rows()) === "done-1,done-2");
+// A branch that becomes merged while the dialog is open stops the delete.
+git("branch", "-q", "--track", "done-3", "origin/main");
 await page.click(".dialog-buttons button:has-text('Delete')");
-await within("both are deleted", async () => !has("done-1") && !has("done-2"));
+await within("a changed list stops the delete", async () => ((await page.textContent(".toasts").catch(() => "")) ?? "").includes("changed since the list was made"));
+check("nothing is deleted", has("done-1") && has("done-2") && has("done-3"));
+await shot("dm3-changed");
+
+// The list again, then the delete.
+await page.click(".group-header:has-text('Local')", { button: "right" });
+await page.click(".menu-item:has-text('Delete Merged Branches')");
+await page.fill(".merged-patterns", "origin/main");
+await page.press(".merged-patterns", "Enter");
+await within("the new list has the new branch", async () => (await rows()) === "done-1,done-2,done-3");
+await page.click(".dialog-buttons button:has-text('Delete')");
+await within("all three are deleted", async () => !has("done-1") && !has("done-2") && !has("done-3"));
 check("wip stays", has("wip"));
 console.log("errors:", JSON.stringify(errors));
 await browser.close();

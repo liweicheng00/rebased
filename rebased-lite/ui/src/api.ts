@@ -183,7 +183,7 @@ export type Op =
   | { op: "pushTag"; remote: string; tag: string }
   | { op: "deleteRemoteRef"; remote: string; name: string }
   | { op: "setUpstream"; branch: string; upstream: string | null }
-  | { op: "deleteMerged"; upstreams: string[]; keep: string[] }
+  | { op: "deleteMerged"; upstreams: string[]; keep: string[]; expected: string[] }
   | { op: "rollbackHunks"; path: string; ids: string[] }
   | { op: "revertLocalHistory"; path: string; blob: string | null }
   | { op: "addWorktree"; path: string; branch: string; newBranch: boolean; at: string }
