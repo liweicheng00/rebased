@@ -382,18 +382,36 @@ export async function credentialDialog(prompt: { text: string; secret: boolean; 
   return r === "ok" ? { answer: input.value, remember: remember.checked } : null;
 }
 
-/** Delete Merged Branches: a preview of the branches for the tracked-branch patterns. The user can keep
- * some. Resolves with the patterns of the shown preview, the kept branches and the branches to delete,
- * or null on Cancel. */
+export type DeleteMergedChoice =
+  | { mode: "into"; target: string; names: string[] }
+  | { mode: "tracked"; upstreams: string[]; keep: string[]; expected: string[] };
+
+/** Delete Merged Branches. Two ways to find the branches: merged into one branch (git branch --merged),
+ * or merged into the branch that each one tracks (git branch --delete-merged). The user can keep some.
+ * Resolves with the shown list and the choice, or null on Cancel. */
 export async function deleteMergedDialog(
-  patterns: string,
-  load: (upstreams: string[]) => Promise<MergedBranches>,
-): Promise<{ upstreams: string[]; keep: string[]; expected: string[] } | null> {
-  const input = h("input", { class: "dialog-input merged-patterns", type: "text", value: patterns, spellcheck: false, "data-enter": "own" });
+  start: { mode: "into" | "tracked"; value: string },
+  branches: string[],
+  load: { into: (target: string) => Promise<MergedBranches>; tracked: (upstreams: string[]) => Promise<MergedBranches> },
+): Promise<DeleteMergedChoice | null> {
+  let mode = start.mode;
+  const intoRadio = h("input", { type: "radio", name: "merged-mode", checked: mode === "into" });
+  const trackedRadio = h("input", { type: "radio", name: "merged-mode", checked: mode === "tracked" });
+  const target = h(
+    "select",
+    { class: "dialog-input merged-target" },
+    ...branches.map((b) => h("option", { value: b, selected: mode === "into" && b === start.value }, b)),
+  );
+  const input = h("input", {
+    class: "dialog-input merged-patterns",
+    type: "text",
+    value: mode === "tracked" ? start.value : "**",
+    "data-enter": "own",
+  });
   const list = h("div", { class: "push-commits merged-list" });
   const summary = h("p", { class: "dialog-note merged-summary" });
   const how = h("p", { class: "dialog-note" });
-  let shown: { upstreams: string[]; names: string[] } = { upstreams: [], names: [] };
+  let shown: { mode: "into" | "tracked"; key: string[]; names: string[] } = { mode, key: [], names: [] };
   const boxes = new Map<string, HTMLInputElement>();
   const count = () => {
     const n = [...boxes.values()].filter((b) => b.checked).length;
@@ -401,29 +419,34 @@ export async function deleteMergedDialog(
   };
   let seq = 0;
   const reload = async () => {
-    const upstreams = input.value.split(/\s+/).filter(Boolean);
+    target.disabled = mode !== "into";
+    input.disabled = mode !== "tracked";
+    const key = mode === "into" ? [target.value] : input.value.split(/\s+/).filter(Boolean);
     const mine = ++seq;
     let r: MergedBranches;
     try {
-      r = await load(upstreams);
+      r = mode === "into" ? await load.into(key[0] ?? "") : await load.tracked(key);
     } catch (e) {
       if (mine !== seq) return;
-      shown = { upstreams: [], names: [] };
+      shown = { mode, key: [], names: [] };
       boxes.clear();
       list.replaceChildren(h("div", { class: "muted danger-text" }, String(e).replace(/^Error: /, "")));
       count();
       return;
     }
     if (mine !== seq) return;
-    shown = { upstreams, names: r.branches.map((b) => b.name) };
-    how.textContent = r.native
-      ? "Git finds the branches with git branch --delete-merged."
-      : "Your git is older than 2.56, so Rebased Lite applies the rules of git branch --delete-merged itself.";
+    shown = { mode, key, names: r.branches.map((b) => b.name) };
+    how.textContent =
+      mode === "into"
+        ? `The same list as git branch --merged ${key[0]}. Branches with a long-lived name, such as main or uat, are not checked at first.`
+        : r.native
+          ? "Git finds the branches with git branch --delete-merged."
+          : "Your git is older than 2.56, so Rebased Lite applies the rules of git branch --delete-merged itself.";
     boxes.clear();
     list.replaceChildren(
       ...(r.branches.length
         ? r.branches.map((b) => {
-            const box = h("input", { type: "checkbox", checked: true });
+            const box = h("input", { type: "checkbox", checked: !b.suggestKeep });
             box.addEventListener("change", count);
             boxes.set(b.name, box);
             return h(
@@ -431,15 +454,32 @@ export async function deleteMergedDialog(
               { class: "push-commit merged-row", title: b.oid },
               box,
               h("b", { class: "merged-name" }, b.name),
-              h("span", { class: "muted-inline" }, "→ " + b.upstream),
+              h("span", { class: "muted-inline" }, b.suggestKeep ? "long-lived" : mode === "tracked" ? "→ " + b.upstream : ""),
               h("span", { class: "rebase-subject" }, b.subject),
               h("code", { class: "rebase-hash" }, b.oid.slice(0, 8)),
             );
           })
-        : [h("div", { class: "muted" }, upstreams.length ? "No local branch is merged into its tracked branch." : "Type at least one pattern.")]),
+        : [
+            h(
+              "div",
+              { class: "muted" },
+              mode === "into"
+                ? `No other local branch is merged into ${key[0]}.`
+                : key.length
+                  ? "No local branch is merged into the branch that it tracks."
+                  : "Type at least one pattern.",
+            ),
+          ]),
     );
     count();
   };
+  const setMode = (m: "into" | "tracked") => {
+    mode = m;
+    void reload();
+  };
+  intoRadio.addEventListener("change", () => setMode("into"));
+  trackedRadio.addEventListener("change", () => setMode("tracked"));
+  target.addEventListener("change", () => void reload());
   let timer = 0;
   input.addEventListener("input", () => {
     clearTimeout(timer);
@@ -453,16 +493,18 @@ export async function deleteMergedDialog(
   });
   await reload();
   const body = [
+    h("label", { class: "dialog-check merged-mode" }, intoRadio, h("span", {}, "Merged into"), target),
     h(
       "label",
-      { class: "dialog-field" },
-      h("span", {}, "Tracked branches"),
+      { class: "dialog-check merged-mode" },
+      trackedRadio,
+      h("span", {}, "Merged into the branch that each one tracks"),
       input,
     ),
     h(
       "p",
       { class: "dialog-note" },
-      "A local branch is deleted when its work is on the branch that it tracks. Give a branch (origin/main), a remote (origin, for its HEAD), or a glob (origin/** or ** for all). Separate patterns with spaces.",
+      "The tracked branch of a local branch is the remote branch that Update pulls from, for example origin/fix/h-01. Give a branch (origin/main), a remote (origin, for its HEAD), or a glob (origin/** or ** for all). Separate patterns with spaces.",
     ),
     list,
     summary,
@@ -470,9 +512,10 @@ export async function deleteMergedDialog(
   ];
   const r = await modal("Delete Merged Branches", body, [{ label: "Delete", value: "ok", danger: true }], true);
   if (r !== "ok" || !shown.names.length) return null;
-  const keep = shown.names.filter((n) => !boxes.get(n)?.checked);
-  if (keep.length === shown.names.length) return null;
-  return { upstreams: shown.upstreams, keep, expected: shown.names.filter((n) => !keep.includes(n)) };
+  const chosen = shown.names.filter((n) => boxes.get(n)?.checked);
+  if (!chosen.length) return null;
+  if (shown.mode === "into") return { mode: "into", target: shown.key[0], names: chosen };
+  return { mode: "tracked", upstreams: shown.key, keep: shown.names.filter((n) => !chosen.includes(n)), expected: chosen };
 }
 
 /** The Merge dialog of a review: how the branch goes into the base, the message, and the branch after. */

@@ -119,12 +119,16 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 - **Diff panel**: View > Diff Panel, the ✕ button of the diff, or Mod+2 hides and shows the diff
   panel below the log. The log then uses all the height. The panel keeps the size that it had. A
   double click on a changed file shows the panel again. "Show Diff" in the context menu also shows it.
-- **Delete Merged Branches**: the context menu of the Local group, a branch, or a remote deletes the
-  local branches whose work is on the branch that they track. A preview lists the branches, and the
-  user can keep some. With Git 2.56 or later, git finds them with `git branch --delete-merged`. With
-  an older git, Rebased Lite applies the same rules. When the list changed after the preview, for
-  example after a fetch, nothing is deleted. Undo creates the branches again with their tracked
-  branches, also after a delete that stopped halfway.
+- **Delete Merged Branches**: the context menu of the Local group, a branch, or a remote. Two ways
+  find the branches:
+  - Merged into a branch, as `git branch --merged uat`. This is the first way. Branches with a
+    long-lived name (main, uat, release/1.0 and so on) are not checked at first.
+  - Merged into the branch that each one tracks, as `git branch --delete-merged` of Git 2.56. With an
+    older git, Rebased Lite applies the same rules.
+  A preview lists the branches, and the user can keep some. When the list changed after the preview,
+  for example after a fetch, nothing is deleted. Undo creates the branches again with their config,
+  also after a delete that stopped halfway.
+- **No autocorrect**: the fields take no spell check, autocorrect or automatic capitals.
 - **Passwords and passphrases**: when git or ssh needs a user name, a password, an SSH key
   passphrase or a host key confirmation, a dialog asks for it (the app is the `GIT_ASKPASS` and
   `SSH_ASKPASS` program). "Remember" keeps the answer until the app closes; a git credential

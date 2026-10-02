@@ -4,4 +4,9 @@ export type MergedBranch = { name: string, oid: string,
 /**
  * The tracked branch, for example `origin/main`.
  */
-upstream: string, subject: string, };
+upstream: string, subject: string, 
+/**
+ * The name looks like a long-lived branch (main, uat, release/1.0 and so on), or
+ * `branch.<name>.deleteMerged` is false. The dialog does not choose it at first.
+ */
+suggestKeep: boolean, };

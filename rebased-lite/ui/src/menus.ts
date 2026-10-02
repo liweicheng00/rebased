@@ -112,8 +112,8 @@ sidebar.onContextMenu = (b, e) => {
       ? []
       : [
           {
-            label: b.kind === "remote" ? `Delete Branches Merged into ${b.name}…` : "Delete Merged Branches…",
-            action: () => void deleteMergedBranches(b.kind === "remote" ? b.name : "**"),
+            label: `Delete Branches Merged into ${b.name}…`,
+            action: () => void deleteMergedBranches({ mode: "into", value: b.name }),
           },
         ]),
     { label: sidebar.isFavorite(b) ? "Remove from Favorites" : "Add to Favorites", action: () => toggleFavorite(b) },

@@ -69,6 +69,7 @@ impl Service {
             "reviews" => serde_json::to_string(&self.reviews()?),
             "review" => serde_json::to_string(&self.review(parse(body)?)?),
             "review_edit" => serde_json::to_string(&self.review_edit(parse(body)?)?),
+            "merged_into" => serde_json::to_string(&self.merged_into(parse(body)?)?),
             "merged_branches" => serde_json::to_string(&self.merged_branches(parse(body)?)?),
             "compare_refs" => serde_json::to_string(&self.compare_refs(parse(body)?)?),
             "file_pair" => serde_json::to_string(&self.file_pair(parse(body)?)?),

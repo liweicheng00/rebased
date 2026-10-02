@@ -122,7 +122,7 @@ sidebar.onRemoteMenu = (remote, e) =>
       },
     },
     { label: "Remove Remote…", action: () => void removeRemote(remote) },
-    { label: `Delete Branches Merged into ${remote}…`, action: () => void deleteMergedBranches(`${remote}/**`) },
+    { label: `Delete Merged Branches That Track ${remote}…`, action: () => void deleteMergedBranches({ mode: "tracked", value: `${remote}/**` }) },
     { separator: true },
     { label: "Manage Remotes…", action: () => void manageRemotes() },
   ]);

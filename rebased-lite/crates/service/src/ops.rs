@@ -74,6 +74,8 @@ pub enum Op {
     /// Deletes the local branches whose work is on their tracked branch, except the kept ones.
     /// `expected` is the list that the user saw; a changed list deletes nothing.
     DeleteMerged { upstreams: Vec<String>, #[serde(default)] keep: Vec<String>, expected: Vec<String> },
+    /// Deletes the chosen branches that are merged into `target`, as `git branch --merged`.
+    DeleteMergedInto { target: String, names: Vec<String> },
     /// Puts a reviewed branch into its base: Merge, Squash, or Rebase and fast-forward.
     FinishReview { branch: String, mode: FinishMode, #[serde(default)] message: String, #[serde(default)] delete_branch: bool },
     /// Sets the tracked branch; no upstream stops the tracking.
@@ -284,6 +286,7 @@ impl Service {
             Op::DeleteRemoteRef { remote, name } => repo.delete_remote_ref(&remote, &name),
             Op::SetUpstream { branch, upstream } => repo.set_upstream(&branch, upstream.as_deref()),
             Op::FinishReview { branch, mode, message, delete_branch } => repo.finish_review(&branch, mode, &message, delete_branch),
+            Op::DeleteMergedInto { target, names } => repo.delete_merged_into(&target, &names),
             Op::DeleteMerged { upstreams, keep, expected } => repo.delete_merged(&upstreams, &keep, &expected),
             Op::RollbackHunks { path, ids } => repo.rollback_hunks(&path, &ids),
             Op::RevertLocalHistory { path, blob } => history

@@ -31,6 +31,9 @@ pub struct MergedBranch {
     /// The tracked branch, for example `origin/main`.
     pub upstream: String,
     pub subject: String,
+    /// The name looks like a long-lived branch (main, uat, release/1.0 and so on), or
+    /// `branch.<name>.deleteMerged` is false. The dialog does not choose it at first.
+    pub suggest_keep: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -308,7 +311,7 @@ impl Repo {
             .into_iter()
             .filter_map(|n| {
                 let l = locals.get(&n)?;
-                Some(MergedBranch { name: n, oid: l.oid.clone(), upstream: short_ref(&l.upstream).to_string(), subject: l.subject.clone() })
+                Some(MergedBranch { name: n, oid: l.oid.clone(), upstream: short_ref(&l.upstream).to_string(), subject: l.subject.clone(), suggest_keep: false })
             })
             .collect();
         Ok(MergedBranches { branches, native })
@@ -359,14 +362,25 @@ impl Repo {
             }
             r
         };
-        // Undo comes from the state before and after, so it also covers a delete that stopped halfway.
+        self.deleted_result(&before, &before_config, names.len(), run)
+    }
+
+    /// The result of a delete, with Undo from the state before and after. So Undo also covers a delete
+    /// that stopped halfway.
+    fn deleted_result(
+        &self,
+        before: &HashMap<String, String>,
+        before_config: &Config,
+        wanted: usize,
+        run: std::result::Result<(), (String, String)>,
+    ) -> Result<OpResult> {
         let after: HashSet<String> = self.cleanup_locals()?.into_iter().map(|l| l.name).collect();
         let mut deleted: Vec<(&String, &String)> = before.iter().filter(|(n, _)| !after.contains(*n)).collect();
         deleted.sort();
         let mut undo: Vec<UndoAction> =
             deleted.iter().map(|(n, oid)| UndoAction::CreateRef { name: format!("refs/heads/{n}"), oid: (*oid).clone() }).collect();
         let after_config = self.config_local();
-        for (k, v) in &before_config {
+        for (k, v) in before_config {
             if after_config.get(k) != Some(v) {
                 undo.push(UndoAction::SetConfig { key: k.clone(), values: v.clone() });
             }
@@ -376,12 +390,65 @@ impl Repo {
         }
         let n = deleted.len();
         if let Err((_, e)) = run {
-            let message = if n == 0 { e } else { format!("{e}\n{n} of {} branches were deleted. Undo creates them again", names.len()) };
+            let message = if n == 0 { e } else { format!("{e}\n{n} of {wanted} branches were deleted. Undo creates them again") };
             return Ok(OpResult { ok: false, message, conflicts: Vec::new(), undo });
         }
         let message = if n == 1 { format!("Deleted merged branch {}", deleted[0].0) } else { format!("Deleted {n} merged branches") };
         Ok(OpResult { ok: true, message, conflicts: Vec::new(), undo })
     }
+
+    /// The local branches whose commits are all on `target`, as `git branch --merged <target>`. A branch
+    /// that a worktree has checked out, and the target itself, are not in the list.
+    pub fn merged_into(&self, target: &str) -> Result<MergedBranches> {
+        let oid = self.resolve(safe(target)?).ok_or_else(|| GitError(format!("'{target}' is not a branch or a commit")))?;
+        let merged = self.git(&["for-each-ref", "--merged", &oid, "--format=%(refname:lstrip=2)", "refs/heads"]).map(text)?;
+        let merged: HashSet<&str> = merged.lines().collect();
+        let config = self.config_all();
+        let mut branches: Vec<MergedBranch> = self
+            .cleanup_locals()?
+            .into_iter()
+            .filter(|l| merged.contains(l.name.as_str()) && !l.checked_out && l.name != target)
+            .map(|l| {
+                let opt_out = config.get(&format!("branch.{}.deletemerged", l.name)).and_then(|v| v.last()).map(|v| v.to_ascii_lowercase());
+                MergedBranch {
+                    suggest_keep: long_lived(&l.name) || matches!(opt_out.as_deref(), Some("false" | "no" | "off" | "0")),
+                    upstream: target.to_string(),
+                    name: l.name,
+                    oid: l.oid,
+                    subject: l.subject,
+                }
+            })
+            .collect();
+        branches.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(MergedBranches { branches, native: false })
+    }
+
+    /// Deletes the branches in `names` when they are still merged into `target`. When one of them is
+    /// not, nothing is deleted. Undo creates the branches again and restores their config.
+    pub fn delete_merged_into(&self, target: &str, names: &[String]) -> Result<OpResult> {
+        if names.is_empty() {
+            return Ok(OpResult::ok_msg("No merged branch to delete"));
+        }
+        let now: HashSet<String> = self.merged_into(target)?.branches.into_iter().map(|b| b.name).collect();
+        if let Some(n) = names.iter().find(|n| !now.contains(*n)) {
+            return Err(GitError(format!("{n} is not merged into {target} any more. Look at the list again")));
+        }
+        let before_config = self.config_local();
+        let before: HashMap<String, String> = self.cleanup_locals()?.into_iter().map(|l| (l.name, l.oid)).collect();
+        let mut args = vec!["branch", "-D", "--"];
+        for n in names {
+            args.push(safe(n)?);
+        }
+        let run = self.git_write(&args, &[]).map(|_| ());
+        self.deleted_result(&before, &before_config, names.len(), run)
+    }
+}
+
+/// A name that teams often use for a branch that lives long: main, develop, uat, release/1.0 and so on.
+fn long_lived(name: &str) -> bool {
+    const NAMES: [&str; 14] = ["main", "master", "trunk", "develop", "dev", "development", "uat", "sit", "qa", "test", "staging", "stage", "prod", "production"];
+    let first = name.split('/').next().unwrap_or(name);
+    NAMES.contains(&name) || (["release", "hotfix", "support"].contains(&first) && name.contains('/')) || name.starts_with("release-")
 }
 
 #[cfg(test)]
@@ -397,6 +464,12 @@ mod tests {
         assert!(glob_match("ma?n", "main"));
         assert!(glob_match("release-[0-9]", "release-3"));
         assert!(!glob_match("release-[!0-9]", "release-3"));
+    }
+
+    #[test]
+    fn long_lived_names() {
+        assert!(long_lived("uat") && long_lived("main") && long_lived("release/1.0") && long_lived("release-2"));
+        assert!(!long_lived("fix/h-01") && !long_lived("feature/release") && !long_lived("hotfix"));
     }
 
     #[test]

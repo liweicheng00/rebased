@@ -1,6 +1,6 @@
 //! The read commands.
 
-use crate::{err, history, watch, BlameArgs, BlobArgs, CompareArgs, CompareRefsArgs, MergedBranchesArgs, ReviewArgs, ReviewEdit, CompareResult, FilePair, FilePairArgs, IndexArgs, OidArgs, PathArgs, PushInfoArgs, Result, RevSpec, Service};
+use crate::{err, history, watch, BlameArgs, BlobArgs, CompareArgs, CompareRefsArgs, MergedBranchesArgs, MergedIntoArgs, ReviewArgs, ReviewEdit, CompareResult, FilePair, FilePairArgs, IndexArgs, OidArgs, PathArgs, PushInfoArgs, Result, RevSpec, Service};
 use rebased_git::changelist::{ChangeListOp, LocalChanges};
 use rebased_git::history::{Blame, HistoryEntry};
 use rebased_git::merge::MergeSides;
@@ -158,6 +158,11 @@ impl Service {
             }
             .map_err(err)
         })
+    }
+
+    /// The local branches whose commits are all on a branch, as `git branch --merged`.
+    pub fn merged_into(&self, args: MergedIntoArgs) -> Result<rebased_git::cleanup::MergedBranches> {
+        self.with_repo(|r| r.merged_into(&args.target).map_err(err))
     }
 
     /// The local branches that Delete Merged Branches deletes.

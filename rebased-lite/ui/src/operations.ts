@@ -191,10 +191,19 @@ export async function deleteBranch(b: BranchInfo) {
   }
 }
 
-/** Delete Merged Branches. The patterns name the tracked branches; `**` means all of them. */
-export async function deleteMergedBranches(patterns = "**") {
-  const choice = await deleteMergedDialog(patterns, (upstreams) => api.mergedBranches(upstreams));
-  if (choice) await runOp({ op: "deleteMerged", ...choice }, "Deleting merged branches");
+/** Delete Merged Branches. "into" starts with the branches merged into a branch (the current branch by
+ * default); "tracked" starts with tracked-branch patterns, where `**` means all of them. */
+export async function deleteMergedBranches(start: { mode: "into" | "tracked"; value?: string } = { mode: "into" }) {
+  const locals = app.refs.filter((b) => b.kind === "local").map((b) => b.name);
+  const remotes = app.refs.filter((b) => b.kind === "remote").map((b) => b.name);
+  const value = start.value ?? (start.mode === "into" ? currentBranch() ?? locals[0] ?? "" : "**");
+  const choice = await deleteMergedDialog({ mode: start.mode, value }, [...locals, ...remotes], {
+    into: (target) => api.mergedInto(target),
+    tracked: (upstreams) => api.mergedBranches(upstreams),
+  });
+  if (!choice) return;
+  if (choice.mode === "into") await runOp({ op: "deleteMergedInto", target: choice.target, names: choice.names }, "Deleting merged branches");
+  else await runOp({ op: "deleteMerged", upstreams: choice.upstreams, keep: choice.keep, expected: choice.expected }, "Deleting merged branches");
 }
 
 export async function renameBranch(b: BranchInfo) {

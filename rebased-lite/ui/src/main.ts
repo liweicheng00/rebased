@@ -25,6 +25,19 @@ import { applyBackendSettings, scheduleAutoFetch } from "./settings-flow";
 import { applyLayout, applyTheme, showLeftTab } from "./shell";
 import { showWorkspace } from "./welcome";
 
+// No spell check, autocorrect or automatic capitals in the fields: branch names, paths and hashes are
+// not prose. The attributes go on each field when it gets the focus, so fields made later get them too.
+document.documentElement.spellcheck = false;
+document.addEventListener(
+  "focusin",
+  (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement)) return;
+    t.spellcheck = false;
+    for (const a of ["autocorrect", "autocapitalize", "autocomplete"]) t.setAttribute(a, "off");
+  },
+  true,
+);
 applyLayout();
 showLeftTab(settings.leftTab);
 applyTheme();

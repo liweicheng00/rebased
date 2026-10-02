@@ -194,6 +194,7 @@ export type Op =
   | { op: "deleteRemoteRef"; remote: string; name: string }
   | { op: "setUpstream"; branch: string; upstream: string | null }
   | { op: "deleteMerged"; upstreams: string[]; keep: string[]; expected: string[] }
+  | { op: "deleteMergedInto"; target: string; names: string[] }
   | { op: "finishReview"; branch: string; mode: FinishMode; message: string; deleteBranch: boolean }
   | { op: "rollbackHunks"; path: string; ids: string[] }
   | { op: "revertLocalHistory"; path: string; blob: string | null }
@@ -269,6 +270,7 @@ export const api = {
   reviews: () => call<ReviewSummary[]>("reviews"),
   review: (branch: string) => call<ReviewDetail>("review", { branch }),
   reviewEdit: (edit: ReviewEdit) => call<null>("review_edit", edit),
+  mergedInto: (target: string) => call<MergedBranches>("merged_into", { target }),
   mergedBranches: (upstreams: string[]) => call<MergedBranches>("merged_branches", { upstreams }),
   compareRefs: (left: string, right: string) =>
     call<{ left: string; right: string; base: string | null; onlyLeft: OutgoingCommit[]; onlyRight: OutgoingCommit[] }>("compare_refs", { left, right }),

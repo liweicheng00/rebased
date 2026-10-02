@@ -510,8 +510,12 @@ export class DiffView {
     this.singleHost.hidden = true;
     const old = this.editor.getModel();
     this.editor.setModel({ original: monaco.editor.createModel(a, lang), modified: monaco.editor.createModel(b, lang) });
-    old?.original.dispose();
-    old?.modified.dispose();
+    // A diff of the old models can still run in the worker. It fails with "no diff result available"
+    // when its models are gone, so they go a little later.
+    if (old) setTimeout(() => {
+      old.original.dispose();
+      old.modified.dispose();
+    }, 3000);
     if (this.keepView) {
       this.editor.getModifiedEditor().restoreViewState(this.keepView);
       this.keepView = null;

@@ -1,4 +1,5 @@
-// UI scenario for Delete Merged Branches: the preview, a kept branch, Undo, and a bad pattern.
+// UI scenario for Delete Merged Branches: merged into a branch (git branch --merged), and merged into the
+// tracked branch (git branch --delete-merged) with the preview, a kept branch, Undo, and a bad pattern.
 // Start the dev server first (see README). Build a fresh repository with make-demo-repo.sh, then:
 // node e2e/delete-merged.mjs <repo> <screenshot-dir>. Set NATIVE=1 when the dev server uses git 2.56 or
 // later. Set CHROMIUM to a Chromium binary when Playwright has no downloaded browser.
@@ -13,6 +14,8 @@ git("fetch", "-q");
 git("branch", "-q", "--track", "done-1", "origin/main");
 git("branch", "-q", "--track", "done-2", "origin/main");
 git("branch", "-q", "--track", "wip", "origin/main");
+// A long-lived branch without a tracked branch.
+git("branch", "-q", "--no-track", "uat", "origin/main");
 git("worktree", "add", "-q", `${repo}-wt`, "wip");
 execFileSync("git", ["-C", `${repo}-wt`, "commit", "-q", "--allow-empty", "-m", "Work in progress"]);
 git("worktree", "remove", `${repo}-wt`);
@@ -42,6 +45,18 @@ await page.waitForSelector(".sidebar .branch", { timeout: 30000 });
 await page.click(".group-header:has-text('Local')", { button: "right" });
 await page.click(".menu-item:has-text('Delete Merged Branches')");
 await page.waitForSelector(".dialog:has-text('Delete Merged Branches')");
+// First mode: merged into the current branch, as git branch --merged main.
+check("the first mode is merged into the current branch", (await page.inputValue(".merged-target")) === "main");
+await within("fix/readme is merged into main", async () => (await rows()) === "fix/readme");
+await page.selectOption(".merged-target", "origin/main");
+// main is checked out, so it is not in the list. uat has a long-lived name, so it is not checked.
+await within("into origin/main: the done branches, fix/readme and uat", async () => (await rows()) === "done-1,done-2,fix/readme,uat");
+check("uat is not checked", !(await page.isChecked(".merged-row:has-text('uat') input")));
+await shot("dm0-merged-into");
+// The field takes no automatic capitals or corrections.
+await page.click(".merged-mode:has-text('each one tracks') input[type=radio]");
+await page.click(".merged-patterns");
+check("no autocorrect in the field", (await page.getAttribute(".merged-patterns", "autocorrect")) === "off" && (await page.getAttribute(".merged-patterns", "autocapitalize")) === "off");
 await within("the preview shows the merged branches only", async () => (await rows()) === "done-1,done-2");
 const note = (await page.textContent(".dialog")) ?? "";
 check("the note says how git finds them", note.includes(process.env.NATIVE ? "Git finds the branches" : "older than 2.56"));
@@ -64,6 +79,7 @@ check("done-1 tracks origin/main again", git("rev-parse", "--abbrev-ref", "done-
 // A bad pattern shows the error of git, and Enter in the field only loads the preview again.
 await page.click(".group-header:has-text('Local')", { button: "right" });
 await page.click(".menu-item:has-text('Delete Merged Branches')");
+await page.click(".merged-mode:has-text('each one tracks') input[type=radio]");
 await page.fill(".merged-patterns", "no-such-branch");
 await page.press(".merged-patterns", "Enter");
 await within("a bad pattern shows the error", async () => ((await page.textContent(".merged-list")) ?? "").includes("not a valid branch or pattern"));
@@ -81,12 +97,22 @@ await shot("dm3-changed");
 // The list again, then the delete.
 await page.click(".group-header:has-text('Local')", { button: "right" });
 await page.click(".menu-item:has-text('Delete Merged Branches')");
+await page.click(".merged-mode:has-text('each one tracks') input[type=radio]");
 await page.fill(".merged-patterns", "origin/main");
 await page.press(".merged-patterns", "Enter");
 await within("the new list has the new branch", async () => (await rows()) === "done-1,done-2,done-3");
 await page.click(".dialog-buttons button:has-text('Delete')");
 await within("all three are deleted", async () => !has("done-1") && !has("done-2") && !has("done-3"));
 check("wip stays", has("wip"));
+
+// Merged into a branch: delete fix/readme from the list of main, then Undo.
+await page.click(".group-header:has-text('Local')", { button: "right" });
+await page.click(".menu-item:has-text('Delete Merged Branches')");
+await within("the list of main", async () => (await rows()) === "fix/readme");
+await page.click(".dialog-buttons button:has-text('Delete')");
+await within("fix/readme is deleted", async () => !has("fix/readme"));
+await page.click(".toast button:has-text('Undo')");
+await within("Undo creates fix/readme again", async () => has("fix/readme"));
 console.log("errors:", JSON.stringify(errors));
 await browser.close();
 if (errors.length) process.exit(1);

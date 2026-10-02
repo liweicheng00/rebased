@@ -168,3 +168,44 @@ fn delete_merged_branches() {
         check(true);
     }
 }
+
+/// Merged into a branch, as `git branch --merged uat`: the branches do not need to track uat.
+#[test]
+fn delete_branches_merged_into_a_branch() {
+    let dir = std::env::temp_dir().join(format!("rebased-lite-cleanup-into-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    git(&dir, &["init", "-q", "-b", "uat"]);
+    git(&dir, &["config", "user.name", "Me"]);
+    git(&dir, &["config", "user.email", "me@example.com"]);
+    commit(&dir, "a.txt", "Initial");
+    git(&dir, &["branch", "sit"]);
+    git(&dir, &["checkout", "-q", "-b", "fix/a"]);
+    commit(&dir, "fa.txt", "Fix a");
+    git(&dir, &["checkout", "-q", "-b", "fix/b", "uat"]);
+    commit(&dir, "fb.txt", "Fix b");
+    git(&dir, &["checkout", "-q", "uat"]);
+    git(&dir, &["merge", "-q", "--no-ff", "-m", "Merge fix/a", "fix/a"]);
+    git(&dir, &["config", "branch.fix/a.description", "first fix"]);
+    let repo = Repo::open(&dir).unwrap();
+
+    let found = repo.merged_into("uat").unwrap();
+    let listed: Vec<(&str, bool)> = found.branches.iter().map(|b| (b.name.as_str(), b.suggest_keep)).collect();
+    // fix/b is not merged; uat is the target; sit is merged, but its name says that it lives long.
+    assert_eq!(listed, [("fix/a", false), ("sit", true)]);
+
+    let r = repo.delete_merged_into("uat", &strings(&["fix/a"])).unwrap();
+    assert!(r.ok && r.message == "Deleted merged branch fix/a", "{}", r.message);
+    assert!(git(&dir, &["branch", "--list", "fix/a"]).is_empty());
+    repo.apply_undo(&r.undo).unwrap();
+    assert!(!git(&dir, &["branch", "--list", "fix/a"]).is_empty());
+    assert_eq!(git(&dir, &["config", "branch.fix/a.description"]), "first fix");
+
+    // A branch with new work since the list was made stops the delete.
+    git(&dir, &["checkout", "-q", "fix/a"]);
+    commit(&dir, "fa2.txt", "More on a");
+    git(&dir, &["checkout", "-q", "uat"]);
+    let err = repo.delete_merged_into("uat", &strings(&["fix/a"])).unwrap_err();
+    assert!(err.0.contains("not merged into uat"), "{}", err.0);
+    assert!(repo.merged_into("no-such-branch").is_err());
+}
