@@ -15,19 +15,36 @@ page.on("pageerror", (e) => errors.push("pageerror: " + e));
 page.on("console", (m) => m.type() === "error" && errors.push("console: " + m.text()));
 const shot = async (name) => { await page.waitForTimeout(700); await page.screenshot({ path: `${outDir}/${name}.png` }); console.log("shot", name); };
 const check = (what, ok) => { console.log(ok ? "ok  " : "FAIL", what); if (!ok) errors.push("check: " + what); };
+const within = async (what, fn, ms = 8000) => {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (await fn()) return check(what, true);
+    await page.waitForTimeout(200);
+  }
+  check(what, false);
+};
 const tree = async () => (await page.textContent(".commit-tree")).replace(/\s+/g, " ");
 const toastText = async () => (await page.textContent(".toasts").catch(() => "")).replace(/\s+/g, " ");
 const clearToasts = () => page.evaluate(() => document.querySelectorAll(".toast").forEach((t) => t.remove()));
 
 await page.goto(`http://127.0.0.1:5174/?repo=${encodeURIComponent(repo)}`);
 await page.waitForSelector(".log-row", { timeout: 30000 });
-await page.click(".lp-tab:has-text('Commit')");
+await page.click(".lp-tab:has-text('Changes')");
 await page.waitForSelector(".cl-file");
 console.log("tree:", await tree());
-check("tab shows the count", (await page.textContent(".lp-tab:has-text('Commit') .lp-count")) === "5");
+check("tab shows the count", (await page.textContent(".lp-tab:has-text('Changes') .lp-count")) === "5");
 await page.click(".cl-file:has-text('arith.rs')");
 await page.waitForTimeout(1200);
 await shot("cl1-commit-panel");
+
+// A double click on a local change opens the compare window with that file.
+const name = "arith.rs";
+await page.dblclick(".commit-panel .cl-file:has-text('arith.rs')");
+await page.waitForSelector(".history-window[aria-label='Compare Branches']");
+await within(`the compare window shows ${name}`, async () => ((await page.textContent(".compare-file.selected").catch(() => "")) ?? "").includes(String(name).split("/").pop()));
+check("the right side is the working tree", (await page.inputValue(".compare-select >> nth=1")) === "\u0000worktree");
+await shot("cl8-compare");
+await page.keyboard.press("Escape");
 
 // New changelist with README.md, from the file menu.
 await page.click(".cl-file:has-text('README.md')", { button: "right" });
@@ -96,6 +113,7 @@ await page.click(".menu-item:has-text('Dark')");
 await page.click(".cl-header:has-text('Changes')");
 await page.waitForTimeout(1200);
 await shot("cl7-dark");
+
 console.log("errors:", JSON.stringify(errors));
 await browser.close();
 if (errors.length) process.exit(1);

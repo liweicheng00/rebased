@@ -29,7 +29,7 @@ const check = (what, ok) => { console.log(ok ? "ok  " : "FAIL", what); if (!ok) 
 
 await page.goto(`http://127.0.0.1:5174/?repo=${encodeURIComponent(repo)}`);
 await page.waitForSelector(".log-row", { timeout: 30000 });
-await page.click(".lp-tab:has-text('Commit')");
+await page.click(".lp-tab:has-text('Changes')");
 await page.waitForSelector(".cl-file:has-text('calc.txt')").catch(async (e) => {
   console.log("commit panel:", await page.textContent(".commit-tree"));
   console.log("status bar:", await page.textContent(".statusbar"));

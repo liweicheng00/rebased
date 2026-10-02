@@ -26,7 +26,7 @@ for (const a of [
   { id: "push", label: "Push", defaults: ["Mod+Shift+K"], run: () => app.view && void pushBranch() },
   {
     id: "commit",
-    label: "Commit (show the Commit tab)",
+    label: "Commit (show the Changes tab)",
     defaults: ["Mod+K"],
     run: () => {
       showLeftTab("commit");

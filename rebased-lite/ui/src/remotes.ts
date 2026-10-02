@@ -12,8 +12,9 @@ import { jumpToOid, reloadView } from "./repo";
 import { collapse } from "./selection";
 import { save, settings } from "./settings";
 import { openSettings } from "./settings-flow";
-import { log, sidebar, toggleDiff, toggleSidebar, viewBtn } from "./shell";
+import { log, remoteBtn, sidebar, toggleDiff, toggleSidebar, viewBtn } from "./shell";
 import { app } from "./state";
+import { branchUrl, commitUrl, webUrl } from "./web-url";
 
 export async function fetchRemote(name: string) {
   await runOp({ op: "fetchRemote", name }, `Fetching ${name}`);
@@ -61,8 +62,8 @@ export async function manageRemotes() {
   });
 }
 
-/** Opens Compare Branches. The right side can be the working tree. */
-export function compareBranches(leftRef: string, rightRef: string) {
+/** Opens Compare Branches. The right side can be the working tree. `path` is the file to show first. */
+export function compareBranches(leftRef: string, rightRef: string, path?: string) {
   const names = [
     ...app.refs.filter((b) => b.kind === "local").map((b) => b.name),
     ...app.refs.filter((b) => b.kind === "remote").map((b) => b.name),
@@ -78,7 +79,7 @@ export function compareBranches(leftRef: string, rightRef: string) {
     changes: async (l, r) => (await api.compare(l, r)).changes,
     pair: api.filePair,
     showInLog: (oid) => void jumpToOid(oid, true),
-  });
+  }, path);
 }
 
 /** The favorite refs of the active repository, from its git dir. */
@@ -122,6 +123,7 @@ sidebar.onRemoteMenu = (remote, e) =>
       },
     },
     { label: "Remove Remote…", action: () => void removeRemote(remote) },
+    { label: `Open ${remote} in the Browser`, action: () => void openOnRemote({ remote }) },
     { label: `Delete Merged Branches That Track ${remote}…`, action: () => void deleteMergedBranches({ mode: "tracked", value: `${remote}/**` }) },
     { separator: true },
     { label: "Manage Remotes…", action: () => void manageRemotes() },
@@ -143,6 +145,7 @@ export function remoteRefItems(b: BranchInfo): MenuItem[] {
     return [
       { label: b.upstream ? `Change Tracked Branch (${b.upstream})…` : "Set Tracked Branch…", action: () => void setTracked(b) },
       { label: "Stop Tracking", disabled: !b.upstream, action: () => void runOp({ op: "setUpstream", branch: b.name, upstream: null }, `Stop tracking for ${b.name}`) },
+      { label: b.upstream ? `Open ${b.upstream} in the Browser` : "Open in the Browser (no tracked branch)", disabled: !b.upstream, action: () => void openOnRemote({ branch: b }) },
     ];
   }
   if (b.kind === "remote") {
@@ -151,6 +154,7 @@ export function remoteRefItems(b: BranchInfo): MenuItem[] {
     const branch = b.name.slice(slash + 1);
     return [
       { label: `Fetch ${remote}`, action: () => void fetchRemote(remote) },
+      { label: "Open in the Browser", action: () => void openOnRemote({ branch: b }) },
       {
         label: "Delete from Remote…",
         action: async () => {
@@ -199,4 +203,45 @@ viewBtn.addEventListener("click", () => {
     { separator: true },
     { label: "Settings…", shortcut: keymap.shortcut("settings"), action: () => void openSettings() },
   ]);
+});
+
+/** The web page of a remote, or a notice when its URL has no web page. */
+async function webOf(remote: string): Promise<string | null> {
+  const r = (await api.remotes().catch(() => [] as RemoteInfo[])).find((x) => x.name === remote);
+  const web = r ? webUrl(r.fetchUrl) : null;
+  if (!web) toast(r ? `The URL of ${remote} has no web page: ${r.fetchUrl}` : `There is no remote ${remote}.`, "error");
+  return web;
+}
+
+const splitRemoteRef = (ref: string) => {
+  const i = ref.indexOf("/");
+  return { remote: ref.slice(0, i), branch: ref.slice(i + 1) };
+};
+
+/** The remote for a commit or the repository: the remote of the current branch, else origin, else the first. */
+async function defaultRemote(): Promise<string | null> {
+  const cur = app.refs.find((b) => b.current);
+  if (cur?.upstream) return splitRemoteRef(cur.upstream).remote;
+  const names = (await api.remotes().catch(() => [] as RemoteInfo[])).map((r) => r.name);
+  return names.includes("origin") ? "origin" : (names[0] ?? null);
+}
+
+/** Opens a page of the remote: a branch (local with a tracked branch, or remote), a commit, or the home. */
+export async function openOnRemote(target: { branch?: BranchInfo; oid?: string; remote?: string }) {
+  const b = target.branch;
+  const ref = b?.kind === "remote" ? b.name : b?.upstream;
+  const remote = ref ? splitRemoteRef(ref).remote : (target.remote ?? (await defaultRemote()));
+  if (!remote) return toast("The repository has no remote.", "error");
+  const web = await webOf(remote);
+  if (!web) return;
+  await api.openUrl(ref ? branchUrl(web, splitRemoteRef(ref).branch) : target.oid ? commitUrl(web, target.oid) : web);
+}
+
+// The toolbar button: the current branch on its remote; without a tracked branch, the home of a remote.
+remoteBtn.addEventListener("click", async () => {
+  const cur = app.refs.find((b) => b.current);
+  if (cur?.upstream) return openOnRemote({ branch: cur });
+  const remotes = await api.remotes().catch(() => [] as RemoteInfo[]);
+  if (remotes.length <= 1) return openOnRemote({ remote: remotes[0]?.name });
+  menuBelow(remoteBtn, remotes.map((r) => ({ label: `${r.name} · ${webUrl(r.fetchUrl) ?? r.fetchUrl}`, disabled: !webUrl(r.fetchUrl), action: () => void openOnRemote({ remote: r.name }) })));
 });

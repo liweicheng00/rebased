@@ -69,6 +69,8 @@ export class CommitPanel {
   private draftBeforeAmend = "";
 
   onOpen: (f: LocalFile) => void = () => {};
+  /** A double click on a file. */
+  onActivate: (f: LocalFile) => void = () => {};
   onFileMenu: (files: LocalFile[], e: MouseEvent) => void = () => {};
   onListMenu: (list: ChangeListView, e: MouseEvent) => void = () => {};
   onUnversionedMenu: (e: MouseEvent) => void = () => {};
@@ -572,6 +574,12 @@ export class CommitPanel {
         const [a, b] = [order.indexOf(this.anchor), order.indexOf(f.key)].sort((x, y) => x - y);
         this.selection = new Set(order.slice(a, b + 1));
         this.render();
+        return;
+      }
+      // The first click renders the rows again, so the second click has a new row and no dblclick
+      // event comes. The click count of the mousedown still counts it.
+      if (e.detail === 2) {
+        this.onActivate(f);
         return;
       }
       this.selection = new Set([f.key]);

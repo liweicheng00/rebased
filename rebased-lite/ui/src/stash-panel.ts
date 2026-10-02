@@ -56,7 +56,7 @@ export class StashPanel {
 
   private render() {
     if (!this.stashes.length) {
-      this.list.replaceChildren(h("div", { class: "muted commit-empty" }, "There are no stashes. Stash local changes from here or from the Commit tab."));
+      this.list.replaceChildren(h("div", { class: "muted commit-empty" }, "There are no stashes. Stash local changes from here or from the Changes tab."));
       return;
     }
     this.list.replaceChildren(

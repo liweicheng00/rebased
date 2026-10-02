@@ -6,7 +6,7 @@ import { emptyFilter } from "./filter-bar";
 import { loadFavorites } from "./remotes";
 import { clearCompare } from "./selection";
 import { addRecent, save, settings } from "./settings";
-import { authors, banner, commitPanel, fetchBtn, filterBar, localHistoryBtn, log, mod, pushBtn, refreshBtn, reviewPanel, sidebar, stashPanel, statusRight, tabBar, tabCommit, tabReviews, tabStash, task, updateBtn, updateStatus } from "./shell";
+import { authors, banner, commitPanel, fetchBtn, filterBar, localHistoryBtn, log, mod, pushBtn, refreshBtn, remoteBtn, reviewPanel, sidebar, stashPanel, statusRight, tabBar, tabCommit, tabReviews, tabStash, task, updateBtn, updateStatus } from "./shell";
 import { app } from "./state";
 import { showWorkspace } from "./welcome";
 
@@ -93,7 +93,7 @@ async function closeTab(root: string) {
     app.view = null;
     commitPanel.clear();
     document.title = "Rebased Lite";
-    refreshBtn.disabled = fetchBtn.disabled = updateBtn.disabled = pushBtn.disabled = localHistoryBtn.disabled = true;
+    refreshBtn.disabled = fetchBtn.disabled = updateBtn.disabled = pushBtn.disabled = remoteBtn.disabled = localHistoryBtn.disabled = true;
     renderTabs();
     showWorkspace(false);
   }
@@ -134,7 +134,7 @@ export async function applyView(r: ViewResult, keepSelection: boolean) {
   const keepOids = keepSelection ? app.selected.map((s) => s.oid) : [];
   app.view = r;
   document.title = `${r.root.split(/[\\/]/).pop()} – Rebased Lite`;
-  refreshBtn.disabled = fetchBtn.disabled = updateBtn.disabled = pushBtn.disabled = localHistoryBtn.disabled = false;
+  refreshBtn.disabled = fetchBtn.disabled = updateBtn.disabled = pushBtn.disabled = remoteBtn.disabled = localHistoryBtn.disabled = false;
   updateStatus();
   log.setCollapsed(r.collapsed);
   log.reset(r.rowCount, r.recommendedWidth);
@@ -189,7 +189,7 @@ export async function loadLocalChanges() {
     commitPanel.clear(`The local changes could not be loaded: ${String(e).replace(/^Error: /, "")}`);
   }
   const n = commitPanel.changeCount;
-  tabCommit.replaceChildren("Commit", n ? h("span", { class: "lp-count" }, String(n)) : "");
+  tabCommit.replaceChildren("Changes", n ? h("span", { class: "lp-count" }, String(n)) : "");
   try {
     stashPanel.set(await api.stashes());
   } catch {

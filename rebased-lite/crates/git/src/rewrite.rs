@@ -274,7 +274,7 @@ impl Repo {
                 Ok(OpResult {
                     ok: true,
                     message: format!(
-                        "The rebase stopped at {} for editing. Change the files, amend the commit in the Commit tab, then continue.",
+                        "The rebase stopped at {} for editing. Change the files, amend the commit in the Changes tab, then continue.",
                         &at[..at.len().min(8)]
                     ),
                     conflicts: Vec::new(),

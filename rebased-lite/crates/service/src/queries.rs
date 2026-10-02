@@ -1,6 +1,6 @@
 //! The read commands.
 
-use crate::{err, history, watch, BlameArgs, BlobArgs, CompareArgs, CompareRefsArgs, MergedBranchesArgs, MergedIntoArgs, ReviewArgs, ReviewEdit, CompareResult, FilePair, FilePairArgs, IndexArgs, OidArgs, PathArgs, PushInfoArgs, Result, RevSpec, Service};
+use crate::{err, history, watch, BlameArgs, BlobArgs, CompareArgs, CompareRefsArgs, MergedBranchesArgs, MergedIntoArgs, UrlArgs, ReviewArgs, ReviewEdit, CompareResult, FilePair, FilePairArgs, IndexArgs, OidArgs, PathArgs, PushInfoArgs, Result, RevSpec, Service};
 use rebased_git::changelist::{ChangeListOp, LocalChanges};
 use rebased_git::history::{Blame, HistoryEntry};
 use rebased_git::merge::MergeSides;
@@ -158,6 +158,27 @@ impl Service {
             }
             .map_err(err)
         })
+    }
+
+    /// Opens a web page in the default browser. Only http and https URLs open, so a remote URL can
+    /// never start a program.
+    pub fn open_url(&self, args: UrlArgs) -> Result<()> {
+        let url = args.url.trim();
+        let ok = (url.starts_with("https://") || url.starts_with("http://")) && !url.chars().any(|c| c.is_whitespace() || c.is_control());
+        if !ok {
+            return Err(format!("not a web address: {url}"));
+        }
+        let mut cmd = if cfg!(target_os = "macos") {
+            std::process::Command::new("open")
+        } else if cfg!(windows) {
+            // FileProtocolHandler does not go through a shell, so & and | in the URL stay text.
+            let mut c = std::process::Command::new("rundll32");
+            c.arg("url.dll,FileProtocolHandler");
+            c
+        } else {
+            std::process::Command::new("xdg-open")
+        };
+        cmd.arg(url).spawn().map(|_| ()).map_err(|e| format!("cannot open the browser: {e}"))
     }
 
     /// The local branches whose commits are all on a branch, as `git branch --merged`.

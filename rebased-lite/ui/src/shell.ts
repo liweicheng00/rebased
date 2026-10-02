@@ -37,13 +37,14 @@ export const refreshBtn = h("button", { class: "tb-button", title: `Reload commi
 export const fetchBtn = h("button", { class: "tb-button", title: "Fetch all remotes, or one remote", disabled: true }, "⇣ Fetch ▾");
 export const updateBtn = h("button", { class: "tb-button", title: `Update the current branch: fetch, then merge or rebase (${mod}T)`, disabled: true }, "↧ Update");
 export const pushBtn = h("button", { class: "tb-button", title: `Push the current branch (${mod}⇧K)`, disabled: true }, "↥ Push");
+export const remoteBtn = h("button", { class: "tb-button", title: "Open the current branch on the web page of its remote", disabled: true }, "🌐 Remote");
 export const localHistoryBtn = h("button", { class: "tb-button", title: "Local History: the recent versions of changed files", disabled: true }, "🕘 Local History");
 const repoLabel = h("span", { class: "tb-repo" });
 export const branchBtn = h("button", { class: "tb-button tb-branch-button", title: "Switch branch (recent branches first)", hidden: true }, "⑂ ▾");
 export const viewBtn = h("button", { class: "tb-button", title: "View options" }, "View ▾");
 const themeBtn = h("button", { class: "tb-button", title: "Theme" }, "◐");
 export const settingsBtn = h("button", { class: "tb-button", title: "Settings" }, "⚙");
-const toolbar = h("header", { class: "toolbar" }, openBtn, refreshBtn, fetchBtn, updateBtn, pushBtn, localHistoryBtn, repoLabel, branchBtn, h("span", { class: "spacer" }), viewBtn, themeBtn, settingsBtn);
+const toolbar = h("header", { class: "toolbar" }, openBtn, refreshBtn, fetchBtn, updateBtn, pushBtn, remoteBtn, localHistoryBtn, repoLabel, branchBtn, h("span", { class: "spacer" }), viewBtn, themeBtn, settingsBtn);
 
 export const tabBar = h("nav", { class: "tabbar", hidden: true });
 
@@ -59,7 +60,7 @@ const detailsGrip = h("div", { class: "hgrip-row" });
 const center = h("section", { class: "center" }, banner.el, filterBar.el, log.el);
 const right = h("section", { class: "right" }, changes.el, detailsGrip, details.el);
 const tabBranches = h("button", { class: "lp-tab", title: `Branches (${mod}1)` }, "Branches");
-export const tabCommit = h("button", { class: "lp-tab", title: `Commit (${mod}K)` }, "Commit");
+export const tabCommit = h("button", { class: "lp-tab", title: `Local changes and commit (${mod}K)` }, "Changes");
 export const tabStash = h("button", { class: "lp-tab", title: "Stashes" }, "Stash");
 export const tabReviews = h("button", { class: "lp-tab", title: `Reviews (${mod}3)` }, "Reviews");
 const leftPane = h("aside", { class: "leftpane" }, h("div", { class: "lp-tabs" }, tabBranches, tabCommit, tabStash, tabReviews), sidebar.el, commitPanel.el, stashPanel.el, reviewPanel.el);
@@ -187,9 +188,9 @@ export function toggleDiff(show = !settings.showDiff) {
   applyLayout();
 }
 diff.onHide = () => toggleDiff(false);
-// A double click on a changed file shows the panel again.
+// A double click on a changed file of a commit shows the panel again.
 document.addEventListener("dblclick", (e) => {
-  if ((e.target as HTMLElement).closest(".change, .cl-file")) toggleDiff(true);
+  if ((e.target as HTMLElement).closest(".changes-panel .change")) toggleDiff(true);
 });
 
 export function toggleSidebar() {

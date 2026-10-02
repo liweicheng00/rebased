@@ -35,7 +35,7 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   squash, drop, and interactive rebase. Squash, drop, edit and interactive rebase run in memory:
   a conflict stops them before a file or a ref changes. An interactive rebase with an Edit step
   runs `git rebase -i` instead: it stops at that commit, you change the files, amend in the
-  Commit tab, and continue. A banner shows a merge, rebase, cherry-pick or revert in progress, with its
+  Changes tab, and continue. A banner shows a merge, rebase, cherry-pick or revert in progress, with its
   conflicting files and the Mark Resolved, Abort and Continue actions.
 - **Undo**: the notification after an operation has an Undo button, and `Ctrl/Cmd+Z` (outside a
   text field) undoes the last operation. Undo works for checkout, new branch, new tag, rename,
@@ -45,17 +45,18 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 - **Local History**: the app keeps versions of the files that change in the working tree, as in
   IntelliJ. It also keeps the content before Rollback, delete of unversioned files, Get from
   Revision, Apply Changes, a hard reset, a stash and a resolve. The 🕘 Local History button shows
-  the recent versions of all files; "Show Local History" in the Commit tab shows one file. Revert
+  the recent versions of all files; "Show Local History" in the Changes tab shows one file. Revert
   writes a version back, and first keeps the current content. The store is in the git directory,
   in `rebased-lite/local-history`. It keeps 5 days and at most 200 MB, and skips files larger
   than 2 MB and changes of more than 200 files at one time (for example a checkout).
-- **Changelists and commit**: the Commit tab (`Ctrl/Cmd+K`) groups the local changes into named
+- **Changelists and commit**: the Changes tab (`Ctrl/Cmd+K`) groups the local changes into named
   changelists, as in IntelliJ. New changes go to the active changelist. Move files with the context
   menu or with drag and drop. The checked files go into the commit; the other local changes and the
   staged content of other files stay as they are. Each changelist keeps its draft commit message.
   The panel also has Amend, Rollback, Add to Git, delete of unversioned files, and Undo of the last
   commit (the changes become local changes again). The changelists of a worktree are stored in its
-  git directory, in `rebased-lite/changelists.json`.
+  git directory, in `rebased-lite/changelists.json`. A double click on a file opens the compare
+  window of the current branch and the working tree, with that file first.
 - **Commit extras**: Sign-off adds "Signed-off-by" with your name, as `git commit -s`. The 🕘
   button (or `Ctrl/Cmd+M` in the message field) lists the last 30 commit messages. "Edit Author…" in
   the context menu of one or more commits of the current branch changes their author; the author
@@ -99,7 +100,7 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 - **Push and Update**: the push dialog lists the outgoing commits and lets you choose the remote,
   the remote branch, force push with lease, tags, and the tracked branch. A new branch shows
   "New". A rejected push offers Update. Update fetches the tracked branch and merges or rebases,
-  with the local changes stashed and restored. The Commit tab has "Commit and Push". The branch
+  with the local changes stashed and restored. The Changes tab has "Commit and Push". The branch
   menu pushes any local branch.
 - **Remotes**: the Fetch menu fetches all remotes or one remote, and opens Manage Remotes: add,
   edit (name, URL, push URL), fetch and remove a remote. The group of a remote in the Branches tab
@@ -116,6 +117,10 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   and fast-forward, and can delete the branch. When the base is not checked out, git merges without
   the working tree. Undo puts back the two branches. The reviews and notes are in
   `.git/rebased-lite/reviews.json` and never go to a remote.
+- **Open on the remote**: the 🌐 Remote button opens the current branch on the web page of its remote.
+  The context menus open a branch, a commit or a remote in the browser. GitHub, GitLab, Bitbucket,
+  Azure DevOps and Gitea links work; an ssh or https remote URL becomes the web address. Only http
+  and https addresses open.
 - **Diff panel**: View > Diff Panel, the ✕ button of the diff, or Mod+2 hides and shows the diff
   panel below the log. The log then uses all the height. The panel keeps the size that it had. A
   double click on a changed file shows the panel again. "Show Diff" in the context menu also shows it.

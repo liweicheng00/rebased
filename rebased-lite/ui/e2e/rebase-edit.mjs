@@ -39,9 +39,9 @@ check("the toolbar names the branch", (await page.textContent(".tb-branch-button
 await shot("re2-stopped");
 await clearToasts();
 
-// Change the commit: edit cli.rs and amend in the Commit tab.
+// Change the commit: edit cli.rs and amend in the Changes tab.
 appendFileSync(`${repo}/cli.rs`, "// edited during the rebase\n");
-await page.click(".lp-tab:has-text('Commit')");
+await page.click(".lp-tab:has-text('Changes')");
 await page.click("button[title='Refresh the local changes']");
 await page.waitForSelector(".cl-file:has-text('cli.rs')");
 await page.check(".cl-file:has-text('cli.rs') .cl-check");

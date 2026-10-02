@@ -54,7 +54,7 @@ export class OpBanner {
           !name
             ? `${state.conflicts.length} file(s) have conflicts. Fix them, then mark them resolved.`
             : state.editing && !state.conflicts.length
-              ? `Stopped at ${state.editing.slice(0, 8)} for editing. Change the files, amend the commit in the Commit tab, then continue.`
+              ? `Stopped at ${state.editing.slice(0, 8)} for editing. Change the files, amend the commit in the Changes tab, then continue.`
               : state.conflicts.length
               ? `${state.conflicts.length} file(s) have conflicts. Fix them in your editor, mark them resolved, then continue.`
               : "No conflicts are left. Continue to finish.",

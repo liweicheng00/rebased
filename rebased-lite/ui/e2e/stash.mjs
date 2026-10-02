@@ -17,7 +17,7 @@ const clearToasts = () => page.evaluate(() => document.querySelectorAll(".toast"
 execFileSync("sh", ["-c", `cd "${repo}" && echo "More docs" >> README.md`]);
 await page.goto(`http://127.0.0.1:5174/?repo=${encodeURIComponent(repo)}`);
 await page.waitForSelector(".log-row", { timeout: 30000 });
-await page.click(".lp-tab:has-text('Commit')");
+await page.click(".lp-tab:has-text('Changes')");
 await page.waitForSelector(".cl-file");
 
 // 1. Stash one file from the commit panel.

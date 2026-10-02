@@ -121,6 +121,11 @@ pub enum ReviewEdit {
 }
 
 #[derive(Deserialize)]
+pub struct UrlArgs {
+    pub url: String,
+}
+
+#[derive(Deserialize)]
 pub struct MergedIntoArgs {
     pub target: String,
 }

@@ -47,7 +47,7 @@ await fileMenu("Initial commit", "README.md", "Get from Revision");
 await page.click(".dialog-buttons button:has-text('Get')");
 await page.waitForTimeout(1500);
 check("README.md has its first version", readFileSync(`${repo}/README.md`, "utf8") === git("show", `${git("rev-list", "--max-parents=0", "HEAD")}:README.md`) + "\n");
-await page.click(".lp-tab:has-text('Commit')");
+await page.click(".lp-tab:has-text('Changes')");
 await page.waitForTimeout(800);
 const tree = (await page.textContent(".commit-tree")).replace(/\s+/g, " ");
 console.log("local changes:", tree);

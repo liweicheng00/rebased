@@ -20,7 +20,8 @@ export interface CompareCallbacks {
   head: string;
 }
 
-export async function openCompare(leftRef: string, rightRef: string, cb: CompareCallbacks) {
+/** Opens the window. `path` is the file to show first; without it, the first file. */
+export async function openCompare(leftRef: string, rightRef: string, cb: CompareCallbacks, path?: string) {
   const d = sharedDiff();
   let left = leftRef;
   let right = rightRef;
@@ -161,7 +162,9 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
         }),
       );
       selected = -1;
-      if (files.length) void select(0);
+      const first = path ? files.findIndex((f) => f.path === path) : -1;
+      path = undefined;
+      if (files.length) void select(Math.max(0, first));
       else d.message(fromBase ? `${rightName} has no file changes since the common ancestor.` : "The two sides have the same files.");
     } catch (e) {
       if (req === request) {

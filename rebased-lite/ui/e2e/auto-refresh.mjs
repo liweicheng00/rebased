@@ -25,11 +25,11 @@ const within = async (what, fn, ms = 5000) => {
 
 await page.goto(`http://127.0.0.1:5174/?repo=${encodeURIComponent(repo)}`);
 await page.waitForSelector(".log-row", { timeout: 30000 });
-await page.click(".lp-tab:has-text('Commit')");
+await page.click(".lp-tab:has-text('Changes')");
 await page.waitForSelector(".cl-file:has-text('main.rs')");
 await page.waitForTimeout(1500);
 
-// A file edited in another program appears in the Commit tab.
+// A file edited in another program appears in the Changes tab.
 appendFileSync(`${repo}/README.md`, "Edited outside\n");
 await within("an edited file appears", async () => (await page.textContent(".commit-tree")).includes("README.md"));
 

@@ -1,15 +1,17 @@
-// The Commit tab: local changes, changelists, commit, rollback and partial changelists.
+// The Changes tab: local changes, changelists, commit, rollback and partial changelists.
 
 import { api, type ChangeListView } from "./api";
 import { type LocalFile } from "./commit-panel";
 import { menuBelow, type MenuItem, showMenu } from "./context-menu";
 import { confirmDialog, formDialog } from "./dialogs";
 import { toast } from "./notify";
-import { runOp } from "./operations";
+import { currentBranch, runOp } from "./operations";
 import { jumpToOid, loadLocalChanges } from "./repo";
 import { save, settings } from "./settings";
 import { commitPanel, diff } from "./shell";
 import { app } from "./state";
+import { WORKTREE } from "./compare-view";
+import { compareBranches } from "./remotes";
 import { pushBranch } from "./sync";
 
 let localRequest = 0;
@@ -211,3 +213,7 @@ commitPanel.onMove = (paths, to) => void changeListOp({ op: "move", paths, to })
 commitPanel.onSaveMessage = (id, message) => void api.changeListOp({ op: "saveMessage", id, message }).catch(() => {});
 commitPanel.onAmendToggle = () => api.headMessage().catch(() => "");
 commitPanel.onCommit = (files, message, amend, list, push, signOff) => void commitFiles(files, message, amend, list, push, signOff);
+
+// A double click on a local change opens the compare window: the current branch and the working tree,
+// with this file first. The window lists all local changes, so the user can go through them there.
+commitPanel.onActivate = (f) => compareBranches(currentBranch() ?? "HEAD", WORKTREE, f.change.path);

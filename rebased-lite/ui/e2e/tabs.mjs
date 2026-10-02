@@ -53,7 +53,7 @@ await page.keyboard.press("Enter");
 await within("the second repository shows", async () => (await firstSubject()).includes("Second in second"));
 check("two tabs", (await page.$$(".tab")).length === 2);
 check("the new tab is active", (await page.textContent(".tab.on")).includes("-second"));
-await page.click(".lp-tab:has-text('Commit')");
+await page.click(".lp-tab:has-text('Changes')");
 await within("the local change of the second repository", async () => (await page.$(".cl-file:has-text('s.txt')")) !== null);
 await shot("tab1-second-repo");
 

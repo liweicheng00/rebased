@@ -45,7 +45,7 @@ await shot("sf1-favorites");
 await page.click(".fav-filter");
 
 // Commit with Sign-off.
-await page.click(".lp-tab:has-text('Commit')");
+await page.click(".lp-tab:has-text('Changes')");
 await page.waitForSelector(".cl-file:has-text('main.rs')");
 await page.check(".commit-amend:has-text('Sign-off') input");
 await page.click(".cl-header:has-text('Changes') .cl-check");

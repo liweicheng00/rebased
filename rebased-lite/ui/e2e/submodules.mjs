@@ -50,8 +50,8 @@ check("the Submodules section lists vendor/lib", (await page.textContent(".branc
 run(sub, "checkout", "-q", c1);
 await page.keyboard.press("F5");
 await within("the sidebar shows another commit", async () => (await page.textContent(".branch.submodule")).includes("other commit"));
-await page.click(".lp-tab:has-text('Commit')");
-// The Commit tab groups the files by folder: the submodule shows as "lib" under "vendor".
+await page.click(".lp-tab:has-text('Changes')");
+// The Changes tab groups the files by folder: the submodule shows as "lib" under "vendor".
 await within("the submodule is a local change", async () => (await page.$(".cl-file:has-text('lib')")) !== null);
 await page.click(".cl-file:has-text('lib')");
 await within("the diff shows the two commits", async () => {

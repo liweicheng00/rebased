@@ -7,7 +7,7 @@ import { copyText } from "./dom";
 import { showHistory } from "./history-flow";
 import { keymap } from "./keyboard";
 import { addWorktree, checkoutBranch, checkoutCommit, currentBranch, deleteBranch, deleteMergedBranches, interactiveRebase, mergeIntoCurrent, newBranch, newTag, rebaseCurrentOnto, renameBranch, resetTo, rewriteSelected, runOp } from "./operations";
-import { compareBranches, fetchRemote, manageRemotes, remoteRefItems, toggleFavorite } from "./remotes";
+import { compareBranches, fetchRemote, manageRemotes, openOnRemote, remoteRefItems, toggleFavorite } from "./remotes";
 import { startReview } from "./review-flow";
 import { askForRepo, fetchAll, jumpToOid, openRepo, refresh } from "./repo";
 import { collapse, compare, comparedCommits, compareWithWorktree, fileChangesAction, openFile, short, showSelection } from "./selection";
@@ -24,6 +24,7 @@ async function rowMenu(r: Row, e: MouseEvent) {
   const items: MenuItem[] = [
     { label: multi ? "Copy Revision Numbers" : "Copy Revision Number", shortcut: keymap.shortcut("copyHash"), action: () => void copyText(multi ? rows.map((s) => s.oid).join(" ") : r.oid) },
     { label: "Copy Subject", action: () => void copyText(r.subject) },
+    { label: "Open Commit in the Browser", disabled: multi, action: () => void openOnRemote({ oid: r.oid }) },
     { separator: true },
     { label: "Compare with Parent", action: () => log.select([r.row]) },
     { label: "Compare with Working Tree", action: () => compareWithWorktree(r) },

@@ -39,7 +39,7 @@ await page.waitForTimeout(1200);
 check("the log selects the commit", (await page.textContent(".log-row.selected")).includes("Add math module"));
 
 // Annotate a local change: an uncommitted line, then click an annotation to go to its commit.
-await page.click(".lp-tab:has-text('Commit')");
+await page.click(".lp-tab:has-text('Changes')");
 await page.waitForSelector(".cl-file:has-text('main.rs')");
 await page.click(".cl-file:has-text('main.rs')");
 await page.waitForTimeout(1000);

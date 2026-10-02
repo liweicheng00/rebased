@@ -270,6 +270,8 @@ export const api = {
   reviews: () => call<ReviewSummary[]>("reviews"),
   review: (branch: string) => call<ReviewDetail>("review", { branch }),
   reviewEdit: (edit: ReviewEdit) => call<null>("review_edit", edit),
+  /** Opens a web page: the default browser in the app, a new tab in a browser. */
+  openUrl: (url: string) => (inTauri ? call<null>("open_url", { url }) : Promise.resolve(void window.open(url, "_blank", "noopener")).then(() => null)),
   mergedInto: (target: string) => call<MergedBranches>("merged_into", { target }),
   mergedBranches: (upstreams: string[]) => call<MergedBranches>("merged_branches", { upstreams }),
   compareRefs: (left: string, right: string) =>
