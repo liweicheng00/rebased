@@ -1,9 +1,10 @@
 // UI scenario for the diff panel: hide and show it with the shortcut, the close button, the View menu and
-// a double click, and keep its size.
+// a double click, and keep its size. It also checks that the HEAD row of the sidebar goes to HEAD.
 // Start the dev server first (see README). Build a fresh repository with make-demo-repo.sh, then:
 // node e2e/diff-panel.mjs <repo> <screenshot-dir>.
 // Set CHROMIUM to a Chromium binary when Playwright has no downloaded browser.
 import { chromium } from "playwright";
+import { execFileSync } from "node:child_process";
 const [,, repo, outDir] = process.argv;
 
 const browser = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
@@ -71,6 +72,12 @@ await page.click(".log-row >> nth=2");
 await page.keyboard.press("Control+2");
 await within("the size stays after a reload", async () => Math.abs((await diffHeight()) - tall) < 3);
 await shot("dp2-shown");
+
+// A click on the HEAD row of the sidebar selects the commit of HEAD.
+const headSubject = execFileSync("git", ["-C", repo, "log", "-1", "--format=%s"], { encoding: "utf8" }).trim();
+await page.click(".log-row >> nth=5");
+await page.click(".sidebar-head");
+await within("the HEAD row goes to the commit of HEAD", async () => ((await page.textContent(".log-row.selected").catch(() => "")) ?? "").includes(headSubject));
 console.log("errors:", JSON.stringify(errors));
 await browser.close();
 if (errors.length) process.exit(1);

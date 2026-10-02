@@ -103,7 +103,13 @@ export class Sidebar {
     const frag = document.createDocumentFragment();
     if (current.length) {
       const c = current[0];
-      frag.append(h("div", { class: "sidebar-head", title: c.subject }, h("span", { class: "head-icon" }, "HEAD"), " ", c.name));
+      const head = h("div", { class: "sidebar-head", title: `${c.subject}\nClick: go to the commit of HEAD` }, h("span", { class: "head-icon" }, "HEAD"), " ", c.name);
+      head.addEventListener("click", () => this.onNavigate(c));
+      head.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        this.onContextMenu(c, e);
+      });
+      frag.append(head);
     }
     for (const [title, unsorted] of groups) {
       // Favorites first, as in IntelliJ; the order stays otherwise.

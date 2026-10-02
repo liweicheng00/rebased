@@ -98,7 +98,8 @@ input { font: inherit; }
 .sidebar { display: flex; flex-direction: column; background: var(--panel-2); }
 .sidebar-search { margin: 6px 8px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--fg); }
 .sidebar-list { flex: 1; overflow: auto; padding-bottom: 8px; }
-.sidebar-head { padding: 4px 10px 6px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-head { padding: 4px 10px 6px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.sidebar-head:hover { background: var(--hover); }
 .head-icon { font-size: 10px; color: var(--head); border: 1px solid var(--head); border-radius: 3px; padding: 0 3px; font-weight: 600; }
 .group-header { display: flex; gap: 4px; align-items: center; padding: 3px 6px; font-weight: 600; font-size: 12px; color: var(--muted); cursor: default; user-select: none; }
 .group-header:hover { color: var(--fg); }
