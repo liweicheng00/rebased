@@ -5,7 +5,7 @@ use crate::ops::{safe, OpResult};
 use crate::{GitError, Repo, Result};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[derive(ts_rs::TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]

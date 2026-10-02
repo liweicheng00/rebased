@@ -18,6 +18,11 @@ import type { Hunk } from "./bindings/Hunk";
 import type { LocalChanges } from "./bindings/LocalChanges";
 import type { MergeSides } from "./bindings/MergeSides";
 import type { MergedBranches } from "./bindings/MergedBranches";
+import type { FinishMode } from "./bindings/FinishMode";
+import type { ReviewComment } from "./bindings/ReviewComment";
+import type { ReviewDetail } from "./bindings/ReviewDetail";
+import type { ReviewFile } from "./bindings/ReviewFile";
+import type { ReviewSummary } from "./bindings/ReviewSummary";
 import type { OpOutcome } from "./bindings/OpOutcome";
 import type { OpResult } from "./bindings/OpResult";
 import type { OutgoingCommit } from "./bindings/OutgoingCommit";
@@ -54,6 +59,11 @@ export type {
   LocalChanges,
   MergeSides,
   MergedBranches,
+  FinishMode,
+  ReviewComment,
+  ReviewDetail,
+  ReviewFile,
+  ReviewSummary,
   OpOutcome,
   OpResult,
   OutgoingCommit,
@@ -184,6 +194,7 @@ export type Op =
   | { op: "deleteRemoteRef"; remote: string; name: string }
   | { op: "setUpstream"; branch: string; upstream: string | null }
   | { op: "deleteMerged"; upstreams: string[]; keep: string[]; expected: string[] }
+  | { op: "finishReview"; branch: string; mode: FinishMode; message: string; deleteBranch: boolean }
   | { op: "rollbackHunks"; path: string; ids: string[] }
   | { op: "revertLocalHistory"; path: string; blob: string | null }
   | { op: "addWorktree"; path: string; branch: string; newBranch: boolean; at: string }
@@ -255,6 +266,9 @@ export const api = {
   mergeSides: (path: string) => call<MergeSides>("merge_sides", { path }),
   stashDetail: (index: number) => call<StashDetail>("stash_detail", { index }),
   pushInfo: (branch?: string) => call<PushInfo>("push_info", { branch: branch ?? null }),
+  reviews: () => call<ReviewSummary[]>("reviews"),
+  review: (branch: string) => call<ReviewDetail>("review", { branch }),
+  reviewEdit: (edit: ReviewEdit) => call<null>("review_edit", edit),
   mergedBranches: (upstreams: string[]) => call<MergedBranches>("merged_branches", { upstreams }),
   compareRefs: (left: string, right: string) =>
     call<{ left: string; right: string; base: string | null; onlyLeft: OutgoingCommit[]; onlyRight: OutgoingCommit[] }>("compare_refs", { left, right }),
@@ -300,3 +314,11 @@ export async function pickFolder(title = "Open Git Repository"): Promise<string 
   }
   return null;
 }
+
+/** A change to the review data. */
+export type ReviewEdit =
+  | { action: "start"; branch: string; base: string }
+  | { action: "remove"; branch: string }
+  | { action: "viewed"; branch: string; paths: string[]; viewed: boolean }
+  | { action: "comment"; branch: string; path: string; line: number; text: string }
+  | { action: "deleteComment"; branch: string; id: string };

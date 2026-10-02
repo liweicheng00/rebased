@@ -104,6 +104,23 @@ pub struct CompareArgs {
 }
 
 #[derive(Deserialize)]
+pub struct ReviewArgs {
+    pub branch: String,
+}
+
+/// A change to a review that is not a git operation: the review data only.
+#[derive(Deserialize)]
+#[serde(tag = "action", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum ReviewEdit {
+    /// Starts a review, or changes its base.
+    Start { branch: String, base: String },
+    Remove { branch: String },
+    Viewed { branch: String, paths: Vec<String>, viewed: bool },
+    Comment { branch: String, path: String, line: u32, text: String },
+    DeleteComment { branch: String, id: String },
+}
+
+#[derive(Deserialize)]
 pub struct MergedBranchesArgs {
     pub upstreams: Vec<String>,
 }

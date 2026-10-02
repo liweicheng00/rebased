@@ -11,7 +11,7 @@ export interface Settings {
   showDate: boolean;
   showHash: boolean;
   showSidebar: boolean;
-  leftTab: "branches" | "commit" | "stash";
+  leftTab: "branches" | "commit" | "stash" | "reviews";
   updateMode: "merge" | "rebase";
   autoRefresh: boolean;
   changesAsTree: boolean;

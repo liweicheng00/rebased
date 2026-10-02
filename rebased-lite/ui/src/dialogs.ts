@@ -1,6 +1,6 @@
 // Modal dialogs: forms, confirmations, the reset dialog, the message editor and the interactive rebase editor.
 
-import type { MergedBranches, PlanAction, PlanEntry, PushInfo, RewriteRange } from "./api";
+import type { FinishMode, MergedBranches, PlanAction, PlanEntry, PushInfo, ReviewDetail, RewriteRange } from "./api";
 import { formatDate, h } from "./dom";
 
 interface DialogButton {
@@ -473,4 +473,49 @@ export async function deleteMergedDialog(
   const keep = shown.names.filter((n) => !boxes.get(n)?.checked);
   if (keep.length === shown.names.length) return null;
   return { upstreams: shown.upstreams, keep, expected: shown.names.filter((n) => !keep.includes(n)) };
+}
+
+/** The Merge dialog of a review: how the branch goes into the base, the message, and the branch after. */
+export async function finishReviewDialog(d: ReviewDetail): Promise<{ mode: FinishMode; message: string; deleteBranch: boolean } | null> {
+  const s = d.summary;
+  const oldestFirst = [...d.commitList].reverse();
+  const messages: Record<FinishMode, string> = {
+    merge: `Merge branch '${s.branch}' into ${s.base}`,
+    squash: oldestFirst.length === 1 ? oldestFirst[0].subject : `${s.branch}\n\n${oldestFirst.map((c) => `* ${c.subject}`).join("\n")}`,
+    rebase: "",
+  };
+  const labels: [FinishMode, string, string][] = [
+    ["merge", "Merge commit", `A merge commit on ${s.base} with the ${s.commits} commit(s) of ${s.branch}.`],
+    ["squash", "Squash", `One new commit on ${s.base} with all the changes.`],
+    ["rebase", "Rebase and fast-forward", `The commits of ${s.branch} go on top of ${s.base}, and ${s.base} moves to them. The history stays linear.`],
+  ];
+  let mode: FinishMode = "merge";
+  let edited = false;
+  const message = h("textarea", { class: "dialog-input review-merge-message", rows: 5, spellcheck: false }, messages.merge);
+  message.addEventListener("input", () => (edited = true));
+  const messageField = h("label", { class: "dialog-field" }, h("span", {}, "Commit message"), message);
+  const radios = labels.map(([m, label, hint]) => {
+    const r = h("input", { type: "radio", name: "review-mode", value: m, checked: m === mode });
+    r.addEventListener("change", () => {
+      mode = m;
+      if (!edited) message.value = messages[m];
+      messageField.hidden = m === "rebase";
+    });
+    return h("label", { class: "dialog-check review-mode" }, r, h("span", {}, h("b", {}, label), h("br", {}), h("span", { class: "muted-inline" }, hint)));
+  });
+  const del = h("input", { type: "checkbox", checked: true });
+  const warnings: Node[] = [];
+  if (s.conflicts.length) warnings.push(h("p", { class: "dialog-note danger-text" }, `⚠ ${s.conflicts.length} file(s) conflict: ${s.conflicts.join(", ")}. Merge commit and Squash stop for the merge tool only when ${s.base} is checked out.`));
+  if (s.viewed < s.files) warnings.push(h("p", { class: "dialog-note" }, `${s.files - s.viewed} of ${s.files} file(s) are not marked as viewed.`));
+  const body = [
+    h("p", { class: "dialog-text" }, h("b", {}, s.branch), " → ", h("b", {}, s.base)),
+    ...radios,
+    messageField,
+    h("label", { class: "dialog-check" }, del, `Delete the branch ${s.branch} after the merge`),
+    ...warnings,
+    h("p", { class: "dialog-note" }, "Undo puts the two branches back."),
+  ];
+  const r = await modal(`Merge ${s.branch}`, body, [{ label: "Merge", value: "ok", primary: true }], true);
+  if (r !== "ok") return null;
+  return { mode, message: message.value.trim(), deleteBranch: del.checked };
 }

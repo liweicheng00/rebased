@@ -1,6 +1,6 @@
 //! The read commands.
 
-use crate::{err, history, watch, BlameArgs, BlobArgs, CompareArgs, CompareRefsArgs, MergedBranchesArgs, CompareResult, FilePair, FilePairArgs, IndexArgs, OidArgs, PathArgs, PushInfoArgs, Result, RevSpec, Service};
+use crate::{err, history, watch, BlameArgs, BlobArgs, CompareArgs, CompareRefsArgs, MergedBranchesArgs, ReviewArgs, ReviewEdit, CompareResult, FilePair, FilePairArgs, IndexArgs, OidArgs, PathArgs, PushInfoArgs, Result, RevSpec, Service};
 use rebased_git::changelist::{ChangeListOp, LocalChanges};
 use rebased_git::history::{Blame, HistoryEntry};
 use rebased_git::merge::MergeSides;
@@ -134,6 +134,30 @@ impl Service {
     /// The commits that each of two refs has and the other has not.
     pub fn compare_refs(&self, args: CompareRefsArgs) -> Result<rebased_git::remote::RefComparison> {
         self.with_repo(|r| r.compare_refs(&args.left, &args.right).map_err(err))
+    }
+
+    /// The reviews of the repository, for the Reviews tab.
+    pub fn reviews(&self) -> Result<Vec<rebased_git::review::ReviewSummary>> {
+        self.with_repo(|r| r.reviews().map_err(err))
+    }
+
+    pub fn review(&self, args: ReviewArgs) -> Result<rebased_git::review::ReviewDetail> {
+        self.with_repo(|r| r.review(&args.branch).map_err(err))
+    }
+
+    /// Changes the review data. It holds the session lock, so two edits do not overwrite each other.
+    pub fn review_edit(&self, edit: ReviewEdit) -> Result<()> {
+        self.with(|s| {
+            let r = &s.repo;
+            match edit {
+                ReviewEdit::Start { branch, base } => r.start_review(&branch, &base),
+                ReviewEdit::Remove { branch } => r.remove_review(&branch),
+                ReviewEdit::Viewed { branch, paths, viewed } => r.set_viewed(&branch, &paths, viewed),
+                ReviewEdit::Comment { branch, path, line, text } => r.add_review_comment(&branch, &path, line, &text),
+                ReviewEdit::DeleteComment { branch, id } => r.delete_review_comment(&branch, &id),
+            }
+            .map_err(err)
+        })
     }
 
     /// The local branches that Delete Merged Branches deletes.

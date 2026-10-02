@@ -8,6 +8,7 @@ pub mod hunks;
 pub mod merge;
 pub mod ops;
 pub mod remote;
+pub mod review;
 pub mod rewrite;
 pub mod stash;
 pub mod submodule;

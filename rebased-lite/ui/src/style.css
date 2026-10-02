@@ -307,10 +307,10 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .leftpane > .sidebar, .leftpane > .commit-panel, .leftpane > .stash-panel { flex: 1; min-height: 0; border-right: 0; }
 .leftpane > [hidden] { display: none !important; }
 .leftpane .sidebar > .pane-title { display: none; }
-.lp-tabs { display: flex; overflow: hidden; border-bottom: 1px solid var(--border); padding: 0 4px; gap: 2px; }
-.lp-tab { font-size: 12px; white-space: nowrap; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 6px 6px 5px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; }
+.lp-tabs { display: flex; overflow: hidden; border-bottom: 1px solid var(--border); padding: 0 2px; gap: 0; }
+.lp-tab { font-size: 11.5px; white-space: nowrap; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 6px 3px 5px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; }
 .lp-tab:hover { color: var(--fg); }
-.lp-count { margin-left: 3px; padding: 0 4px; border-radius: 8px; background: var(--select); color: var(--fg); font-size: 11px; font-weight: 600; }
+.lp-count { margin-left: 2px; padding: 0 3px; border-radius: 8px; background: var(--select); color: var(--fg); font-size: 10px; font-weight: 600; }
 .lp-tab.on { color: var(--fg); border-bottom-color: var(--accent); }
 
 /* commit panel */
@@ -534,3 +534,46 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .compare-file .rebase-author { overflow: hidden; text-overflow: ellipsis; }
 .merged-row { grid-template-columns: auto auto auto minmax(0, 1fr) auto; cursor: pointer; }
 .merged-name { white-space: nowrap; }
+.leftpane > .review-panel { flex: 1; min-height: 0; border-right: 0; }
+.review-panel { display: flex; flex-direction: column; min-height: 0; }
+.review-list { flex: 1; overflow: auto; outline: none; }
+.review-row { padding: 6px 10px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
+.review-row:hover { background: var(--hover); }
+.review-title { display: flex; align-items: center; gap: 4px; min-width: 0; white-space: nowrap; }
+.review-title b { overflow: hidden; text-overflow: ellipsis; }
+.review-meta { display: flex; gap: 8px; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; }
+.review-subject { overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.review-badge { border-radius: 3px; padding: 0 4px; }
+.review-badge.conflict { color: var(--deleted); }
+.review-badge.ready, .review-ok { color: var(--added); }
+.review-badge.merged { color: var(--muted); font-style: italic; }
+.review-badge.gone { color: var(--deleted); font-style: italic; }
+.review-finish { font-size: 11px; padding: 1px 8px; }
+.review-progress { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 2px; }
+.review-progress-bar { height: 100%; background: var(--added); }
+.review-window .merge-header .review-switcher { max-width: 360px; }
+.review-info { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.review-status { padding: 4px 12px; border-bottom: 1px solid var(--border); font-size: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+.review-commits { max-height: 30%; overflow: auto; border-bottom: 1px solid var(--border); flex: none; }
+.review-commit.selected, .review-file.selected { background: var(--select); }
+.review-file { display: grid; grid-template-columns: auto auto minmax(0, auto) minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.review-file.viewed .rebase-subject { color: var(--muted); }
+.review-file-notes { font-size: 11px; color: var(--muted); }
+.review-right { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; min-width: 0; }
+.review-notes { border-top: 1px solid var(--border); max-height: 220px; display: flex; flex-direction: column; min-height: 0; }
+.review-notes-title { padding: 4px 10px; font-size: 12px; color: var(--muted); }
+.review-notes-list { overflow: auto; flex: 1; min-height: 0; }
+.review-note { display: flex; gap: 8px; align-items: baseline; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+.review-note:hover { background: var(--hover); }
+.review-note.outdated .review-note-body { opacity: 0.6; }
+.review-note-line-no { font-family: var(--mono, monospace); color: var(--tag); }
+.review-note-body { flex: 1; white-space: pre-wrap; }
+.review-note-form { display: flex; gap: 6px; padding: 6px 10px; align-items: flex-end; }
+.review-note-text { flex: 1; resize: vertical; }
+.review-note-line { background: rgba(230, 170, 30, 0.12); }
+.review-note-bar { border-left: 3px solid #e6aa1e; margin-left: 2px; }
+.review-mode { align-items: flex-start; margin: 4px 0; }
+.review-merge-message { font-family: var(--mono, monospace); }
+.review-commit { grid-template-columns: auto minmax(0, 1fr) auto; }
+.review-commit > b { white-space: nowrap; }
+.review-meta { flex-wrap: wrap; row-gap: 0; }

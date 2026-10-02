@@ -106,6 +106,16 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   has the same actions in its context menu. A local branch can set, change or stop its tracked
   branch. A remote branch can be deleted on the remote. A tag can be pushed to a remote or deleted
   there; the local tag stays.
+- **Review Branch (a local pull request)**: "Review Branch…" in the context menu of a local branch,
+  or New Review in the Reviews tab (Mod+3), starts a review of a branch against a base. The review
+  shows the changes from the merge base, as a pull request does, and each commit alone. Mark each
+  file as viewed (the check box or Space). A new version of the file clears the mark. Add a note on
+  the line of the cursor. A note on a file that changed later shows as outdated. The window shows
+  before the merge which files conflict. The Reviews tab lists all reviews with their progress, and
+  the window header switches between them. "Merge…" merges with a merge commit, Squash, or Rebase
+  and fast-forward, and can delete the branch. When the base is not checked out, git merges without
+  the working tree. Undo puts back the two branches. The reviews and notes are in
+  `.git/rebased-lite/reviews.json` and never go to a remote.
 - **Diff panel**: View > Diff Panel, the ✕ button of the diff, or Mod+2 hides and shows the diff
   panel below the log. The log then uses all the height. The panel keeps the size that it had. A
   double click on a changed file shows the panel again. "Show Diff" in the context menu also shows it.

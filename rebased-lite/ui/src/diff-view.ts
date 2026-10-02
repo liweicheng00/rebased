@@ -58,6 +58,10 @@ export class DiffView {
   /** A file in more than one changelist: the changes of the other changelists, marked in the diff. */
   private listHunks: { start: number; lines: number; label: string }[] = [];
   private listDeco: string[] = [];
+  /** Review notes: marked lines of the right side. */
+  private notes: { line: number; text: string }[] = [];
+  private noteDeco: string[] = [];
+  private singleNoteDeco: string[] = [];
   private menuAt = { x: 0, y: 0 };
   private moveKey: monaco.editor.IContextKey<boolean>;
   /** Local changes only: move the change at a working-tree line to another changelist. */
@@ -126,6 +130,7 @@ export class DiffView {
       this.updateStats();
       this.renderHunks();
       this.renderListHunks();
+      this.renderNotes();
     });
     this.editor.getModifiedEditor().onMouseDown((ev) => {
       if (!this.selectable || ev.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) return;
@@ -268,6 +273,43 @@ export class DiffView {
     this.listDeco = ed.deltaDecorations(this.listDeco, deco);
   }
 
+  /** Marks the lines that have review notes. show() clears them, so call it after show(). */
+  setNotes(notes: { line: number; text: string }[]) {
+    this.notes = notes;
+    this.renderNotes();
+  }
+
+  /** The editor of the right side: the modified side, or the one editor of an added file. */
+  private rightEditor(): monaco.editor.ICodeEditor {
+    return this.singleHost.hidden ? this.editor.getModifiedEditor() : this.single;
+  }
+
+  /** The line of the cursor on the right side, 1-based. */
+  cursorLine(): number {
+    return this.rightEditor().getPosition()?.lineNumber ?? 1;
+  }
+
+  revealLine(line: number) {
+    const ed = this.rightEditor();
+    ed.revealLineInCenter(line);
+    ed.setPosition({ lineNumber: line, column: 1 });
+  }
+
+  private renderNotes() {
+    const deco = (ed: monaco.editor.ICodeEditor): monaco.editor.IModelDeltaDecoration[] => {
+      const count = ed.getModel()?.getLineCount() ?? 0;
+      return this.notes
+        .filter((n) => n.line >= 1 && n.line <= count)
+        .map((n) => ({
+          range: new monaco.Range(n.line, 1, n.line, 1),
+          options: { isWholeLine: true, className: "review-note-line", linesDecorationsClassName: "review-note-bar", hoverMessage: { value: n.text } },
+        }));
+    };
+    const onSingle = !this.singleHost.hidden;
+    this.noteDeco = this.editor.getModifiedEditor().deltaDecorations(this.noteDeco, onSingle ? [] : deco(this.editor.getModifiedEditor()));
+    if (this.singleEditor) this.singleNoteDeco = this.singleEditor.deltaDecorations(this.singleNoteDeco, onSingle ? deco(this.singleEditor) : []);
+  }
+
   private renderHunks() {
     const ed = this.editor.getModifiedEditor();
     const changes = this.selectable && this.notice.hidden && this.singleHost.hidden ? this.editor.getLineChanges() ?? [] : [];
@@ -404,6 +446,7 @@ export class DiffView {
 
   show(change: Change, left: FileContent, right: FileContent) {
     this.clearBlame();
+    this.notes = [];
     queueMicrotask(() => void this.annotate());
     // The same file again (for example after it changed on disk): keep the scroll position.
     const same = change.path === this.path && this.notice.hidden && this.singleHost.hidden;

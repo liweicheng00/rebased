@@ -291,7 +291,7 @@ impl Repo {
     }
 
     /// Applies the change `base -> commit` on top of `onto` without touching the working tree.
-    fn merge_tree(&self, base: &str, onto: &str, commit: &str, label: &str) -> Result<String> {
+    pub(crate) fn merge_tree(&self, base: &str, onto: &str, commit: &str, label: &str) -> Result<String> {
         let args = if base.is_empty() {
             vec!["merge-tree".to_string(), "--write-tree".into(), "--allow-unrelated-histories".into(), onto.into(), commit.into()]
         } else {
@@ -313,7 +313,7 @@ impl Repo {
         }
     }
 
-    fn commit_tree(&self, tree: &str, parent: &str, author: &CommitMeta, message: &str) -> Result<String> {
+    pub(crate) fn commit_tree(&self, tree: &str, parent: &str, author: &CommitMeta, message: &str) -> Result<String> {
         let env = [
             ("GIT_AUTHOR_NAME", author.author_name.as_str()),
             ("GIT_AUTHOR_EMAIL", author.author_email.as_str()),

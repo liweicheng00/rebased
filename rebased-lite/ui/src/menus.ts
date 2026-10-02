@@ -8,6 +8,7 @@ import { showHistory } from "./history-flow";
 import { keymap } from "./keyboard";
 import { addWorktree, checkoutBranch, checkoutCommit, currentBranch, deleteBranch, deleteMergedBranches, interactiveRebase, mergeIntoCurrent, newBranch, newTag, rebaseCurrentOnto, renameBranch, resetTo, rewriteSelected, runOp } from "./operations";
 import { compareBranches, fetchRemote, manageRemotes, remoteRefItems, toggleFavorite } from "./remotes";
+import { startReview } from "./review-flow";
 import { askForRepo, fetchAll, jumpToOid, openRepo, refresh } from "./repo";
 import { collapse, compare, comparedCommits, compareWithWorktree, fileChangesAction, openFile, short, showSelection } from "./selection";
 import { settings } from "./settings";
@@ -102,6 +103,8 @@ sidebar.onContextMenu = (b, e) => {
       disabled: isCurrent || !app.view?.headOid,
       action: () => filterBar.set({ ...filterBar.filter, branches: [cur ?? "HEAD", `^${b.name}`] }, true),
     },
+    { separator: true },
+    { label: "Review Branch…", disabled: b.kind !== "local", action: () => void startReview(b.name) },
     { separator: true },
     { label: "Rename…", disabled: b.kind !== "local", action: () => void renameBranch(b) },
     { label: b.kind === "tag" ? "Delete Tag…" : "Delete…", disabled: b.kind === "remote" || isCurrent, action: () => void deleteBranch(b) },

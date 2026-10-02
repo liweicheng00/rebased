@@ -56,7 +56,7 @@ struct Local {
 }
 
 /// The config of the repository: lowercase section and key, the subsection as written.
-type Config = BTreeMap<String, Vec<String>>;
+pub(crate) type Config = BTreeMap<String, Vec<String>>;
 
 fn text(b: Vec<u8>) -> String {
     String::from_utf8_lossy(&b).trim().to_string()
@@ -142,7 +142,7 @@ impl Repo {
     }
 
     /// The `branch.*` config of the repository only, for Undo: Undo writes to this file.
-    fn config_local(&self) -> Config {
+    pub(crate) fn config_local(&self) -> Config {
         self.config_scope(&["--local"]).into_iter().filter(|(k, _)| k.starts_with("branch.")).collect()
     }
 

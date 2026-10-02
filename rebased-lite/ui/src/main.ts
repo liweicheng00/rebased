@@ -10,6 +10,7 @@ import "./operations";
 import "./commit-flow";
 import "./sync";
 import "./stash-flow";
+import "./review-flow";
 import "./history-flow";
 import "./conflicts";
 import "./menus";

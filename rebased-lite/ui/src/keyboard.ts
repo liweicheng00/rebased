@@ -44,6 +44,7 @@ for (const a of [
       else toggleSidebar();
     },
   },
+  { id: "reviews", label: "Reviews", defaults: ["Mod+3"], run: () => showLeftTab("reviews") },
   { id: "diffPanel", label: "Diff Panel", defaults: ["Mod+2"], run: () => toggleDiff() },
   { id: "localHistory", label: "Local History", defaults: [], run: () => app.view && showLocalHistory("") },
   { id: "nextTab", label: "Next Tab", defaults: ["Mod+PageDown"], run: () => nextTab(1) },

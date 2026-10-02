@@ -13,6 +13,7 @@ import { toast } from "./notify";
 import { OpBanner } from "./op-banner";
 import { save, settings } from "./settings";
 import { Sidebar } from "./sidebar";
+import { ReviewPanel } from "./review-panel";
 import { StashPanel } from "./stash-panel";
 import { app } from "./state";
 
@@ -26,6 +27,7 @@ export const details = new DetailsPanel();
 export const diff = new DiffView();
 export const commitPanel = new CommitPanel();
 export const stashPanel = new StashPanel();
+export const reviewPanel = new ReviewPanel();
 
 export const banner = new OpBanner();
 export const authors = new Set<string>();
@@ -59,8 +61,9 @@ const right = h("section", { class: "right" }, changes.el, detailsGrip, details.
 const tabBranches = h("button", { class: "lp-tab", title: `Branches (${mod}1)` }, "Branches");
 export const tabCommit = h("button", { class: "lp-tab", title: `Commit (${mod}K)` }, "Commit");
 export const tabStash = h("button", { class: "lp-tab", title: "Stashes" }, "Stash");
-const leftPane = h("aside", { class: "leftpane" }, h("div", { class: "lp-tabs" }, tabBranches, tabCommit, tabStash), sidebar.el, commitPanel.el, stashPanel.el);
-export function showLeftTab(tab: "branches" | "commit" | "stash") {
+export const tabReviews = h("button", { class: "lp-tab", title: `Reviews (${mod}3)` }, "Reviews");
+const leftPane = h("aside", { class: "leftpane" }, h("div", { class: "lp-tabs" }, tabBranches, tabCommit, tabStash, tabReviews), sidebar.el, commitPanel.el, stashPanel.el, reviewPanel.el);
+export function showLeftTab(tab: "branches" | "commit" | "stash" | "reviews") {
   settings.leftTab = tab;
   save();
   if (!settings.showSidebar) {
@@ -73,10 +76,13 @@ export function showLeftTab(tab: "branches" | "commit" | "stash") {
   sidebar.el.hidden = tab !== "branches";
   commitPanel.el.hidden = tab !== "commit";
   stashPanel.el.hidden = tab !== "stash";
+  tabReviews.classList.toggle("on", tab === "reviews");
+  reviewPanel.el.hidden = tab !== "reviews";
 }
 tabBranches.addEventListener("click", () => showLeftTab("branches"));
 tabCommit.addEventListener("click", () => showLeftTab("commit"));
 tabStash.addEventListener("click", () => showLeftTab("stash"));
+tabReviews.addEventListener("click", () => showLeftTab("reviews"));
 const top = h("div", { class: "top" }, leftPane, sideGrip, center, rightGrip, right);
 export const workspace = h("main", { class: "workspace" }, top, diffGrip, diff.el);
 export const welcome = h("main", { class: "welcome" });
