@@ -6,7 +6,7 @@ import { emptyFilter } from "./filter-bar";
 import { loadFavorites } from "./remotes";
 import { clearCompare } from "./selection";
 import { addRecent, save, settings } from "./settings";
-import { authors, banner, commitPanel, fetchBtn, filterBar, localHistoryBtn, log, mod, pushBtn, refreshBtn, sidebar, stashPanel, statusRight, tabBar, tabCommit, tabStash, task, updateBtn, updateStatus } from "./shell";
+import { authors, banner, commitPanel, fetchBtn, filterBar, localHistoryBtn, log, mod, pushBtn, refreshBtn, reviewPanel, sidebar, stashPanel, statusRight, tabBar, tabCommit, tabReviews, tabStash, task, updateBtn, updateStatus } from "./shell";
 import { app } from "./state";
 import { showWorkspace } from "./welcome";
 
@@ -74,6 +74,7 @@ export async function switchTab(root: string) {
 }
 
 async function closeTab(root: string) {
+  await showing.catch(() => {});
   await api.close(root).catch(() => {});
   const i = settings.tabs.indexOf(root);
   settings.tabs = settings.tabs.filter((t) => t !== root);
@@ -99,7 +100,16 @@ async function closeTab(root: string) {
 }
 
 /** Shows the repository of the active tab. `state` restores the filter and the selection of a tab. */
-async function showRepo(r: ViewResult, state: TabState | null) {
+/** The repository that shows now, while it loads. A tab closes only after it, so no request goes to a
+ * repository that is closed. */
+let showing: Promise<void> = Promise.resolve();
+
+function showRepo(r: ViewResult, state: TabState | null): Promise<void> {
+  showing = loadRepo(r, state);
+  return showing;
+}
+
+async function loadRepo(r: ViewResult, state: TabState | null) {
   setRepoRoot(r.root);
   settings.activeTab = r.root;
   save();
@@ -117,7 +127,7 @@ async function showRepo(r: ViewResult, state: TabState | null) {
   await loadRefs();
   commitPanel.setTemplate(await api.commitTemplate().catch(() => null));
   const target = state?.selected ?? r.headOid;
-  if (target) void jumpToOid(target, true);
+  if (target) await jumpToOid(target, true);
 }
 
 export async function applyView(r: ViewResult, keepSelection: boolean) {
@@ -186,6 +196,17 @@ export async function loadLocalChanges() {
     stashPanel.set([]);
   }
   tabStash.replaceChildren("Stash", stashPanel.count ? h("span", { class: "lp-count" }, String(stashPanel.count)) : "");
+  await loadReviews();
+}
+
+/** Loads the reviews for the Reviews tab. The count on the tab is the reviews that are not merged. */
+export async function loadReviews() {
+  try {
+    reviewPanel.set(await api.reviews());
+  } catch {
+    reviewPanel.set([]);
+  }
+  tabReviews.replaceChildren("Reviews", reviewPanel.open ? h("span", { class: "lp-count" }, String(reviewPanel.open)) : "");
 }
 
 export async function reloadView() {
