@@ -15,6 +15,8 @@ export interface Settings {
   updateMode: "merge" | "rebase";
   autoRefresh: boolean;
   changesAsTree: boolean;
+  /** The file list of a review is a tree of folders. */
+  reviewAsTree: boolean;
   sideBySide: boolean;
   ignoreWhitespace: boolean;
   collapseUnchanged: boolean;
@@ -69,6 +71,7 @@ const DEFAULTS: Settings = {
   updateMode: "merge",
   autoRefresh: true,
   changesAsTree: true,
+  reviewAsTree: true,
   sideBySide: true,
   ignoreWhitespace: false,
   collapseUnchanged: false,

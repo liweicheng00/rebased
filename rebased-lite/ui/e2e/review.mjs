@@ -97,6 +97,34 @@ await shot("rv4-merged");
 await page.click(".toast button:has-text('Undo')");
 await within("Undo puts back main", async () => git("rev-parse", "main") === main);
 check("Undo puts back the branch", has("feature/cli"));
+// A review with folders shows a tree: one row for src/app, closed with a click.
+git("branch", "-q", "feature/tree", "main");
+const tmp = `${repo}-tree`;
+execFileSync("git", ["-C", repo, "worktree", "add", "-q", tmp, "feature/tree"]);
+for (const f of ["src/app/one.rs", "src/app/two.rs", "top.txt"]) {
+  execFileSync("mkdir", ["-p", `${tmp}/${f.slice(0, f.lastIndexOf("/") + 1) || "."}`]);
+  execFileSync("sh", ["-c", `echo x > '${tmp}/${f}'`]);
+}
+execFileSync("git", ["-C", tmp, "add", "."]);
+execFileSync("git", ["-C", tmp, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "Tree files"]);
+execFileSync("git", ["-C", repo, "worktree", "remove", "--force", tmp]);
+await page.click(".tb-button:has-text('Refresh')");
+await page.keyboard.press("Control+1");
+await page.waitForSelector(".sidebar .branch:has-text('feature/tree')");
+await page.keyboard.press("Control+4");
+await page.click(".review-panel button:has-text('New Review')");
+await page.waitForSelector(".dialog:has-text('Review Branch')");
+await page.selectOption(".dialog select >> nth=0", "feature/tree");
+await page.click(".dialog-buttons button:has-text('Start Review')");
+await within("the tree has a row for src/app", async () => ((await page.textContent(".review-window .review-dir").catch(() => "")) ?? "").includes("src/app"));
+check("the files under it come first", (await files()) === "one.rs,two.rs,top.txt");
+await shot("rv5-tree");
+await page.click(".review-window .review-dir");
+await within("a click closes the folder", async () => (await files()) === "top.txt");
+await page.click(".review-tree-toggle");
+await within("the flat list shows all files", async () => (await files()) === "src/app/one.rs,src/app/two.rs,top.txt".split(",").map((p) => p.split("/").pop()).join(","));
+await page.click(".review-tree-toggle");
+await page.keyboard.press("Escape");
 console.log("errors:", JSON.stringify(errors));
 await browser.close();
 if (errors.length) process.exit(1);

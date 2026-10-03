@@ -4,7 +4,10 @@
 import type { Change, FileContent, ReviewComment, ReviewDetail, ReviewEdit, ReviewSummary, RevSpec } from "./api";
 import { statusName } from "./changes-panel";
 import { dragResize, formatDate, h } from "./dom";
+import { fileIcon } from "./file-icon";
+import { buildTree, treeOrder, walkTree } from "./file-tree";
 import { sharedDiff } from "./history-view";
+import { save, settings } from "./settings";
 
 export interface ReviewCallbacks {
   /** All reviews, for the switcher in the header. */
@@ -45,7 +48,17 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
   const closeBtn = h("button", { class: "tb-button" }, "Close");
   const status = h("div", { class: "review-status" });
   const commitsEl = h("div", { class: "review-commits" });
-  const filesTitle = h("div", { class: "compare-files-title" });
+  const filesTitle = h("div", { class: "compare-files-title review-files-title" });
+  const treeBtn = h("button", { class: "icon-button review-tree-toggle" });
+  treeBtn.addEventListener("click", () => {
+    settings.reviewAsTree = !settings.reviewAsTree;
+    save();
+    const keep = rows[selected]?.path;
+    if (settings.reviewAsTree) rows.sort((a, b) => treeOrder(a.path, b.path));
+    else rows.sort((a, b) => a.path.localeCompare(b.path));
+    selected = keep ? rows.findIndex((r) => r.path === keep) : -1;
+    renderFiles();
+  });
   const filesEl = h("div", { class: "history-list review-files", tabIndex: 0 });
   const notesTitle = h("div", { class: "review-notes-title" });
   const notesList = h("div", { class: "review-notes-list" });
@@ -87,7 +100,11 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
       close();
     } else if (document.activeElement === filesEl && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       e.preventDefault();
-      void select(Math.max(0, Math.min(rows.length - 1, selected + (e.key === "ArrowDown" ? 1 : -1))));
+      // Up and down go through the files that show; a closed folder hides its files.
+      const shown = [...filesEl.querySelectorAll<HTMLElement>(".review-file")].map((el) => Number(el.dataset.index));
+      const at = shown.indexOf(selected);
+      const next = shown[Math.max(0, Math.min(shown.length - 1, at < 0 ? 0 : at + (e.key === "ArrowDown" ? 1 : -1)))];
+      if (next !== undefined) void select(next);
     } else if (document.activeElement === filesEl && e.key === " " && scope === "all" && rows[selected]) {
       e.preventDefault();
       void setViewed(rows[selected], !rows[selected].viewed);
@@ -130,6 +147,7 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
     finishBtn.disabled = !s.exists || s.merged;
     filesTitle.replaceChildren(
       scope === "all" ? `Files · ${s.viewed}/${s.files} viewed` : "Files of the commit",
+      treeBtn,
       h("div", { class: "review-progress" }, h("div", { class: "review-progress-bar", style: { width: `${s.files ? Math.round((s.viewed / s.files) * 100) : 0}%` } })),
     );
   };
@@ -156,26 +174,62 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
     commitsEl.replaceChildren(all, ...list);
   };
 
+  /** The folders that the user closed in the tree, by path. */
+  const collapsed = new Set<string>();
+
+  const fileRow = (f: Row, i: number, depth: number, withDir: boolean) => {
+    const slash = f.path.lastIndexOf("/");
+    const box = h("input", { type: "checkbox", class: "review-viewed", checked: !!f.viewed, title: "Viewed (Space)" });
+    box.addEventListener("mousedown", (e) => e.stopPropagation());
+    box.addEventListener("change", () => void setViewed(f, box.checked));
+    const row = h(
+      "div",
+      {
+        class: "history-row review-file" + (i === selected ? " selected" : "") + (f.viewed ? " viewed" : ""),
+        "data-index": i,
+        title: f.oldPath ? `${f.oldPath} → ${f.path}` : f.path,
+        style: { paddingLeft: `${8 + depth * 14}px` },
+      },
+      scope === "all" ? box : "",
+      fileIcon(f.path),
+      h("span", { class: `rebase-subject status-text-${f.status}` }, f.path.slice(slash + 1)),
+      h("span", { class: "rebase-author" }, withDir && slash > 0 ? f.path.slice(0, slash) : ""),
+      f.comments ? h("span", { class: "review-file-notes", title: `${f.comments} note(s)` }, `💬${f.comments}`) : h("span", {}),
+      h("span", { class: `status status-end status-${f.status}`, title: statusName(f.status) }, f.status),
+    );
+    row.addEventListener("mousedown", () => void select(i));
+    return row;
+  };
+
   const renderFiles = () => {
-    filesEl.replaceChildren(
-      ...rows.map((f, i) => {
-        const slash = f.path.lastIndexOf("/");
-        const box = h("input", { type: "checkbox", class: "review-viewed", checked: !!f.viewed, title: "Viewed (Space)" });
-        box.addEventListener("mousedown", (e) => e.stopPropagation());
-        box.addEventListener("change", () => void setViewed(f, box.checked));
+    treeBtn.textContent = settings.reviewAsTree ? "☰" : "🗀";
+    treeBtn.title = settings.reviewAsTree ? "Show as a flat list" : "Group by folder";
+    if (!settings.reviewAsTree) {
+      filesEl.replaceChildren(...rows.map((f, i) => fileRow(f, i, 0, true)));
+      return;
+    }
+    const tree = buildTree(rows.map((r, index) => ({ path: r.path, index })));
+    const out: HTMLElement[] = [];
+    walkTree(tree, collapsed, {
+      dir: (label, full, depth, open, count, viewed) => {
         const row = h(
           "div",
-          { class: "history-row review-file" + (i === selected ? " selected" : "") + (f.viewed ? " viewed" : ""), title: f.oldPath ? `${f.oldPath} → ${f.path}` : f.path },
-          scope === "all" ? box : "",
-          h("span", { class: `status status-${f.status}`, title: statusName(f.status) }, f.status),
-          h("span", { class: "rebase-subject" }, f.path.slice(slash + 1)),
-          h("span", { class: "rebase-author" }, slash > 0 ? f.path.slice(0, slash) : ""),
-          f.comments ? h("span", { class: "review-file-notes", title: `${f.comments} note(s)` }, `💬${f.comments}`) : "",
+          { class: "history-row review-dir" + (count && viewed === count ? " viewed" : ""), style: { paddingLeft: `${8 + depth * 14}px` }, title: full },
+          h("span", { class: "twisty" }, open ? "▾" : "▸"),
+          h("span", { class: "dir-name" }, label),
+          h("span", { class: "dir-count" }, scope === "all" ? `${viewed}/${count}` : String(count)),
         );
-        row.addEventListener("mousedown", () => void select(i));
-        return row;
-      }),
-    );
+        row.addEventListener("mousedown", () => {
+          if (open) collapsed.add(full);
+          else collapsed.delete(full);
+          renderFiles();
+        });
+        out.push(row);
+      },
+      file: (index, depth) => out.push(fileRow(rows[index], index, depth, false)),
+      viewed: (index) => !!rows[index].viewed,
+    });
+    filesEl.replaceChildren(...out);
   };
 
   const renderNotes = () => {
@@ -239,8 +293,8 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
     const rv = revs();
     if (i < 0 || i >= rows.length || !rv) return;
     selected = i;
-    for (const [j, el] of [...filesEl.children].entries()) el.classList.toggle("selected", j === i);
-    filesEl.children[i]?.scrollIntoView({ block: "nearest" });
+    for (const el of filesEl.querySelectorAll<HTMLElement>(".review-file")) el.classList.toggle("selected", Number(el.dataset.index) === i);
+    filesEl.querySelector(`.review-file[data-index="${i}"]`)?.scrollIntoView({ block: "nearest" });
     const f = rows[i];
     const req = ++request;
     try {
@@ -273,6 +327,7 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
       rows = (await cb.changes(rv.l, rv.r)).map((c) => ({ status: c.status, path: c.path, oldPath: c.old_path }));
       d.setSides(`${scope.slice(0, 8)}^`, scope.slice(0, 8));
     }
+    if (settings.reviewAsTree) rows.sort((a, b) => treeOrder(a.path, b.path));
     const i = keep ? rows.findIndex((r) => r.path === keep) : -1;
     selected = -1;
     renderFiles();
