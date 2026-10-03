@@ -9,7 +9,7 @@ import { copyText } from "./dom";
 import { toast } from "./notify";
 import { applyView, jumpToOid, loadRefs, openRepo } from "./repo";
 import { short } from "./selection";
-import { banner, branchBtn, sidebar, statusRight, task } from "./shell";
+import { banner, branchBtn, sidebar, statusActivity, task } from "./shell";
 import { app } from "./state";
 
 /** Runs a write operation, reloads the log, and reports the result. */
@@ -29,14 +29,14 @@ export async function runOp(op: Op, label: string, errorAction?: { label: string
       const what = stale.length === 1 ? `Submodule ${stale[0]} is` : `${stale.length} submodules are`;
       toast(`${what} not at the commit that this revision records.`, "info", { label: "Update Submodules", run: () => updateSubmodules(stale) });
     }
-    statusRight.textContent = r.message;
+    statusActivity.textContent = r.message;
   } else {
     const hint = errorHint(outcome.errorKind);
     // An operation that stopped halfway can still have Undo steps for the part that it did.
     app.lastUndo = r.undo.length ? { actions: r.undo, message: r.message } : app.lastUndo;
     toast(hint ? `${r.message}\n${hint}` : r.message, "error", errorAction ?? (r.undo.length ? { label: "Undo", run: () => void undoLast() } : undefined));
-    statusRight.textContent = r.message;
-    statusRight.className = "sb-right error";
+    statusActivity.textContent = r.message;
+    statusActivity.className = "sb-activity error";
   }
   return outcome;
 }
@@ -46,7 +46,7 @@ export async function runOp(op: Op, label: string, errorAction?: { label: string
 export async function undoLast() {
   const u = app.lastUndo;
   if (!u) {
-    statusRight.textContent = "There is nothing to undo";
+    statusActivity.textContent = "There is nothing to undo";
     return;
   }
   app.lastUndo = null;

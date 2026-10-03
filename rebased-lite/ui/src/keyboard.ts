@@ -7,7 +7,7 @@ import { undoLast } from "./operations";
 import { askForRepo, fetchAll, refresh, switchTab } from "./repo";
 import { settings } from "./settings";
 import { openSettings } from "./settings-flow";
-import { changes, commitPanel, diff, filterBar, showLeftTab, statusRight, toggleDiff, toggleSidebar } from "./shell";
+import { changes, commitPanel, diff, filterBar, showLeftTab, statusActivity, toggleDiff, toggleSidebar } from "./shell";
 import { app } from "./state";
 import { pushBranch, updateBranch } from "./sync";
 
@@ -60,7 +60,7 @@ for (const a of [
     defaults: ["Mod+C"],
     run: () => {
       void copyText(app.selected.map((s) => s.oid).join(" "));
-      statusRight.textContent = "Copied the revision number";
+      statusActivity.textContent = "Copied the revision number";
     },
     when: (t: HTMLElement) => !typing(t) && !!t.closest(".log") && app.selected.length > 0,
   },

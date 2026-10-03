@@ -50,8 +50,9 @@ export const tabBar = h("nav", { class: "tabbar", hidden: true });
 
 const statusLeft = h("span", { class: "sb-left" });
 const statusMid = h("span", { class: "sb-mid" });
-export const statusRight = h("span", { class: "sb-right" });
-const statusBar = h("footer", { class: "statusbar" }, statusLeft, statusMid, statusRight);
+/** The running or the last operation. It is at the left end, where the eye looks first. */
+export const statusActivity = h("span", { class: "sb-activity" });
+const statusBar = h("footer", { class: "statusbar" }, statusActivity, statusLeft, statusMid);
 
 const sideGrip = h("div", { class: "vgrip" });
 const rightGrip = h("div", { class: "vgrip" });
@@ -142,17 +143,17 @@ themeBtn.addEventListener("click", () =>
 
 export async function task<T>(label: string, fn: () => Promise<T>): Promise<T | undefined> {
   app.busy++;
-  statusRight.textContent = label + "…";
-  statusRight.className = "sb-right busy";
+  statusActivity.textContent = label + "…";
+  statusActivity.className = "sb-activity busy";
   try {
     const r = await fn();
-    statusRight.textContent = "";
-    statusRight.className = "sb-right";
+    statusActivity.textContent = "";
+    statusActivity.className = "sb-activity";
     return r;
   } catch (e) {
     const message = String(e).replace(/^Error: /, "");
-    statusRight.textContent = message;
-    statusRight.className = "sb-right error";
+    statusActivity.textContent = message;
+    statusActivity.className = "sb-activity error";
     // A failure that the user must fix outside the app gets a notification with what to do.
     const hint = e instanceof ApiError ? errorHint(e.kind) : "";
     if (hint) toast(`${message}\n${hint}`, "error");
@@ -177,7 +178,7 @@ export function updateStatus() {
     : `${app.view.totalCommits.toLocaleString()} commits`;
   if (app.view.collapsed) statusMid.textContent += ` · ${app.view.rowCount.toLocaleString()} rows shown, linear branches collapsed`;
   filterBar.setInfo(app.view.filtered ? `${app.view.rowCount.toLocaleString()} of ${app.view.totalCommits.toLocaleString()}` : "");
-  if (!app.busy) statusRight.textContent = `loaded in ${app.view.loadMs} ms`;
+  if (!app.busy) statusActivity.textContent = `loaded in ${app.view.loadMs} ms`;
 }
 
 /** Shows or hides the diff panel. The panel comes back with the size that it had. */

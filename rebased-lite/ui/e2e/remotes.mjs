@@ -94,7 +94,7 @@ await within("the branch tracks nothing", async () => {
 await page.click(".tb-button:has-text('Fetch')");
 await within("the Fetch menu lists each remote", async () => (await page.$(".menu-item:has-text('Fetch mirror')")) !== null);
 await page.click(".menu-item:has-text('Fetch origin')");
-await within("fetch of one remote finishes", async () => (await page.textContent(".sb-right")).includes("Fetched origin"));
+await within("fetch of one remote finishes", async () => (await page.textContent(".sb-activity")).includes("Fetched origin"));
 
 // Remove the remote from its group menu.
 await page.click(".group-header:has-text('Remote: mirror')", { button: "right" });

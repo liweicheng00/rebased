@@ -6,7 +6,7 @@ import { emptyFilter } from "./filter-bar";
 import { loadFavorites } from "./remotes";
 import { clearCompare } from "./selection";
 import { addRecent, save, settings } from "./settings";
-import { authors, banner, commitPanel, fetchBtn, filterBar, localHistoryBtn, log, mod, pushBtn, refreshBtn, remoteBtn, reviewPanel, sidebar, stashPanel, statusRight, tabBar, tabCommit, tabReviews, tabStash, task, updateBtn, updateStatus } from "./shell";
+import { authors, banner, commitPanel, fetchBtn, filterBar, localHistoryBtn, log, mod, pushBtn, refreshBtn, remoteBtn, reviewPanel, sidebar, stashPanel, statusActivity, tabBar, tabCommit, tabReviews, tabStash, task, updateBtn, updateStatus } from "./shell";
 import { app } from "./state";
 import { showWorkspace } from "./welcome";
 
@@ -232,7 +232,7 @@ export async function fetchAll() {
   if (r) {
     await applyView(r, true);
     await loadRefs();
-    statusRight.textContent = "Fetch finished";
+    statusActivity.textContent = "Fetch finished";
     void loadRemoteTags();
   }
 }
@@ -260,7 +260,7 @@ export async function loadRemoteTags(remote?: string) {
 export async function jumpToOid(oid: string, select: boolean): Promise<boolean> {
   const f = await api.find(oid);
   if (f.row === null) {
-    if (f.oid) statusRight.textContent = `Commit ${f.oid.slice(0, 8)} is hidden by the current filter.`;
+    if (f.oid) statusActivity.textContent = `Commit ${f.oid.slice(0, 8)} is hidden by the current filter.`;
     return false;
   }
   if (f.rowCount !== null && app.view) {

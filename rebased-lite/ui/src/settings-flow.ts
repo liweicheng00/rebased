@@ -7,7 +7,7 @@ import { toast } from "./notify";
 import { fetchAll, refresh } from "./repo";
 import { save, settings } from "./settings";
 import { openSettingsDialog } from "./settings-dialog";
-import { applyTheme, settingsBtn, statusRight } from "./shell";
+import { applyTheme, settingsBtn, statusActivity } from "./shell";
 import { app } from "./state";
 
 let autoFetchTimer = 0;
@@ -53,7 +53,7 @@ export async function openSettings() {
   if (backendChanged) {
     try {
       const version = await api.setBackendSettings({ gitPath: next.gitPath, history: { days: next.historyDays, maxMb: next.historyMaxMb }, stored: true });
-      statusRight.textContent = `git ${version}`;
+      statusActivity.textContent = `git ${version}`;
     } catch (e) {
       toast(String(e).replace(/^Error: /, ""), "error");
       next.gitPath = settings.gitPath;
