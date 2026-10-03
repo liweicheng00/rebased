@@ -121,6 +121,9 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   The context menus open a branch, a commit or a remote in the browser. GitHub, GitLab, Bitbucket,
   Azure DevOps and Gitea links work; an ssh or https remote URL becomes the web address. Only http
   and https addresses open.
+- **File icons**: the file lists show the icons of Material Icon Theme (MIT), the icons that VS Code
+  users know. The status letter (M, A, D) is at the end of the row. A review shows its files as a
+  tree of folders by default; the button in the title switches to a flat list.
 - **Diff panel**: View > Diff Panel, the ✕ button of the diff, or Mod+` hides and shows the diff
   panel below the log. The log then uses all the height. The panel keeps the size that it had. A
   double click on a changed file shows the panel again. "Show Diff" in the context menu also shows it.

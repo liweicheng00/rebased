@@ -578,8 +578,15 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .review-commit { grid-template-columns: auto minmax(0, 1fr) auto; }
 .review-commit > b { white-space: nowrap; }
 .review-meta { flex-wrap: wrap; row-gap: 0; }
-.file-icon { flex: 0 0 14px; }
+.file-icon { flex: 0 0 16px; width: 16px; height: 16px; }
 .change .path { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .change .dir { flex: 0 1 auto; min-width: 0; }
 /* The status letter at the end of the row, so the names line up after the icons. */
 .change .status-end { margin-left: auto; padding-left: 6px; flex: 0 0 auto; text-align: right; }
+.review-files-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.review-files-title .review-progress { flex-basis: 100%; }
+.review-tree-toggle { margin-left: auto; }
+.review-dir { display: flex; gap: 6px; align-items: center; cursor: default; }
+.review-dir.viewed .dir-name { color: var(--muted); }
+.review-file { grid-template-columns: auto auto minmax(0, auto) minmax(0, 1fr) auto auto; }
+.review-file .status-end { margin-left: 0; }

@@ -10,3 +10,8 @@ and contributors, licensed under the Apache License, Version 2.0:
 - crates/graph/tests/data: copied from platform/vcs-log/graph/testData.
 - ui/src/graph-paint.ts: ported from platform/vcs-log/impl (SimpleGraphCellPainter,
   PaintParameters, DefaultColorGenerator).
+
+This product includes the file icons of Material Icon Theme
+(https://github.com/material-extensions/vscode-material-icon-theme), Copyright (c) 2025
+Material Extensions, licensed under the MIT License. The npm package material-icon-theme
+carries the icons and its LICENSE; ui/src/file-icons.gen.ts is generated from its icon map.
