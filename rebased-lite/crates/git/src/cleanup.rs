@@ -31,8 +31,14 @@ pub struct MergedBranch {
     /// The tracked branch, for example `origin/main`.
     pub upstream: String,
     pub subject: String,
-    /// The name looks like a long-lived branch (main, uat, release/1.0 and so on), or
-    /// `branch.<name>.deleteMerged` is false. The dialog does not choose it at first.
+    /// The worktree that has the branch checked out. Deleting the branch removes this worktree first.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub worktree: Option<String>,
+    /// The worktree has local changes, so git does not remove it.
+    pub worktree_dirty: bool,
+    /// The name looks like a long-lived branch (main, uat, release/1.0 and so on), another worktree
+    /// has the branch, or `branch.<name>.deleteMerged` is false. The dialog does not choose it at first.
     pub suggest_keep: bool,
 }
 
@@ -55,6 +61,8 @@ struct Local {
     /// The full name of the tracked branch, or empty.
     upstream: String,
     checked_out: bool,
+    /// The worktree that has the branch checked out, or empty.
+    worktree: String,
     subject: String,
 }
 
@@ -163,6 +171,10 @@ impl Repo {
     }
 
     fn cleanup_locals(&self) -> Result<Vec<Local>> {
+        Ok(self.cleanup_locals_raw()?.into_iter().map(|l| Local { checked_out: !l.worktree.is_empty(), ..l }).collect())
+    }
+
+    fn cleanup_locals_raw(&self) -> Result<Vec<Local>> {
         let out = self.git(&["for-each-ref", "--format=%(refname:lstrip=2)%00%(objectname)%00%(upstream)%00%(worktreepath)%00%(contents:subject)", "refs/heads"])?;
         Ok(String::from_utf8_lossy(&out)
             .lines()
@@ -172,7 +184,11 @@ impl Repo {
                     name: p.next()?.to_string(),
                     oid: p.next()?.to_string(),
                     upstream: p.next()?.to_string(),
-                    checked_out: !p.next()?.is_empty(),
+                    worktree: {
+                        let w = p.next()?;
+                        w.to_string()
+                    },
+                    checked_out: false,
                     subject: p.next().unwrap_or("").to_string(),
                 })
             })
@@ -311,7 +327,7 @@ impl Repo {
             .into_iter()
             .filter_map(|n| {
                 let l = locals.get(&n)?;
-                Some(MergedBranch { name: n, oid: l.oid.clone(), upstream: short_ref(&l.upstream).to_string(), subject: l.subject.clone(), suggest_keep: false })
+                Some(MergedBranch { name: n, oid: l.oid.clone(), upstream: short_ref(&l.upstream).to_string(), subject: l.subject.clone(), suggest_keep: false, worktree: None, worktree_dirty: false })
             })
             .collect();
         Ok(MergedBranches { branches, native })
@@ -397,8 +413,9 @@ impl Repo {
         Ok(OpResult { ok: true, message, conflicts: Vec::new(), undo })
     }
 
-    /// The local branches whose commits are all on `target`, as `git branch --merged <target>`. A branch
-    /// that a worktree has checked out, and the target itself, are not in the list.
+    /// The local branches whose commits are all on `target`, as `git branch --merged <target>`. The target
+    /// and the branch of this worktree are not in the list. A branch of another worktree is in the list
+    /// with its worktree; the dialog does not choose it at first.
     pub fn merged_into(&self, target: &str) -> Result<MergedBranches> {
         let oid = self.resolve(safe(target)?).ok_or_else(|| GitError(format!("'{target}' is not a branch or a commit")))?;
         let merged = self.git(&["for-each-ref", "--merged", &oid, "--format=%(refname:lstrip=2)", "refs/heads"]).map(text)?;
@@ -407,11 +424,15 @@ impl Repo {
         let mut branches: Vec<MergedBranch> = self
             .cleanup_locals()?
             .into_iter()
-            .filter(|l| merged.contains(l.name.as_str()) && !l.checked_out && l.name != target)
+            .filter(|l| merged.contains(l.name.as_str()) && l.name != target && !self.is_this_worktree(&l.worktree))
             .map(|l| {
                 let opt_out = config.get(&format!("branch.{}.deletemerged", l.name)).and_then(|v| v.last()).map(|v| v.to_ascii_lowercase());
+                let worktree = (!l.worktree.is_empty()).then(|| l.worktree.clone());
+                let worktree_dirty = worktree.as_ref().is_some_and(|w| !self.worktree_clean(w));
                 MergedBranch {
-                    suggest_keep: long_lived(&l.name) || matches!(opt_out.as_deref(), Some("false" | "no" | "off" | "0")),
+                    suggest_keep: long_lived(&l.name) || matches!(opt_out.as_deref(), Some("false" | "no" | "off" | "0")) || worktree.is_some(),
+                    worktree,
+                    worktree_dirty,
                     upstream: target.to_string(),
                     name: l.name,
                     oid: l.oid,
@@ -434,13 +455,36 @@ impl Repo {
             return Err(GitError(format!("{n} is not merged into {target} any more. Look at the list again")));
         }
         let before_config = self.config_local();
-        let before: HashMap<String, String> = self.cleanup_locals()?.into_iter().map(|l| (l.name, l.oid)).collect();
+        let locals = self.cleanup_locals_raw()?;
+        let before: HashMap<String, String> = locals.iter().map(|l| (l.name.clone(), l.oid.clone())).collect();
+        // A branch of another worktree: the worktree goes first. Without --force, git keeps a worktree
+        // with local changes or a lock, and the delete stops there.
+        for l in locals.iter().filter(|l| names.contains(&l.name) && !l.worktree.is_empty()) {
+            if let Err((_, e)) = self.git_write(&["worktree", "remove", "--", &l.worktree], &[]) {
+                return self.deleted_result(&before, &before_config, names.len(), Err((String::new(), format!("The worktree {} stays: {e}", l.worktree))));
+            }
+        }
         let mut args = vec!["branch", "-D", "--"];
         for n in names {
             args.push(safe(n)?);
         }
         let run = self.git_write(&args, &[]).map(|_| ());
         self.deleted_result(&before, &before_config, names.len(), run)
+    }
+
+    fn is_this_worktree(&self, path: &str) -> bool {
+        !path.is_empty() && std::fs::canonicalize(path).ok() == std::fs::canonicalize(&self.root).ok()
+    }
+
+    /// True when the worktree has no local changes and no untracked files.
+    fn worktree_clean(&self, path: &str) -> bool {
+        crate::git_command()
+            .arg("-C")
+            .arg(path)
+            .args(["status", "--porcelain"])
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .output()
+            .is_ok_and(|o| o.status.success() && o.stdout.is_empty())
     }
 }
 

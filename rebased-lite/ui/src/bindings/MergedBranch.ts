@@ -6,7 +6,15 @@ export type MergedBranch = { name: string, oid: string,
  */
 upstream: string, subject: string, 
 /**
- * The name looks like a long-lived branch (main, uat, release/1.0 and so on), or
- * `branch.<name>.deleteMerged` is false. The dialog does not choose it at first.
+ * The worktree that has the branch checked out. Deleting the branch removes this worktree first.
+ */
+worktree?: string, 
+/**
+ * The worktree has local changes, so git does not remove it.
+ */
+worktreeDirty: boolean, 
+/**
+ * The name looks like a long-lived branch (main, uat, release/1.0 and so on), another worktree
+ * has the branch, or `branch.<name>.deleteMerged` is false. The dialog does not choose it at first.
  */
 suggestKeep: boolean, };

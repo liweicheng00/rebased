@@ -5,6 +5,7 @@
 // later. Set CHROMIUM to a Chromium binary when Playwright has no downloaded browser.
 import { chromium } from "playwright";
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 const [,, repo, outDir] = process.argv;
 const git = (...args) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).replace(/\s+$/, "");
 const has = (b) => git("branch", "--list", b) !== "";
@@ -113,6 +114,21 @@ await page.click(".dialog-buttons button:has-text('Delete')");
 await within("fix/readme is deleted", async () => !has("fix/readme"));
 await page.click(".toast button:has-text('Undo')");
 await within("Undo creates fix/readme again", async () => has("fix/readme"));
+
+// A merged branch in another worktree shows with its worktree, unchecked; when checked, the worktree goes.
+git("worktree", "add", "-q", "-b", "wt-done", `${repo}-wt2`, "main");
+await page.click(".tb-button:has-text('Refresh')");
+await page.click(".group-header:has-text('Local')", { button: "right" });
+await page.click(".menu-item:has-text('Delete Merged Branches')");
+await within("the worktree branch shows", async () => (await rows()) === "fix/readme,wt-done");
+check("it is not checked at first", !(await page.isChecked(".merged-row:has-text('wt-done') input")));
+check("the row names the worktree", ((await page.textContent(".merged-row:has-text('wt-done')")) ?? "").includes("is removed too"));
+await shot("dm4-worktree");
+await page.click(".merged-row:has-text('fix/readme') input");
+await page.click(".merged-row:has-text('wt-done') input");
+await page.click(".dialog-buttons button:has-text('Delete')");
+await within("the worktree branch is deleted", async () => !has("wt-done"));
+check("the worktree folder is gone", !existsSync(`${repo}-wt2`));
 console.log("errors:", JSON.stringify(errors));
 await browser.close();
 if (errors.length) process.exit(1);

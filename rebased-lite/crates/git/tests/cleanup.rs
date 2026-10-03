@@ -208,4 +208,26 @@ fn delete_branches_merged_into_a_branch() {
     let err = repo.delete_merged_into("uat", &strings(&["fix/a"])).unwrap_err();
     assert!(err.0.contains("not merged into uat"), "{}", err.0);
     assert!(repo.merged_into("no-such-branch").is_err());
+
+    // A merged branch in another worktree shows with its worktree, and is not chosen at first.
+    git(&dir, &["branch", "fix/w", "uat"]);
+    let wt = dir.with_extension("wt");
+    let _ = std::fs::remove_dir_all(&wt);
+    git(&dir, &["worktree", "add", "-q", wt.to_str().unwrap(), "fix/w"]);
+    let b = repo.merged_into("uat").unwrap().branches.into_iter().find(|b| b.name == "fix/w").unwrap();
+    assert!(b.suggest_keep && !b.worktree_dirty);
+    assert_eq!(std::fs::canonicalize(b.worktree.unwrap()).unwrap(), std::fs::canonicalize(&wt).unwrap());
+    // Local changes in the worktree keep it, and nothing is deleted.
+    std::fs::write(wt.join("local.txt"), "work").unwrap();
+    assert!(repo.merged_into("uat").unwrap().branches.iter().any(|b| b.name == "fix/w" && b.worktree_dirty));
+    let r = repo.delete_merged_into("uat", &strings(&["fix/w"])).unwrap();
+    assert!(!r.ok && r.message.contains("worktree") && wt.exists(), "{}", r.message);
+    assert!(!git(&dir, &["branch", "--list", "fix/w"]).is_empty());
+    // A clean worktree goes, then the branch.
+    std::fs::remove_file(wt.join("local.txt")).unwrap();
+    let r = repo.delete_merged_into("uat", &strings(&["fix/w"])).unwrap();
+    assert!(r.ok, "{}", r.message);
+    assert!(!wt.exists() && git(&dir, &["branch", "--list", "fix/w"]).is_empty());
+    repo.apply_undo(&r.undo).unwrap();
+    assert!(!git(&dir, &["branch", "--list", "fix/w"]).is_empty());
 }

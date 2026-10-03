@@ -438,7 +438,7 @@ export async function deleteMergedDialog(
     shown = { mode, key, names: r.branches.map((b) => b.name) };
     how.textContent =
       mode === "into"
-        ? `The same list as git branch --merged ${key[0]}. Branches with a long-lived name, such as main or uat, are not checked at first.`
+        ? `The same list as git branch --merged ${key[0]}. Branches with a long-lived name, such as main or uat, and branches in another worktree are not checked at first. Deleting a branch in a worktree removes the worktree folder; Undo creates the branch again, not the folder.`
         : r.native
           ? "Git finds the branches with git branch --delete-merged."
           : "Your git is older than 2.56, so Rebased Lite applies the rules of git branch --delete-merged itself.";
@@ -446,15 +446,24 @@ export async function deleteMergedDialog(
     list.replaceChildren(
       ...(r.branches.length
         ? r.branches.map((b) => {
-            const box = h("input", { type: "checkbox", checked: !b.suggestKeep });
+            const box = h("input", { type: "checkbox", checked: !b.suggestKeep, disabled: b.worktreeDirty });
             box.addEventListener("change", count);
             boxes.set(b.name, box);
+            const where = b.worktree
+              ? b.worktreeDirty
+                ? `worktree ${b.worktree.split(/[\\/]/).pop()} has local changes`
+                : `worktree ${b.worktree.split(/[\\/]/).pop()} is removed too`
+              : b.suggestKeep
+                ? "long-lived"
+                : mode === "tracked"
+                  ? "→ " + b.upstream
+                  : "";
             return h(
               "label",
-              { class: "push-commit merged-row", title: b.oid },
+              { class: "push-commit merged-row", title: b.worktree ? `${b.oid}\nWorktree: ${b.worktree}` : b.oid },
               box,
               h("b", { class: "merged-name" }, b.name),
-              h("span", { class: "muted-inline" }, b.suggestKeep ? "long-lived" : mode === "tracked" ? "→ " + b.upstream : ""),
+              h("span", { class: "muted-inline" + (b.worktreeDirty ? " danger-text" : "") }, where),
               h("span", { class: "rebase-subject" }, b.subject),
               h("code", { class: "rebase-hash" }, b.oid.slice(0, 8)),
             );
