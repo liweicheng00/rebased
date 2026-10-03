@@ -1,6 +1,7 @@
 // Branches panel: local branches, remote branches grouped by remote, and tags.
 
 import type { BranchInfo, RecentBranch, Submodule, Worktree } from "./api";
+import { compareTags } from "./version-sort";
 import { h } from "./dom";
 
 export class Sidebar {
@@ -32,6 +33,10 @@ export class Sidebar {
   onRemoteMenu: (remote: string, e: MouseEvent) => void = () => {};
   /** The context menu of the Local group header. */
   onLocalMenu: (e: MouseEvent) => void = () => {};
+  /** The context menu of the Tags group header. */
+  onTagsMenu: (e: MouseEvent) => void = () => {};
+  /** The tags of a remote, after a fetch or a check. Null: not known, so no tag shows as local only. */
+  private remoteTags: { remote: string; names: Set<string> } | null = null;
 
   constructor() {
     this.search = h("input", { class: "sidebar-search", placeholder: "Search branches and tags", spellcheck: false });
@@ -49,6 +54,16 @@ export class Sidebar {
   setRefs(refs: BranchInfo[]) {
     this.refs = refs;
     this.render();
+  }
+
+  setRemoteTags(remote: string | null, names: string[] | null) {
+    this.remoteTags = remote && names ? { remote, names: new Set(names) } : null;
+    this.render();
+  }
+
+  /** The remote of the last check of the tags, or null. */
+  get remoteTagsOf(): string | null {
+    return this.remoteTags?.remote ?? null;
   }
 
   setRecent(recent: RecentBranch[]) {
@@ -98,7 +113,7 @@ export class Sidebar {
       remotes.get(remote)!.push(b);
     }
     for (const [remote, list] of remotes) groups.push([`Remote: ${remote}`, list]);
-    groups.push(["Tags", this.refs.filter((b) => b.kind === "tag" && match(b)).reverse()]);
+    groups.push(["Tags", this.refs.filter((b) => b.kind === "tag" && match(b)).sort((a, b) => compareTags(a.name, b.name))]);
 
     const frag = document.createDocumentFragment();
     if (current.length) {
@@ -128,6 +143,12 @@ export class Sidebar {
         else this.collapsed.add(title);
         this.render();
       });
+      if (title === "Tags") {
+        header.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          this.onTagsMenu(e);
+        });
+      }
       if (title === "Local") {
         header.addEventListener("contextmenu", (e) => {
           e.preventDefault();
@@ -251,6 +272,9 @@ export class Sidebar {
     const badges = h("span", { class: "badges" });
     if (b.ahead) badges.append(h("span", { class: "ahead", title: `${b.ahead} commits ahead of ${b.upstream}` }, `↑${b.ahead}`));
     if (b.behind) badges.append(h("span", { class: "behind", title: `${b.behind} commits behind ${b.upstream}` }, `↓${b.behind}`));
+    if (b.kind === "tag" && this.remoteTags && !this.remoteTags.names.has(b.name)) {
+      badges.append(h("span", { class: "tag-local", title: `Not on ${this.remoteTags.remote}. Push it from the context menu.` }, "local"));
+    }
     const filterBtn = h("button", { class: "filter-toggle" + (filtered ? " on" : ""), title: filtered ? "Remove from the log filter" : "Show only this branch in the log" }, "⏷");
     filterBtn.addEventListener("dblclick", (e) => e.stopPropagation());
     filterBtn.addEventListener("click", (e) => {

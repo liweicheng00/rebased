@@ -12,6 +12,7 @@ pub mod review;
 pub mod rewrite;
 pub mod stash;
 pub mod submodule;
+pub mod tags;
 mod topology;
 pub mod undo;
 pub mod worktree;

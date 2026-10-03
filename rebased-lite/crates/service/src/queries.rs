@@ -1,6 +1,6 @@
 //! The read commands.
 
-use crate::{err, history, watch, BlameArgs, BlobArgs, CompareArgs, CompareRefsArgs, MergedBranchesArgs, MergedIntoArgs, UrlArgs, ReviewArgs, ReviewEdit, CompareResult, FilePair, FilePairArgs, IndexArgs, OidArgs, PathArgs, PushInfoArgs, Result, RevSpec, Service};
+use crate::{err, history, watch, BlameArgs, BlobArgs, CompareArgs, CompareRefsArgs, MergedBranchesArgs, MergedIntoArgs, UrlArgs, TagArgs, RemoteArgs, ReviewArgs, ReviewEdit, CompareResult, FilePair, FilePairArgs, IndexArgs, OidArgs, PathArgs, PushInfoArgs, Result, RevSpec, Service};
 use rebased_git::changelist::{ChangeListOp, LocalChanges};
 use rebased_git::history::{Blame, HistoryEntry};
 use rebased_git::merge::MergeSides;
@@ -158,6 +158,15 @@ impl Service {
             }
             .map_err(err)
         })
+    }
+
+    pub fn tag_info(&self, args: TagArgs) -> Result<rebased_git::tags::TagInfo> {
+        self.with_repo(|r| r.tag_info(&args.name).map_err(err))
+    }
+
+    /// The tags of a remote. It needs the network, so the front end asks only after a fetch or on request.
+    pub fn remote_tags(&self, args: RemoteArgs) -> Result<Vec<String>> {
+        self.with_repo(|r| r.remote_tags(&args.remote).map_err(err))
     }
 
     /// Opens a web page in the default browser. Only http and https URLs open, so a remote URL can

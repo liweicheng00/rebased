@@ -49,6 +49,7 @@ fresh dm && run delete-merged "$work/dm"
 fresh dp && run diff-panel "$work/dp"
 fresh rv && run review "$work/rv"
 fresh or && run open-remote "$work/or"
+fresh tg && run tags "$work/tg"
 if [ -n "$large" ]; then
   run large-repo "$large"
   run collapse "$large"

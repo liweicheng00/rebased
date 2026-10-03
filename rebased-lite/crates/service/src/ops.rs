@@ -69,6 +69,7 @@ pub enum Op {
     SetRemoteUrl { name: String, url: String, #[serde(default)] push_url: String },
     FetchRemote { name: String },
     PushTag { remote: String, tag: String },
+    PushAllTags { remote: String },
     /// Deletes a branch or a tag on a remote; `name` is a full ref.
     DeleteRemoteRef { remote: String, name: String },
     /// Deletes the local branches whose work is on their tracked branch, except the kept ones.
@@ -283,6 +284,7 @@ impl Service {
             Op::SetRemoteUrl { name, url, push_url } => repo.set_remote_url(&name, &url, &push_url),
             Op::FetchRemote { name } => repo.fetch_remote(&name),
             Op::PushTag { remote, tag } => repo.push_tag(&remote, &tag),
+            Op::PushAllTags { remote } => repo.push_all_tags(&remote),
             Op::DeleteRemoteRef { remote, name } => repo.delete_remote_ref(&remote, &name),
             Op::SetUpstream { branch, upstream } => repo.set_upstream(&branch, upstream.as_deref()),
             Op::FinishReview { branch, mode, message, delete_branch } => repo.finish_review(&branch, mode, &message, delete_branch),

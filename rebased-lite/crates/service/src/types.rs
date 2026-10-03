@@ -121,6 +121,16 @@ pub enum ReviewEdit {
 }
 
 #[derive(Deserialize)]
+pub struct TagArgs {
+    pub name: String,
+}
+
+#[derive(Deserialize)]
+pub struct RemoteArgs {
+    pub remote: String,
+}
+
+#[derive(Deserialize)]
 pub struct UrlArgs {
     pub url: String,
 }

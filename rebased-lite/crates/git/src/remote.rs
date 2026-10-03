@@ -245,6 +245,18 @@ impl Repo {
         self.write(&["push", safe(remote)?, &spec], format!("Pushed tag {tag} to {remote}"))
     }
 
+    /// Pushes all local tags to a remote. A tag that the remote has with another commit is refused, and
+    /// git names it.
+    pub fn push_all_tags(&self, remote: &str) -> Result<OpResult> {
+        self.write(&["push", safe(remote)?, "--tags"], format!("Pushed the tags to {remote}"))
+    }
+
+    /// The tags of a remote, from `git ls-remote`. It needs the network, like Fetch.
+    pub fn remote_tags(&self, remote: &str) -> Result<Vec<String>> {
+        let out = self.git_write(&["ls-remote", "--tags", "--refs", safe(remote)?], &[]).map_err(|(_, e)| GitError(e))?;
+        Ok(out.lines().filter_map(|l| l.split_once('\t')?.1.strip_prefix("refs/tags/").map(String::from)).collect())
+    }
+
     /// Deletes a tag or a branch on a remote. `name` is a full ref, for example `refs/tags/v1`.
     pub fn delete_remote_ref(&self, remote: &str, name: &str) -> Result<OpResult> {
         if !name.starts_with("refs/tags/") && !name.starts_with("refs/heads/") {

@@ -1,6 +1,6 @@
 // Commit details: message, hash, author, committer, parents and refs.
 
-import { api, type CommitInfo, type Row } from "./api";
+import { api, type CommitInfo, type Row, type TagInfo } from "./api";
 import { copyText, formatDate, h } from "./dom";
 
 export class DetailsPanel {
@@ -54,13 +54,45 @@ export class DetailsPanel {
     return a;
   }
 
+  /** The details of the tags of the commit: the message of an annotated tag, its tagger and date. */
+  private async loadTags(names: string[], out: HTMLElement, req: number) {
+    const infos = await Promise.all(names.map((n) => api.tagInfo(n).catch(() => null)));
+    if (req !== this.request) return;
+    out.replaceChildren(
+      ...infos
+        .filter((t): t is TagInfo => !!t)
+        .map((t) =>
+          h(
+            "div",
+            { class: "tag-card" },
+            h(
+              "div",
+              { class: "tag-card-head" },
+              h("span", { class: "ref ref-tag" }, t.name),
+              t.annotated ? "" : h("span", { class: "muted-inline" }, "lightweight tag"),
+              t.signed ? h("span", { class: "tag-signed", title: "The tag has a signature. Rebased Lite does not check it." }, "signed") : "",
+            ),
+            t.annotated
+              ? h("div", { class: "muted-inline tag-card-meta" }, `${t.tagger} <${t.taggerEmail}> · ${formatDate(t.time)}`)
+              : "",
+            t.subject ? h("div", { class: "tag-card-subject" }, t.subject) : "",
+            t.body ? h("pre", { class: "details-message tag-card-body" }, t.body) : "",
+          ),
+        ),
+    );
+  }
+
   private render(c: CommitInfo) {
     const copy = h("button", { class: "icon-button", title: "Copy the full hash" }, "⧉");
     copy.addEventListener("click", () => void copyText(c.oid));
     const refs = c.refs.length ? h("div", { class: "details-refs" }, ...c.refs.map((r) => h("span", { class: `ref ref-${r.kind}` }, r.name))) : "";
     const sameCommitter = c.committer === c.author && c.committer_email === c.author_email;
+    const tags = c.refs.filter((r) => r.kind === "tag").map((r) => r.name);
+    const tagCards = h("div", { class: "tag-cards" });
+    if (tags.length) void this.loadTags(tags, tagCards, this.request);
     this.body.replaceChildren(
       refs,
+      tagCards,
       h("div", { class: "details-subject" }, c.subject),
       c.body ? h("pre", { class: "details-message" }, c.body) : "",
       h(

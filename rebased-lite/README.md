@@ -124,6 +124,11 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 - **File icons**: the file lists show the icons of Material Icon Theme (MIT), the icons that VS Code
   users know. The status letter (M, A, D) is at the end of the row. A review shows its files as a
   tree of folders by default; the button in the title switches to a flat list.
+- **Tags**: the Tags group sorts by version, newest first, and keeps tags with the same prefix
+  (backend/v1.0.0) together. After a fetch, a tag that the remote does not have shows "local". The
+  menu of the Tags group pushes all tags to a remote, and marks the tags that a remote does not have.
+  The commit details show the message, the tagger and the date of an annotated tag, and whether it is
+  signed (Rebased Lite does not check the signature).
 - **Diff panel**: View > Diff Panel, the ✕ button of the diff, or Mod+` hides and shows the diff
   panel below the log. The log then uses all the height. The panel keeps the size that it had. A
   double click on a changed file shows the panel again. "Show Diff" in the context menu also shows it.

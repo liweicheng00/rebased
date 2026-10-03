@@ -119,6 +119,7 @@ async function loadRepo(r: ViewResult, state: TabState | null) {
   authors.clear();
   app.watchSeen = null;
   app.lastUndo = null;
+  sidebar.setRemoteTags(null, null);
   commitPanel.clear();
   showWorkspace(true);
   await applyView(r, false);
@@ -232,6 +233,27 @@ export async function fetchAll() {
     await applyView(r, true);
     await loadRefs();
     statusRight.textContent = "Fetch finished";
+    void loadRemoteTags();
+  }
+}
+
+/** Asks a remote for its tags, so the Tags group marks the tags that are only local. It needs the network,
+ * so it runs after a fetch, after a push of tags, and on request. Without `remote`: the remote of the
+ * current branch, else origin, else the first remote. */
+export async function loadRemoteTags(remote?: string) {
+  const root = app.view?.root;
+  const cur = app.refs.find((b) => b.current);
+  let name = remote ?? cur?.upstream?.split("/")[0];
+  if (!name) {
+    const remotes = (await api.remotes().catch(() => [])).map((r) => r.name);
+    name = remotes.includes("origin") ? "origin" : remotes[0];
+  }
+  if (!name) return sidebar.setRemoteTags(null, null);
+  try {
+    const tags = await api.remoteTags(name);
+    if (app.view?.root === root) sidebar.setRemoteTags(name, tags);
+  } catch {
+    if (app.view?.root === root) sidebar.setRemoteTags(null, null);
   }
 }
 

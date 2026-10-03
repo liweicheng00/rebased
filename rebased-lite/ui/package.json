@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test test/diff3.test.ts test/web-url.test.ts test/file-tree.test.ts"
+    "test": "node --experimental-strip-types --test test/diff3.test.ts test/web-url.test.ts test/file-tree.test.ts test/version-sort.test.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.0",

@@ -1,6 +1,6 @@
 // Remotes, the tracked branch, favorite branches and Compare Branches.
 
-import { api, type BranchInfo, type RemoteInfo } from "./api";
+import { api, type BranchInfo, type Op, type RemoteInfo } from "./api";
 import { openCompare, WORKTREE } from "./compare-view";
 import { menuBelow, type MenuItem, showMenu } from "./context-menu";
 import { confirmDialog, formDialog } from "./dialogs";
@@ -8,7 +8,7 @@ import { keymap } from "./keyboard";
 import { toast } from "./notify";
 import { currentBranch, deleteMergedBranches, runOp } from "./operations";
 import { openRemotesDialog } from "./remotes-dialog";
-import { jumpToOid, reloadView } from "./repo";
+import { jumpToOid, loadRemoteTags, reloadView } from "./repo";
 import { collapse } from "./selection";
 import { save, settings } from "./settings";
 import { openSettings } from "./settings-flow";
@@ -17,7 +17,14 @@ import { app } from "./state";
 import { branchUrl, commitUrl, webUrl } from "./web-url";
 
 export async function fetchRemote(name: string) {
-  await runOp({ op: "fetchRemote", name }, `Fetching ${name}`);
+  const out = await runOp({ op: "fetchRemote", name }, `Fetching ${name}`);
+  if (out?.result.ok) void loadRemoteTags(sidebar.remoteTagsOf ?? undefined);
+}
+
+/** Runs an operation that changes the tags of a remote, then checks the tags of that remote again. */
+async function tagOp(op: Op, label: string, remote: string) {
+  const out = await runOp(op, label);
+  if (out?.result.ok) void loadRemoteTags(remote);
 }
 
 async function addRemote() {
@@ -165,12 +172,12 @@ export function remoteRefItems(b: BranchInfo): MenuItem[] {
     ];
   }
   return remotes.flatMap((remote) => [
-    { label: `Push Tag to ${remote}`, action: () => void runOp({ op: "pushTag", remote, tag: b.name }, `Pushing ${b.name}`) } as MenuItem,
+    { label: `Push Tag to ${remote}`, action: () => void tagOp({ op: "pushTag", remote, tag: b.name }, `Pushing ${b.name}`, remote) } as MenuItem,
     {
       label: `Delete Tag from ${remote}…`,
       action: async () => {
         if (!(await confirmDialog("Delete remote tag", `Delete the tag ${b.name} on ${remote}? The local tag stays.`, "Delete", true))) return;
-        await runOp({ op: "deleteRemoteRef", remote, name: `refs/tags/${b.name}` }, `Deleting ${b.name} from ${remote}`);
+        await tagOp({ op: "deleteRemoteRef", remote, name: `refs/tags/${b.name}` }, `Deleting ${b.name} from ${remote}`, remote);
       },
     } as MenuItem,
   ]);
@@ -245,3 +252,14 @@ remoteBtn.addEventListener("click", async () => {
   if (remotes.length <= 1) return openOnRemote({ remote: remotes[0]?.name });
   menuBelow(remoteBtn, remotes.map((r) => ({ label: `${r.name} · ${webUrl(r.fetchUrl) ?? r.fetchUrl}`, disabled: !webUrl(r.fetchUrl), action: () => void openOnRemote({ remote: r.name }) })));
 });
+
+// The Tags group: push all tags, and check which tags a remote has.
+sidebar.onTagsMenu = async (e) => {
+  const remotes = (await api.remotes().catch(() => [] as RemoteInfo[])).map((r) => r.name);
+  if (!remotes.length) return toast("The repository has no remote.", "info");
+  showMenu(e.clientX, e.clientY, [
+    ...remotes.map((r) => ({ label: `Push All Tags to ${r}`, action: () => void tagOp({ op: "pushAllTags", remote: r }, `Pushing the tags to ${r}`, r) }) as MenuItem),
+    { separator: true },
+    ...remotes.map((r) => ({ label: `Mark the Tags That ${r} Does Not Have`, action: () => void loadRemoteTags(r) }) as MenuItem),
+  ]);
+};

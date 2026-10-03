@@ -592,3 +592,11 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .review-file .status-end { margin-left: 0; }
 .column-grip { flex: 0 0 5px; }
 .compare-side > .compare-files, .compare-side > .review-files { flex: 1 1 0; min-height: 0; overflow: auto; }
+.tag-local { font-size: 10px; padding: 0 4px; border-radius: 3px; border: 1px solid var(--tag); color: var(--tag); margin-left: 4px; }
+.tag-cards:empty { display: none; }
+.tag-card { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; margin: 6px 0; }
+.tag-card-head { display: flex; align-items: center; gap: 6px; }
+.tag-card-meta { font-size: 11px; margin-top: 2px; }
+.tag-card-subject { font-weight: 600; margin-top: 4px; }
+.tag-card-body { margin: 4px 0 0; }
+.tag-signed { font-size: 10px; padding: 0 4px; border-radius: 3px; border: 1px solid var(--added); color: var(--added); }

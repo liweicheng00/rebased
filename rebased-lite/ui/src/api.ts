@@ -23,6 +23,7 @@ import type { ReviewComment } from "./bindings/ReviewComment";
 import type { ReviewDetail } from "./bindings/ReviewDetail";
 import type { ReviewFile } from "./bindings/ReviewFile";
 import type { ReviewSummary } from "./bindings/ReviewSummary";
+import type { TagInfo } from "./bindings/TagInfo";
 import type { OpOutcome } from "./bindings/OpOutcome";
 import type { OpResult } from "./bindings/OpResult";
 import type { OutgoingCommit } from "./bindings/OutgoingCommit";
@@ -64,6 +65,7 @@ export type {
   ReviewDetail,
   ReviewFile,
   ReviewSummary,
+  TagInfo,
   OpOutcome,
   OpResult,
   OutgoingCommit,
@@ -195,6 +197,7 @@ export type Op =
   | { op: "setUpstream"; branch: string; upstream: string | null }
   | { op: "deleteMerged"; upstreams: string[]; keep: string[]; expected: string[] }
   | { op: "deleteMergedInto"; target: string; names: string[] }
+  | { op: "pushAllTags"; remote: string }
   | { op: "finishReview"; branch: string; mode: FinishMode; message: string; deleteBranch: boolean }
   | { op: "rollbackHunks"; path: string; ids: string[] }
   | { op: "revertLocalHistory"; path: string; blob: string | null }
@@ -272,6 +275,8 @@ export const api = {
   reviewEdit: (edit: ReviewEdit) => call<null>("review_edit", edit),
   /** Opens a web page: the default browser in the app, a new tab in a browser. */
   openUrl: (url: string) => (inTauri ? call<null>("open_url", { url }) : Promise.resolve(void window.open(url, "_blank", "noopener")).then(() => null)),
+  tagInfo: (name: string) => call<TagInfo>("tag_info", { name }),
+  remoteTags: (remote: string) => call<string[]>("remote_tags", { remote }),
   mergedInto: (target: string) => call<MergedBranches>("merged_into", { target }),
   mergedBranches: (upstreams: string[]) => call<MergedBranches>("merged_branches", { upstreams }),
   compareRefs: (left: string, right: string) =>
