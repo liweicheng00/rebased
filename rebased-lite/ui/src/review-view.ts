@@ -3,7 +3,7 @@
 
 import type { Change, FileContent, ReviewComment, ReviewDetail, ReviewEdit, ReviewSummary, RevSpec } from "./api";
 import { statusName } from "./changes-panel";
-import { dragResize, formatDate, h } from "./dom";
+import { dragResize, formatDate, h, rowSplitter } from "./dom";
 import { fileIcon } from "./file-icon";
 import { buildTree, treeOrder, walkTree } from "./file-tree";
 import { sharedDiff } from "./history-view";
@@ -65,7 +65,9 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
   const noteText = h("textarea", { class: "dialog-input review-note-text", rows: 2, placeholder: "A note on the line of the cursor (Ctrl+Enter adds it)", spellcheck: false });
   const noteBtn = h("button", { class: "tb-button" }, "Add Note");
   const notes = h("div", { class: "review-notes" }, notesTitle, notesList, h("div", { class: "review-note-form" }, noteText, noteBtn));
-  const side = h("div", { class: "compare-side" }, h("div", { class: "compare-files-title" }, "Commits"), commitsEl, filesTitle, filesEl);
+  const side = h("div", { class: "compare-side" });
+  const sideGrip = rowSplitter(side, commitsEl, () => settings.reviewCommitsHeight, (px) => (settings.reviewCommitsHeight = px), save);
+  side.append(h("div", { class: "compare-files-title" }, "Commits"), commitsEl, sideGrip, filesTitle, filesEl);
   const right = h("div", { class: "review-right" }, d.el, notes);
   const grip = h("div", { class: "vgrip" });
   const body = h("div", { class: "history-body" }, side, grip, right);

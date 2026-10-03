@@ -45,6 +45,17 @@ await within("the changed files between the tips show", async () => (await fileN
 await within("the diff of the first file shows", async () => (await page.$$(".compare-file.selected")).length === 1 && (await page.textContent(".diff-title")).length > 0);
 await shot("cmp1-compare-branches");
 
+// The splitter between the commits and the files: a drag makes the commits shorter.
+const commitsHeight = () => page.$eval(".compare-commits", (e) => Math.round(e.getBoundingClientRect().height));
+const h0 = await commitsHeight();
+const g = await page.$eval(".compare-side .column-grip", (e) => { const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + 2 }; });
+await page.mouse.move(g.x, g.y);
+await page.mouse.down();
+await page.mouse.move(g.x, g.y - 120, { steps: 5 });
+await page.mouse.up();
+const h1 = await commitsHeight();
+check("the drag makes the commits shorter", h1 < h0 - 100);
+
 // From the common ancestor: only the changes of feature/cli.
 await page.selectOption(".compare-header select >> nth=2", "base");
 const baseFiles = git("diff", "--name-only", "main...feature/cli").split("\n").filter(Boolean);
@@ -66,6 +77,13 @@ await page.waitForSelector(".compare-group >> nth=1 >> .compare-commit");
 await page.dblclick(".compare-group >> nth=1 >> .compare-commit >> nth=0");
 await within("the window closes", async () => (await page.$(".compare-header")) === null);
 await within("the log selects the commit", async () => (await page.textContent(".log-row.selected").catch(() => "")).includes(onlyCli[0]));
+
+// The window opens again with the height of the drag.
+await page.click(".group-header:has-text('Local') ~ .branch:has-text('feature/cli') >> nth=0", { button: "right" });
+await page.click(".menu-item:has-text('Compare Branches: main and feature/cli')");
+await page.waitForSelector(".compare-commit");
+check("the height stays", Math.abs((await commitsHeight()) - h1) < 3);
+await page.keyboard.press("Escape");
 console.log("errors:", JSON.stringify(errors));
 await browser.close();
 if (errors.length) process.exit(1);

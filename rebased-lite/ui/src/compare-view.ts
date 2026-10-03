@@ -3,7 +3,8 @@
 
 import type { Change, FileContent, OutgoingCommit, RevSpec } from "./api";
 import { statusName } from "./changes-panel";
-import { dragResize, formatDate, h } from "./dom";
+import { dragResize, formatDate, h, rowSplitter } from "./dom";
+import { save, settings } from "./settings";
 import { sharedDiff } from "./history-view";
 
 /** The working tree, as the right side. */
@@ -46,7 +47,9 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
   const filesEl = h("div", { class: "history-list compare-files", tabIndex: 0 });
   const summary = h("span", { class: "muted-inline" }, "");
   const grip = h("div", { class: "vgrip" });
-  const side = h("div", { class: "compare-side" }, commitsEl, h("div", { class: "compare-files-title" }, "Changed files ", summary), filesEl);
+  const side = h("div", { class: "compare-side" });
+  const sideGrip = rowSplitter(side, commitsEl, () => settings.compareCommitsHeight, (px) => (settings.compareCommitsHeight = px), save);
+  side.append(commitsEl, sideGrip, h("div", { class: "compare-files-title" }, "Changed files ", summary), filesEl);
   const body = h("div", { class: "history-body" }, side, grip, d.el);
   const win = h(
     "div",

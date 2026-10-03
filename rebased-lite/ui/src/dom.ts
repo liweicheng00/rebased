@@ -39,6 +39,24 @@ export function formatDate(seconds: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** A splitter between the top and the rest of a column: the top gets the height that the user drags,
+ * and the setting `key` keeps it. */
+export function rowSplitter(column: HTMLElement, top: HTMLElement, height: () => number, setHeight: (px: number) => void, done: () => void): HTMLElement {
+  const grip = h("div", { class: "hgrip-row column-grip", title: "Drag to resize" });
+  const apply = (px: number) => {
+    top.style.flex = `0 0 ${px}px`;
+    top.style.maxHeight = "none";
+  };
+  apply(height());
+  let start = 0;
+  dragResize(grip, "y", () => (start = top.getBoundingClientRect().height), (d) => {
+    const px = Math.max(40, Math.min(column.clientHeight - 120, start + d));
+    setHeight(px);
+    apply(px);
+  }, done);
+  return grip;
+}
+
 /** Makes `handle` resize something by dragging; `onMove` gets the pointer delta from the drag start. */
 export function dragResize(handle: HTMLElement, axis: "x" | "y", onStart: () => void, onMove: (delta: number) => void, onEnd: () => void) {
   handle.addEventListener("mousedown", (e) => {

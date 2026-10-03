@@ -525,7 +525,7 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .compare-header { gap: 8px; }
 .compare-select { width: auto; max-width: 260px; padding: 3px 6px; }
 .compare-side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); }
-.compare-commits { flex: 0 1 45%; overflow: auto; border-bottom: 1px solid var(--border); }
+.compare-commits { flex: 0 1 45%; overflow: auto; min-height: 0; }
 .compare-group-title, .compare-files-title { display: flex; align-items: center; gap: 6px; padding: 6px 8px 3px; font-weight: 600; font-size: 12px; color: var(--muted); }
 .compare-group-title .group-count { margin-left: auto; }
 .compare-none { padding: 2px 8px 6px; display: block; }
@@ -555,7 +555,7 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .review-window .merge-header .review-switcher { max-width: 360px; }
 .review-info { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .review-status { padding: 4px 12px; border-bottom: 1px solid var(--border); font-size: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
-.review-commits { max-height: 30%; overflow: auto; border-bottom: 1px solid var(--border); flex: none; }
+.review-commits { overflow: auto; min-height: 0; }
 .review-commit.selected, .review-file.selected { background: var(--select); }
 .review-file { display: grid; grid-template-columns: auto auto minmax(0, auto) minmax(0, 1fr) auto; gap: 6px; align-items: center; }
 .review-file.viewed .rebase-subject { color: var(--muted); }
@@ -590,3 +590,5 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .review-dir.viewed .dir-name { color: var(--muted); }
 .review-file { grid-template-columns: auto auto minmax(0, auto) minmax(0, 1fr) auto auto; }
 .review-file .status-end { margin-left: 0; }
+.column-grip { flex: 0 0 5px; }
+.compare-side > .compare-files, .compare-side > .review-files { flex: 1 1 0; min-height: 0; overflow: auto; }

@@ -25,6 +25,9 @@ export interface Settings {
   diffRatio: number;
   /** The diff panel below the log is shown. Its size (diffRatio) stays while it is hidden. */
   showDiff: boolean;
+  /** The height of the commit lists of the Compare and Review windows, in pixels. */
+  compareCommitsHeight: number;
+  reviewCommitsHeight: number;
   detailsRatio: number;
   authorWidth: number;
   dateWidth: number;
@@ -79,6 +82,8 @@ const DEFAULTS: Settings = {
   rightWidth: 360,
   diffRatio: 0.42,
   showDiff: true,
+  compareCommitsHeight: 300,
+  reviewCommitsHeight: 180,
   detailsRatio: 0.55,
   authorWidth: 150,
   dateWidth: 125,
