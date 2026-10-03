@@ -60,9 +60,9 @@ const detailsGrip = h("div", { class: "hgrip-row" });
 const center = h("section", { class: "center" }, banner.el, filterBar.el, log.el);
 const right = h("section", { class: "right" }, changes.el, detailsGrip, details.el);
 const tabBranches = h("button", { class: "lp-tab", title: `Branches (${mod}1)` }, "Branches");
-export const tabCommit = h("button", { class: "lp-tab", title: `Local changes and commit (${mod}K)` }, "Changes");
-export const tabStash = h("button", { class: "lp-tab", title: "Stashes" }, "Stash");
-export const tabReviews = h("button", { class: "lp-tab", title: `Reviews (${mod}3)` }, "Reviews");
+export const tabCommit = h("button", { class: "lp-tab", title: `Local changes and commit (${mod}2)` }, "Changes");
+export const tabStash = h("button", { class: "lp-tab", title: `Stashes (${mod}3)` }, "Stash");
+export const tabReviews = h("button", { class: "lp-tab", title: `Reviews (${mod}4)` }, "Reviews");
 const leftPane = h("aside", { class: "leftpane" }, h("div", { class: "lp-tabs" }, tabBranches, tabCommit, tabStash, tabReviews), sidebar.el, commitPanel.el, stashPanel.el, reviewPanel.el);
 export function showLeftTab(tab: "branches" | "commit" | "stash" | "reviews") {
   settings.leftTab = tab;

@@ -127,7 +127,8 @@ async function loadRepo(r: ViewResult, state: TabState | null) {
   await loadRefs();
   commitPanel.setTemplate(await api.commitTemplate().catch(() => null));
   const target = state?.selected ?? r.headOid;
-  if (target) await jumpToOid(target, true);
+  // The user can choose a commit while the repository loads; that choice stays.
+  if (target && !app.selected.length) await jumpToOid(target, true);
 }
 
 export async function applyView(r: ViewResult, keepSelection: boolean) {

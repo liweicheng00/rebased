@@ -235,7 +235,14 @@ export class LogView {
       settings.showHash ? h("span", { class: "hash" }, r.oid.slice(0, 8)) : "",
     );
     div.style.top = `${r.row * ROW_HEIGHT}px`;
-    div.addEventListener("mousedown", (e) => e.button === 0 && this.onClick(r.row, e));
+    div.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      // The click draws the rows again, so this row goes away. The default action of the mousedown
+      // then has no row to focus and moves the focus to the body, and the arrow keys stop. onClick
+      // focuses the list itself.
+      e.preventDefault();
+      this.onClick(r.row, e);
+    });
     div.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       if (!this.selection.includes(r.row)) this.select([r.row]);

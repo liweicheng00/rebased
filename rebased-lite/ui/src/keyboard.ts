@@ -26,8 +26,8 @@ for (const a of [
   { id: "push", label: "Push", defaults: ["Mod+Shift+K"], run: () => app.view && void pushBranch() },
   {
     id: "commit",
-    label: "Commit (show the Changes tab)",
-    defaults: ["Mod+K"],
+    label: "Changes Tab (and the commit message)",
+    defaults: ["Mod+2", "Mod+K"],
     run: () => {
       showLeftTab("commit");
       commitPanel.focusMessage();
@@ -44,8 +44,9 @@ for (const a of [
       else toggleSidebar();
     },
   },
-  { id: "reviews", label: "Reviews", defaults: ["Mod+3"], run: () => showLeftTab("reviews") },
-  { id: "diffPanel", label: "Diff Panel", defaults: ["Mod+2"], run: () => toggleDiff() },
+  { id: "stash", label: "Stash Tab", defaults: ["Mod+3"], run: () => showLeftTab("stash") },
+  { id: "reviews", label: "Reviews Tab", defaults: ["Mod+4"], run: () => showLeftTab("reviews") },
+  { id: "diffPanel", label: "Diff Panel", defaults: ["Mod+`"], run: () => toggleDiff() },
   { id: "localHistory", label: "Local History", defaults: [], run: () => app.view && showLocalHistory("") },
   { id: "nextTab", label: "Next Tab", defaults: ["Mod+PageDown"], run: () => nextTab(1) },
   { id: "previousTab", label: "Previous Tab", defaults: ["Mod+PageUp"], run: () => nextTab(-1) },

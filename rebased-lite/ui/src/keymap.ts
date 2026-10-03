@@ -25,6 +25,8 @@ export function eventKey(e: KeyboardEvent): string | null {
   else if (e.code.startsWith("Digit")) key = e.code.slice(5);
   else if (e.key === " ") key = "Space";
   else if (e.key === ",") key = "Comma";
+  // The key left of 1, by its place: e.key differs between keyboard layouts.
+  else if (e.code === "Backquote") key = "`";
   else key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
   const parts: string[] = [];
   if (isMac ? e.metaKey : e.ctrlKey) parts.push("Mod");

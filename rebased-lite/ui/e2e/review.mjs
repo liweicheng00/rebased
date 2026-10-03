@@ -59,7 +59,12 @@ await page.keyboard.press("Escape");
 await page.waitForSelector(".review-window", { state: "detached" });
 
 // A second review from the Reviews tab, then switch between the two.
-await page.keyboard.press("Control+3");
+// The tabs of the left pane: Mod+1 to Mod+4.
+for (const [key, panel] of [["2", ".commit-panel"], ["3", ".stash-panel"], ["1", ".sidebar"]]) {
+  await page.keyboard.press(`Control+${key}`);
+  await within(`Mod+${key} shows ${panel}`, async () => !(await page.$eval(panel, (e) => e.hidden)));
+}
+await page.keyboard.press("Control+4");
 await page.waitForSelector(".review-panel:not([hidden])");
 await page.click(".review-panel button:has-text('New Review')");
 await page.selectOption(".dialog select >> nth=0", "topic/readme");

@@ -41,13 +41,13 @@ check("the drag makes the panel taller", tall > before + 100);
 
 // The shortcut hides the panel, and the log takes the space.
 await page.click(".log-row >> nth=2");
-await page.keyboard.press("Control+2");
+await page.keyboard.press("Control+Backquote");
 await within("the shortcut hides the panel", async () => (await diffHeight()) === 0);
 check("the log takes the space", (await logHeight()) > 800);
 await shot("dp1-hidden");
 
 // The shortcut shows it again with the same size.
-await page.keyboard.press("Control+2");
+await page.keyboard.press("Control+Backquote");
 await within("the shortcut shows the panel with its size", async () => Math.abs((await diffHeight()) - tall) < 3);
 
 // The close button, then the View menu.
@@ -58,18 +58,18 @@ await page.click(".menu-item:has-text('Diff Panel')");
 await within("the View menu shows the panel", async () => (await diffHeight()) > 0);
 
 // A double click on a changed file shows a hidden panel.
-await page.keyboard.press("Control+2");
+await page.keyboard.press("Control+Backquote");
 await within("hidden again", async () => (await diffHeight()) === 0);
 await page.dblclick(".changes-panel .change >> nth=0");
 await within("a double click shows the panel", async () => (await diffHeight()) > 0);
 
 // The state and the size stay after a reload.
-await page.keyboard.press("Control+2");
+await page.keyboard.press("Control+Backquote");
 await page.reload();
 await page.waitForSelector(".log-row", { timeout: 30000 });
 await within("the panel stays hidden after a reload", async () => (await diffHeight()) === 0);
 await page.click(".log-row >> nth=2");
-await page.keyboard.press("Control+2");
+await page.keyboard.press("Control+Backquote");
 await within("the size stays after a reload", async () => Math.abs((await diffHeight()) - tall) < 3);
 await shot("dp2-shown");
 
@@ -78,6 +78,16 @@ const headSubject = execFileSync("git", ["-C", repo, "log", "-1", "--format=%s"]
 await page.click(".log-row >> nth=5");
 await page.click(".sidebar-head");
 await within("the HEAD row goes to the commit of HEAD", async () => ((await page.textContent(".log-row.selected").catch(() => "")) ?? "").includes(headSubject));
+
+// The arrow keys move the selection after a click on a row.
+const rowText = (n) => page.textContent(`.log-row >> nth=${n}`);
+await page.click(".log-row >> nth=2");
+await page.waitForTimeout(800);
+await page.keyboard.press("ArrowDown");
+await within("ArrowDown selects the next commit", async () => (await page.textContent(".log-row.selected").catch(() => "")) === (await rowText(3)));
+await page.keyboard.press("ArrowUp");
+await page.keyboard.press("ArrowUp");
+await within("ArrowUp goes back up", async () => (await page.textContent(".log-row.selected").catch(() => "")) === (await rowText(1)));
 console.log("errors:", JSON.stringify(errors));
 await browser.close();
 if (errors.length) process.exit(1);

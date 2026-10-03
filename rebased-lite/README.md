@@ -49,7 +49,7 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   writes a version back, and first keeps the current content. The store is in the git directory,
   in `rebased-lite/local-history`. It keeps 5 days and at most 200 MB, and skips files larger
   than 2 MB and changes of more than 200 files at one time (for example a checkout).
-- **Changelists and commit**: the Changes tab (`Ctrl/Cmd+K`) groups the local changes into named
+- **Changelists and commit**: the Changes tab (`Ctrl/Cmd+2` or `Ctrl/Cmd+K`) groups the local changes into named
   changelists, as in IntelliJ. New changes go to the active changelist. Move files with the context
   menu or with drag and drop. The checked files go into the commit; the other local changes and the
   staged content of other files stay as they are. Each changelist keeps its draft commit message.
@@ -108,7 +108,7 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   branch. A remote branch can be deleted on the remote. A tag can be pushed to a remote or deleted
   there; the local tag stays.
 - **Review Branch (a local pull request)**: "Review Branch…" in the context menu of a local branch,
-  or New Review in the Reviews tab (Mod+3), starts a review of a branch against a base. The review
+  or New Review in the Reviews tab (Mod+4), starts a review of a branch against a base. The review
   shows the changes from the merge base, as a pull request does, and each commit alone. Mark each
   file as viewed (the check box or Space). A new version of the file clears the mark. Add a note on
   the line of the cursor. A note on a file that changed later shows as outdated. The window shows
@@ -121,7 +121,7 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   The context menus open a branch, a commit or a remote in the browser. GitHub, GitLab, Bitbucket,
   Azure DevOps and Gitea links work; an ssh or https remote URL becomes the web address. Only http
   and https addresses open.
-- **Diff panel**: View > Diff Panel, the ✕ button of the diff, or Mod+2 hides and shows the diff
+- **Diff panel**: View > Diff Panel, the ✕ button of the diff, or Mod+` hides and shows the diff
   panel below the log. The log then uses all the height. The panel keeps the size that it had. A
   double click on a changed file shows the panel again. "Show Diff" in the context menu also shows it.
 - **Delete Merged Branches**: the context menu of the Local group, a branch, or a remote. Two ways
@@ -181,9 +181,9 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 - **Other**: context menus, Refresh, Fetch, column choice and resize, resizable panels,
   light, dark or system theme, and a status bar.
 
-Keyboard (the defaults; change them in Settings → Keymap): `Ctrl/Cmd+O` open, `Ctrl/Cmd+K` commit, `Ctrl/Cmd+Shift+K` push, `Ctrl/Cmd+T` update,
-`Ctrl/Cmd+Enter` commit from the message field, `Ctrl/Cmd+Alt+K` commit and push, `Ctrl/Cmd+R` or `F5` refresh, `Ctrl/Cmd+F` filter, `Ctrl/Cmd+1` branches
-panel, arrow keys, Page Up, Page Down, Home and End in the log, `Shift` with arrows to select a range,
+Keyboard (the defaults; change them in Settings → Keymap): `Ctrl/Cmd+O` open, `Ctrl/Cmd+1` to `Ctrl/Cmd+4` the Branches, Changes, Stash and Reviews tabs, `Ctrl/Cmd+K` commit, `Ctrl/Cmd+Shift+K` push, `Ctrl/Cmd+T` update,
+`Ctrl/Cmd+Enter` commit from the message field, `Ctrl/Cmd+Alt+K` commit and push, `Ctrl/Cmd+R` or `F5` refresh, `Ctrl/Cmd+F` filter, `Ctrl/Cmd+`` ` the diff panel,
+arrow keys, Page Up, Page Down, Home and End in the log, `Shift` with arrows to select a range,
 `Ctrl/Cmd+C` copy the hash, `Ctrl/Cmd+Z` undo the last operation, `Ctrl/Cmd+PageDown` and `Ctrl/Cmd+PageUp` next and previous tab, `F7` and `Shift+F7` next and previous change, `Alt+Down` and `Alt+Up` next
 and previous file.
 
