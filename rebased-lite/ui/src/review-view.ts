@@ -141,12 +141,13 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
     info.textContent = ` ${s.commits} commit(s) · ${s.files} file(s) · ${s.viewed}/${s.files} viewed · ${s.comments} note(s)`;
     const parts: (Node | string)[] = [];
     if (s.merged) parts.push(h("span", { class: "review-ok" }, `✓ ${s.base} has all the commits of ${s.branch}.`));
-    else if (!s.exists) parts.push(h("span", { class: "danger-text" }, `${s.branch} or ${s.base} is not a local branch any more.`));
+    else if (!s.exists) parts.push(h("span", { class: "danger-text" }, `${s.branch} or ${s.base} does not exist any more.`));
     else if (s.conflicts.length) parts.push(h("span", { class: "danger-text" }, `⚠ ${s.conflicts.length} file(s) conflict with ${s.base}: ${s.conflicts.join(", ")}`));
     else parts.push(h("span", { class: "review-ok" }, `✓ No conflicts with ${s.base}.`));
     if (s.behind) parts.push(h("span", { class: "muted-inline" }, ` ${s.base} has ${s.behind} commit(s) that ${s.branch} does not have.`));
     status.replaceChildren(...parts);
-    finishBtn.disabled = !s.exists || s.merged;
+    finishBtn.disabled = !s.exists || s.merged || s.baseIsRemote;
+    finishBtn.title = s.baseIsRemote ? `${s.base} is a remote branch. Merge needs a local base` : "";
     filesTitle.replaceChildren(
       scope === "all" ? `Files · ${s.viewed}/${s.files} viewed` : "Files of the commit",
       treeBtn,

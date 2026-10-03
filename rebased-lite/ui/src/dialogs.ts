@@ -563,11 +563,11 @@ export async function finishReviewDialog(d: ReviewDetail): Promise<{ mode: Finis
     h("p", { class: "dialog-text" }, h("b", {}, s.branch), " → ", h("b", {}, s.base)),
     ...radios,
     messageField,
-    h("label", { class: "dialog-check" }, del, `Delete the branch ${s.branch} after the merge`),
+    ...(s.branchIsRemote ? [] : [h("label", { class: "dialog-check" }, del, `Delete the branch ${s.branch} after the merge`)]),
     ...warnings,
     h("p", { class: "dialog-note" }, "Undo puts the two branches back."),
   ];
   const r = await modal(`Merge ${s.branch}`, body, [{ label: "Merge", value: "ok", primary: true }], true);
   if (r !== "ok") return null;
-  return { mode, message: message.value.trim(), deleteBranch: del.checked };
+  return { mode, message: message.value.trim(), deleteBranch: !s.branchIsRemote && del.checked };
 }

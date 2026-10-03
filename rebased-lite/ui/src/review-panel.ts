@@ -51,7 +51,8 @@ export class ReviewPanel {
               ? h("span", { class: "review-badge conflict", title: r.conflicts.join("\n") }, `⚠ ${r.conflicts.length} conflict${r.conflicts.length === 1 ? "" : "s"}`)
               : h("span", { class: "review-badge ready" }, "no conflicts");
         const done = r.files ? Math.round((r.viewed / r.files) * 100) : 0;
-        const finish = h("button", { class: "review-finish", title: `Merge ${r.branch} into ${r.base}`, disabled: !r.exists || r.merged }, "Merge…");
+        const finish = h("button", { class: "review-finish", title: `Merge ${r.branch} into ${r.base}`, disabled: !r.exists || r.merged || r.baseIsRemote }, "Merge…");
+        if (r.baseIsRemote) finish.title = `${r.base} is a remote branch. Merge needs a local base`;
         finish.addEventListener("click", (e) => {
           e.stopPropagation();
           this.onFinish(r);

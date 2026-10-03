@@ -10,31 +10,40 @@ import { reviewPanel, showLeftTab } from "./shell";
 import { app } from "./state";
 
 const locals = () => app.refs.filter((b) => b.kind === "local").map((b) => b.name);
+const remotes = () => app.refs.filter((b) => b.kind === "remote" && !b.name.endsWith("/HEAD")).map((b) => b.name);
+
+/** The choices of a branch field: the local branches first, then the remote branches. */
+const branchOptions = (skip?: string): [string, string][] => [
+  ...locals().filter((n) => n !== skip).map((n): [string, string] => [n, n]),
+  ...remotes().filter((n) => n !== skip).map((n): [string, string] => [n, `${n}  (remote)`]),
+];
 
 const BASES = ["main", "master", "develop"];
+const baseName = (n: string) => n.slice(n.indexOf("/") + 1);
 
-/** The base that a new review of `branch` likely wants: main, master or develop, if they exist. */
+/** The base that a new review of `branch` likely wants: a local main, master or develop, then a remote one. */
 function guessBase(branch: string): string {
   const names = locals().filter((n) => n !== branch);
-  return BASES.find((n) => names.includes(n)) ?? names[0] ?? "";
+  const remote = remotes().filter((n) => n !== branch);
+  return BASES.find((n) => names.includes(n)) ?? remote.find((n) => BASES.includes(baseName(n))) ?? names[0] ?? remote[0] ?? "";
 }
 
 /** Asks for the branch and the base, starts the review, and opens it. */
 export async function startReview(branch?: string) {
-  const names = locals();
-  if (names.length < 2) return void (await confirmDialog("Review Branch", "A review needs two local branches: the branch and its base.", "OK"));
+  const names = [...locals(), ...remotes()];
+  if (names.length < 2) return void (await confirmDialog("Review Branch", "A review needs two branches: the branch and its base.", "OK"));
   const cur = app.repoState?.branch ?? names[0];
   // The current branch, or else a recent branch that is not a usual base.
   const recent = app.recent.map((r) => r.name).filter((n) => names.includes(n));
-  const b = branch ?? (!BASES.includes(cur) ? cur : [...recent, ...names].find((n) => !BASES.includes(n)) ?? names[0]);
+  const b = branch ?? (!BASES.includes(cur) ? cur : [...recent, ...names].find((n) => !BASES.includes(baseName(n)) && !BASES.includes(n)) ?? names[0]);
   const r = await formDialog(
     "Review Branch",
     [
-      { key: "branch", label: "Branch", type: "select", value: b, options: names.map((n) => [n, n]) },
-      { key: "base", label: "Into (base)", type: "select", value: guessBase(b), options: names.map((n) => [n, n]) },
+      { key: "branch", label: "Branch", type: "select", value: b, options: branchOptions() },
+      { key: "base", label: "Into (base)", type: "select", value: guessBase(b), options: branchOptions() },
     ],
     "Start Review",
-    "The review shows the changes of the branch from the commit where it started, as a pull request does. The notes and the viewed files stay in this repository only.",
+    "The review shows the changes of the branch from the commit where it started, as a pull request does. A remote branch shows its last fetched state. Merge needs a local base. The notes and the viewed files stay in this repository only.",
   );
   if (!r) return;
   try {
@@ -80,8 +89,7 @@ export async function openReviewWindow(branch: string) {
 }
 
 async function changeBase(r: ReviewSummary) {
-  const names = locals().filter((n) => n !== r.branch);
-  const f = await formDialog(`Base of ${r.branch}`, [{ key: "base", label: "Into (base)", type: "select", value: r.base, options: names.map((n) => [n, n]) }], "Change");
+  const f = await formDialog(`Base of ${r.branch}`, [{ key: "base", label: "Into (base)", type: "select", value: r.base, options: branchOptions(r.branch) }], "Change");
   if (!f) return;
   await api.reviewEdit({ action: "start", branch: r.branch, base: String(f.base) });
   await loadReviews();
@@ -93,7 +101,7 @@ reviewPanel.onFinish = (r) => void finishReview(r.branch);
 reviewPanel.onMenu = (r, e) =>
   showMenu(e.clientX, e.clientY, [
     { label: "Open Review", action: () => void openReviewWindow(r.branch) },
-    { label: `Merge into ${r.base}…`, disabled: !r.exists || r.merged, action: () => void finishReview(r.branch) },
+    { label: `Merge into ${r.base}…`, disabled: !r.exists || r.merged || r.baseIsRemote, action: () => void finishReview(r.branch) },
     { label: "Change the Base…", action: () => void changeBase(r) },
     { separator: true },
     {

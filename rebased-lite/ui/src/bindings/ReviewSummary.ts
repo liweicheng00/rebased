@@ -5,6 +5,14 @@
  */
 export type ReviewSummary = { branch: string, base: string, 
 /**
+ * The branch is a remote-tracking branch, such as `origin/feature`.
+ */
+branchIsRemote: boolean, 
+/**
+ * The base is a remote-tracking branch. Merge cannot move it.
+ */
+baseIsRemote: boolean, 
+/**
  * The branch and the base exist.
  */
 exists: boolean, 

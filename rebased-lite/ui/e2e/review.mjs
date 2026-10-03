@@ -125,6 +125,32 @@ await page.click(".review-tree-toggle");
 await within("the flat list shows all files", async () => (await files()) === "src/app/one.rs,src/app/two.rs,top.txt".split(",").map((p) => p.split("/").pop()).join(","));
 await page.click(".review-tree-toggle");
 await page.keyboard.press("Escape");
+
+// A remote branch: the review works, and Merge keeps the remote branch.
+const newReview = async (branch, base) => {
+  await page.click(".review-panel button:has-text('New Review')");
+  await page.waitForSelector(".dialog:has-text('Review Branch')");
+  await page.selectOption(".dialog select >> nth=0", branch);
+  await page.selectOption(".dialog select >> nth=1", base);
+  await page.click(".dialog-buttons button:has-text('Start Review')");
+  await page.waitForSelector(".review-window");
+};
+await newReview("origin/feature/cli", "main");
+await within("the remote branch shows its changes", async () => (await files()).includes("cli.rs"));
+await within("Merge is on for a local base", async () => !(await page.isDisabled(".review-window .review-merge")));
+await page.click(".review-window .review-merge");
+await page.waitForSelector(".dialog:has-text('Merge origin/feature/cli')");
+check("no delete box for a remote branch", !((await text(".dialog")) ?? "").includes("Delete the branch"));
+await shot("rv6-remote");
+await page.keyboard.press("Escape");
+await page.keyboard.press("Escape");
+await page.waitForSelector(".review-window", { state: "detached" });
+// A remote base: the review shows, and Merge is off.
+await newReview("feature/tree", "origin/main");
+await within("the remote base shows", async () => (await text(".review-window .merge-header")).includes("origin/main"));
+check("Merge is off for a remote base", await page.isDisabled(".review-window .review-merge"));
+await page.keyboard.press("Escape");
+await within("the panel lists the remote review", async () => (await text(".review-panel")).includes("origin/feature/cli"));
 console.log("errors:", JSON.stringify(errors));
 await browser.close();
 if (errors.length) process.exit(1);

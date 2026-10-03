@@ -105,7 +105,7 @@ sidebar.onContextMenu = (b, e) => {
       action: () => filterBar.set({ ...filterBar.filter, branches: [cur ?? "HEAD", `^${b.name}`] }, true),
     },
     { separator: true },
-    { label: "Review Branch…", disabled: b.kind !== "local", action: () => void startReview(b.name) },
+    { label: "Review Branch…", disabled: b.kind === "tag", action: () => void startReview(b.name) },
     { separator: true },
     { label: "Rename…", disabled: b.kind !== "local", action: () => void renameBranch(b) },
     { label: b.kind === "tag" ? "Delete Tag…" : "Delete…", disabled: b.kind === "remote" || isCurrent, action: () => void deleteBranch(b) },

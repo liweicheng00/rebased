@@ -161,3 +161,64 @@ fn conflicts_show_before_the_merge() {
     assert!(!r.ok && r.conflicts == ["a.txt"], "{}", r.message);
     git(&dir, &["merge", "--abort"]);
 }
+
+/// feature only on the remote: origin/feature, and origin/main as a base.
+fn setup_remote(name: &str) -> PathBuf {
+    let dir = setup(name);
+    let feature = git(&dir, &["rev-parse", "feature"]);
+    let main = git(&dir, &["rev-parse", "main"]);
+    git(&dir, &["update-ref", "refs/remotes/origin/feature", &feature]);
+    git(&dir, &["update-ref", "refs/remotes/origin/main", &main]);
+    git(&dir, &["branch", "-q", "-D", "feature"]);
+    dir
+}
+
+#[test]
+fn review_of_a_remote_branch() {
+    let dir = setup_remote("remote");
+    let repo = Repo::open(&dir).unwrap();
+    assert!(repo.start_review("origin/nothing", "main").is_err());
+    repo.start_review("origin/feature", "main").unwrap();
+    let d = repo.review("origin/feature").unwrap();
+    assert!(d.summary.exists && d.summary.branch_is_remote && !d.summary.base_is_remote);
+    assert_eq!((d.summary.commits, d.summary.files), (2, 2));
+    repo.set_viewed("origin/feature", &["a.txt".into()], true).unwrap();
+    repo.add_review_comment("origin/feature", "a.txt", 2, "Why?").unwrap();
+    assert_eq!((repo.review("origin/feature").unwrap().summary.viewed, repo.review("origin/feature").unwrap().summary.comments), (1, 1));
+
+    // Merge into the local base. The remote branch stays, also when the user asks to delete it.
+    let tip = git(&dir, &["rev-parse", "origin/feature"]);
+    let r = repo.finish_review("origin/feature", FinishMode::Merge, "Merge origin/feature", true).unwrap();
+    assert!(r.message.contains("stays because it is a remote branch"), "{}", r.message);
+    assert_eq!(git(&dir, &["rev-parse", "origin/feature"]), tip);
+    assert_eq!(git(&dir, &["rev-parse", "main^2"]), tip);
+    assert!(git(&dir, &["branch", "--list", "origin/feature"]).is_empty());
+    assert!(repo.review("origin/feature").unwrap().summary.merged);
+}
+
+#[test]
+fn rebase_of_a_remote_branch_moves_the_base_only() {
+    let dir = setup_remote("remote-rebase");
+    let repo = Repo::open(&dir).unwrap();
+    git(&dir, &["checkout", "-q", "--detach"]);
+    repo.start_review("origin/feature", "main").unwrap();
+    let tip = git(&dir, &["rev-parse", "origin/feature"]);
+    repo.finish_review("origin/feature", FinishMode::Rebase, "", false).unwrap();
+    assert_eq!(git(&dir, &["rev-parse", "origin/feature"]), tip);
+    assert_eq!(git(&dir, &["log", "--format=%s", "-3", "main"]), "Add b\nChange a\nMain work");
+}
+
+#[test]
+fn a_remote_base_shows_but_does_not_merge() {
+    let dir = setup("remote-base");
+    let repo = Repo::open(&dir).unwrap();
+    let main = git(&dir, &["rev-parse", "main"]);
+    git(&dir, &["update-ref", "refs/remotes/origin/main", &main]);
+    repo.start_review("feature", "origin/main").unwrap();
+    let d = repo.review("feature").unwrap();
+    assert!(d.summary.base_is_remote && !d.summary.branch_is_remote);
+    assert_eq!((d.summary.commits, d.summary.behind), (2, 1));
+    let e = repo.finish_review("feature", FinishMode::Merge, "m", false).unwrap_err();
+    assert!(e.0.contains("Merge needs a local base"), "{}", e.0);
+    assert_eq!(git(&dir, &["rev-parse", "main"]), main);
+}

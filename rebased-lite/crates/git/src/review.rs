@@ -2,6 +2,9 @@
 //! the branch started (the merge base), as a pull request does. The user marks files as viewed, adds
 //! notes to lines, and then merges the branch into the base in one step.
 //!
+//! The branch and the base can be local branches or remote-tracking branches. A name is a local branch
+//! first, then a remote-tracking branch, as git looks it up. Merge needs a local base.
+//!
 //! The reviews are in `<common git dir>/rebased-lite/reviews.json`, so all worktrees share them, and
 //! nothing goes to a remote.
 
@@ -56,6 +59,10 @@ struct Stored {
 pub struct ReviewSummary {
     pub branch: String,
     pub base: String,
+    /// The branch is a remote-tracking branch, such as `origin/feature`.
+    pub branch_is_remote: bool,
+    /// The base is a remote-tracking branch. Merge cannot move it.
+    pub base_is_remote: bool,
     /// The branch and the base exist.
     pub exists: bool,
     /// The base has all the commits of the branch.
@@ -156,13 +163,29 @@ impl Repo {
         self.resolve(&format!("refs/heads/{name}"))
     }
 
+    fn remote_oid(&self, name: &str) -> Option<String> {
+        if name.ends_with("/HEAD") {
+            return None;
+        }
+        self.resolve(&format!("refs/remotes/{name}"))
+    }
+
+    /// The commit of a branch in a review: a local branch first, then a remote-tracking branch.
+    fn review_oid(&self, name: &str) -> Option<String> {
+        self.branch_oid(name).or_else(|| self.remote_oid(name))
+    }
+
+    fn is_remote_branch(&self, name: &str) -> bool {
+        self.branch_oid(name).is_none() && self.remote_oid(name).is_some()
+    }
+
     /// Starts a review of `branch` against `base`, or changes the base of a review.
     pub fn start_review(&self, branch: &str, base: &str) -> Result<()> {
         if branch == base {
             return Err(GitError("The branch and the base must be different".into()));
         }
         for b in [branch, base] {
-            self.branch_oid(safe(b)?).ok_or_else(|| GitError(format!("{b} is not a local branch")))?;
+            self.review_oid(safe(b)?).ok_or_else(|| GitError(format!("{b} is not a local or a remote branch")))?;
         }
         let mut all = self.load_reviews();
         match all.iter_mut().find(|r| r.branch == branch) {
@@ -209,10 +232,14 @@ impl Repo {
     }
 
     fn review_detail(&self, s: &Stored) -> Result<ReviewDetail> {
-        let (Some(head), Some(base_oid)) = (self.branch_oid(&s.branch), self.branch_oid(&s.base)) else {
+        let branch_is_remote = self.is_remote_branch(&s.branch);
+        let base_is_remote = self.is_remote_branch(&s.base);
+        let (Some(head), Some(base_oid)) = (self.review_oid(&s.branch), self.review_oid(&s.base)) else {
             let summary = ReviewSummary {
                 branch: s.branch.clone(),
                 base: s.base.clone(),
+                branch_is_remote,
+                base_is_remote,
                 exists: false,
                 merged: s.finished,
                 commits: 0,
@@ -257,6 +284,8 @@ impl Repo {
         let summary = ReviewSummary {
             branch: s.branch.clone(),
             base: s.base.clone(),
+            branch_is_remote,
+            base_is_remote,
             exists: true,
             merged: self.git(&["merge-base", "--is-ancestor", &head, &base_oid]).is_ok(),
             commits: commit_list.len(),
@@ -286,7 +315,7 @@ impl Repo {
 
     /// Marks files as viewed at the current version of the branch, or as not viewed.
     pub fn set_viewed(&self, branch: &str, paths: &[String], viewed: bool) -> Result<()> {
-        let head = self.branch_oid(branch).ok_or_else(|| GitError(format!("{branch} is not a local branch")))?;
+        let head = self.review_oid(branch).ok_or_else(|| GitError(format!("{branch} does not exist")))?;
         let blobs = self.blobs(&head, paths);
         self.edit_review(branch, |r| {
             for p in paths {
@@ -304,7 +333,7 @@ impl Repo {
         if text.trim().is_empty() {
             return Err(GitError("The note is empty".into()));
         }
-        let head = self.branch_oid(branch).ok_or_else(|| GitError(format!("{branch} is not a local branch")))?;
+        let head = self.review_oid(branch).ok_or_else(|| GitError(format!("{branch} does not exist")))?;
         let blob = self.blobs(&head, &[path.to_string()]).remove(path).unwrap_or_else(|| "deleted".into());
         self.edit_review(branch, |r| {
             let n = r.comments.iter().filter_map(|c| c.id.parse::<u64>().ok()).max().unwrap_or(0) + 1;
@@ -369,12 +398,17 @@ impl Repo {
     /// Puts the branch into its base, and marks the review as done by that. Merge and Squash use
     /// `message`. The working tree changes only when the base or the branch is checked out here. When
     /// `delete_branch` is set, the branch goes away after it is merged. Undo puts back the base and the
-    /// branch.
+    /// branch. A remote-tracking branch can go into a local base. It stays as it is, and Rebase puts new
+    /// commits on the base only.
     pub fn finish_review(&self, branch: &str, mode: FinishMode, message: &str, delete_branch: bool) -> Result<OpResult> {
         let all = self.load_reviews();
         let s = all.iter().find(|r| r.branch == branch).ok_or_else(|| GitError(format!("There is no review of {branch}")))?;
         let base = s.base.clone();
-        let head = self.branch_oid(branch).ok_or_else(|| GitError(format!("{branch} is not a local branch")))?;
+        if self.is_remote_branch(&base) {
+            return Err(GitError(format!("{base} is a remote branch. Merge needs a local base. Change the base, or check out {base} as a local branch")));
+        }
+        let branch_local = self.branch_oid(branch).is_some();
+        let head = self.review_oid(branch).ok_or_else(|| GitError(format!("{branch} does not exist")))?;
         let base_old = self.branch_oid(&base).ok_or_else(|| GitError(format!("{base} is not a local branch")))?;
         if self.git(&["merge-base", "--is-ancestor", &head, &base_old]).is_ok() {
             return Err(GitError(format!("{base} already has all the commits of {branch}")));
@@ -388,7 +422,7 @@ impl Repo {
         }
         let current = self.state()?.branch;
         let on_base = current.as_deref() == Some(base.as_str());
-        let on_branch = current.as_deref() == Some(branch);
+        let on_branch = branch_local && current.as_deref() == Some(branch);
         // A merge or a commit here would take the staged changes of the user with it.
         if (on_base || (on_branch && mode == FinishMode::Rebase)) && self.git(&["diff", "--cached", "--quiet"]).is_err() {
             return Err(GitError("The index has staged changes. Commit or unstage them first".into()));
@@ -436,7 +470,9 @@ impl Repo {
                     self.branch_oid(branch).unwrap_or_default()
                 } else {
                     let tip = self.rebase_in_memory(&merge_base, &head, &base_old)?;
-                    self.move_ref(branch, &tip, &head, &why)?;
+                    if branch_local {
+                        self.move_ref(branch, &tip, &head, &why)?;
+                    }
                     tip
                 };
                 // Then the base moves forward.
@@ -452,7 +488,9 @@ impl Repo {
 
         let mut note = String::new();
         if delete_branch {
-            if on_branch {
+            if !branch_local {
+                note = format!(". {branch} stays because it is a remote branch");
+            } else if on_branch {
                 note = format!(". {branch} stays because it is checked out");
             } else {
                 self.git_write(&["branch", "-D", "--", branch], &[]).map_err(|(_, e)| GitError(e))?;
@@ -478,7 +516,9 @@ impl Repo {
             }
         };
         restore(&base, &base_old, &mut undo);
-        restore(branch, &head, &mut undo);
+        if branch_local {
+            restore(branch, &head, &mut undo);
+        }
         let after_config = self.config_local();
         for (k, v) in &before_config {
             if after_config.get(k) != Some(v) {
