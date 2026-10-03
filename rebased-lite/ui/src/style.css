@@ -600,3 +600,8 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .tag-card-subject { font-weight: 600; margin-top: 4px; }
 .tag-card-body { margin: 4px 0 0; }
 .tag-signed { font-size: 10px; padding: 0 4px; border-radius: 3px; border: 1px solid var(--added); color: var(--added); }
+/* The refs and the subject on one center line. An inline-block with overflow: hidden sits on its bottom
+   edge, so with baseline alignment the refs showed higher than the text. */
+.log-row .subject { display: flex; align-items: center; }
+.log-row .subject .ref { flex: none; vertical-align: middle; }
+.log-row .subject .subject-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
