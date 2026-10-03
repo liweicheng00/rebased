@@ -8,6 +8,8 @@ import { save, settings } from "./settings";
 const CHUNK = 200;
 const OVERSCAN = 40;
 const MAX_GRAPH_LANES = 40;
+/** The graph column is never narrower than its two buttons. */
+const MIN_GRAPH_WIDTH = 44;
 
 export class LogView {
   readonly el: HTMLElement;
@@ -20,6 +22,9 @@ export class LogView {
   private chunks = new Map<number, Row[] | Promise<Row[]>>();
   private generation = 0;
   private graphLanes = 1;
+  /** The width of all of the graph, and the width of its column. */
+  private graphFull = 0;
+  private graphCol = 0;
   private paintKey = "";
   private rendered = new Map<number, { div: HTMLElement; selected: boolean }>();
   /** Selected rows in click order. */
@@ -70,9 +75,24 @@ export class LogView {
     const expand = h("button", { class: "icon-button", title: "Expand all linear branches", disabled: !this.collapsed }, "⊞");
     collapse.addEventListener("click", () => this.onCollapseAll());
     expand.addEventListener("click", () => this.onExpandAll());
+    const subject = col("subject", "Subject");
+    const grip = h("div", { class: "hgrip", title: "Drag to make the subject wider. Double-click to show all of the graph" });
+    let start = 0;
+    dragResize(grip, "x", () => (start = this.graphCol), (d) => {
+      const w = Math.max(MIN_GRAPH_WIDTH, start + d);
+      // Wider than the graph shows all of it, also when the graph grows later.
+      settings.graphWidth = w >= this.graphFull ? 0 : w;
+      this.render();
+    }, save);
+    grip.addEventListener("dblclick", () => {
+      settings.graphWidth = 0;
+      save();
+      this.render();
+    });
+    subject.prepend(grip);
     this.header.replaceChildren(
       h("div", { class: "hcol graph-tools" }, collapse, expand),
-      col("subject", "Subject"),
+      subject,
       settings.showAuthor ? col("author", "Author", "authorWidth") : "",
       settings.showDate ? col("date", "Date", "dateWidth") : "",
       settings.showHash ? col("hash", "Hash") : "",
@@ -166,7 +186,10 @@ export class LogView {
     for (const r of rows) lanes = Math.max(lanes, Math.min(maxPosition(r.elements) + 1, MAX_GRAPH_LANES));
     const fg = this.foreground();
     const dpr = window.devicePixelRatio || 1;
-    const key = `${lanes}|${fg}|${dpr}|${this.generation}|${settings.showAuthor}${settings.showDate}${settings.showHash}`;
+    this.graphFull = lanes * ELEMENT_WIDTH + 6;
+    this.graphCol = settings.graphWidth ? Math.max(MIN_GRAPH_WIDTH, Math.min(settings.graphWidth, this.graphFull)) : Math.max(MIN_GRAPH_WIDTH, this.graphFull);
+    this.header.querySelector<HTMLElement>(".graph-tools")?.style.setProperty("flex-basis", `${this.graphCol}px`);
+    const key = `${lanes}|${this.graphCol}|${fg}|${dpr}|${this.generation}|${settings.showAuthor}${settings.showDate}${settings.showHash}`;
     if (key !== this.paintKey) {
       this.paintKey = key;
       this.graphLanes = lanes;
@@ -180,7 +203,7 @@ export class LogView {
       const isSel = selected.has(r.row);
       const existing = this.rendered.get(r.row);
       if (existing && existing.selected === isSel) continue;
-      const div = this.buildRow(r, lanes * ELEMENT_WIDTH + 6, fg, dpr, isSel);
+      const div = this.buildRow(r, this.graphFull, this.graphCol, fg, dpr, isSel);
       if (existing) existing.div.replaceWith(div);
       else this.body.append(div);
       this.rendered.set(r.row, { div, selected: isSel });
@@ -193,7 +216,7 @@ export class LogView {
     }
   }
 
-  private buildRow(r: Row, graphWidth: number, fg: string, dpr: number, selected: boolean): HTMLElement {
+  private buildRow(r: Row, graphWidth: number, colWidth: number, fg: string, dpr: number, selected: boolean): HTMLElement {
     const canvas = h("canvas", { width: graphWidth * dpr, height: ROW_HEIGHT * dpr });
     canvas.style.width = `${graphWidth}px`;
     canvas.style.height = `${ROW_HEIGHT}px`;
@@ -228,7 +251,7 @@ export class LogView {
     const div = h(
       "div",
       { class: "log-row" + (selected ? " selected" : "") + (r.isHead ? " head" : ""), "data-row": r.row },
-      canvas,
+      h("span", { class: "graph-cell", style: { width: `${colWidth}px` } }, canvas),
       subject,
       settings.showAuthor ? h("span", { class: "author", title: `${r.author} <${r.authorEmail}>` }, r.author) : "",
       settings.showDate ? h("span", { class: "date" }, formatDate(r.authorTime)) : "",

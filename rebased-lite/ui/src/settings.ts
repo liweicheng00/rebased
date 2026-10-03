@@ -29,6 +29,8 @@ export interface Settings {
   compareCommitsHeight: number;
   reviewCommitsHeight: number;
   detailsRatio: number;
+  /** The largest width of the graph column, in pixels. The subject covers the rest of the graph. 0 shows all of the graph. */
+  graphWidth: number;
   authorWidth: number;
   dateWidth: number;
   recent: string[];
@@ -85,6 +87,7 @@ const DEFAULTS: Settings = {
   compareCommitsHeight: 300,
   reviewCommitsHeight: 180,
   detailsRatio: 0.55,
+  graphWidth: 0,
   authorWidth: 150,
   dateWidth: 125,
   recent: [],
