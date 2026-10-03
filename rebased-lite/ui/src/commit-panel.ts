@@ -3,6 +3,7 @@
 
 import type { Change, ChangeListView, LocalChanges } from "./api";
 import { statusName } from "./changes-panel";
+import { fileIcon } from "./file-icon";
 import { h } from "./dom";
 import { save, settings } from "./settings";
 
@@ -555,10 +556,11 @@ export class CommitPanel {
         title: (c.old_path ? `${c.old_path} → ${c.path}` : c.path) + (c.status === "U" ? "\nConflict" : ""),
       },
       box,
-      h("span", { class: `status status-${status}`, title: status === "?" ? "Unversioned" : c.status === "U" ? "Conflict" : statusName(c.status) }, status),
+      fileIcon(c.path),
       h("span", { class: `path status-text-${status}` }, c.path.slice(slash + 1)),
       c.old_path ? h("span", { class: "dir" }, `← ${c.old_path}`) : slash > 0 ? h("span", { class: "dir" }, c.path.slice(0, slash)) : "",
       f.split ? h("span", { class: "cl-split", title: this.splitTitle(f) }, `${this.hunksOf(c.path)!.filter((x) => x.list === f.list).length}/${this.hunksOf(c.path)!.length}`) : "",
+      h("span", { class: `status status-end status-${status}`, title: status === "?" ? "Unversioned" : c.status === "U" ? "Conflict" : statusName(c.status) }, status),
     );
     row.addEventListener("mousedown", (e) => {
       if (e.button !== 0 || (e.target as HTMLElement).tagName === "INPUT") return;

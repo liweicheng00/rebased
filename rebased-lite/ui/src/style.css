@@ -167,7 +167,7 @@ input { font: inherit; }
 .changes-title { overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-weight: 500; }
 .changes-count { color: var(--muted); font-weight: normal; }
 .changes { flex: 1; overflow: auto; padding: 2px 0; outline: none; }
-.change, .dir-row { display: flex; gap: 6px; align-items: baseline; padding: 1px 8px; white-space: nowrap; cursor: default; }
+.change, .dir-row { display: flex; gap: 6px; align-items: center; padding: 1px 8px; white-space: nowrap; cursor: default; }
 .change:hover, .dir-row:hover { background: var(--hover); }
 .change.active, .change.selected { background: var(--select); }
 .changes:focus .change.active { background: var(--select-strong); }
@@ -578,3 +578,8 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .review-commit { grid-template-columns: auto minmax(0, 1fr) auto; }
 .review-commit > b { white-space: nowrap; }
 .review-meta { flex-wrap: wrap; row-gap: 0; }
+.file-icon { flex: 0 0 14px; }
+.change .path { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.change .dir { flex: 0 1 auto; min-width: 0; }
+/* The status letter at the end of the row, so the names line up after the icons. */
+.change .status-end { margin-left: auto; padding-left: 6px; flex: 0 0 auto; text-align: right; }

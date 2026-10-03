@@ -1,6 +1,7 @@
 // Changed files between two revisions, as a flat list or a directory tree.
 
 import type { Change } from "./api";
+import { fileIcon } from "./file-icon";
 import { h } from "./dom";
 import { save, settings } from "./settings";
 
@@ -163,9 +164,10 @@ export class ChangesPanel {
     const item = h(
       "div",
       { class: "change", "data-index": i, style: { paddingLeft: `${8 + depth * 14 + (withDir ? 0 : 14)}px` } },
-      h("span", { class: `status status-${c.status}`, title: statusName(c.status) }, c.status),
+      fileIcon(c.path),
       h("span", { class: `path status-text-${c.status}` }, c.path.slice(slash + 1)),
       c.old_path ? h("span", { class: "dir" }, `← ${c.old_path}`) : withDir && slash > 0 ? h("span", { class: "dir" }, c.path.slice(0, slash)) : "",
+      h("span", { class: `status status-end status-${c.status}`, title: statusName(c.status) }, c.status),
     );
     item.title = c.old_path ? `${c.old_path} → ${c.path}` : c.path;
     item.addEventListener("click", (e) => {
