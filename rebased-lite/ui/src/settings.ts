@@ -17,6 +17,8 @@ export interface Settings {
   changesAsTree: boolean;
   /** The file list of a review is a tree of folders. */
   reviewAsTree: boolean;
+  /** The Changes tab groups the files of a changelist by folder. */
+  localChangesAsTree: boolean;
   sideBySide: boolean;
   ignoreWhitespace: boolean;
   collapseUnchanged: boolean;
@@ -77,6 +79,7 @@ const DEFAULTS: Settings = {
   autoRefresh: true,
   changesAsTree: true,
   reviewAsTree: true,
+  localChangesAsTree: true,
   sideBySide: true,
   ignoreWhitespace: false,
   collapseUnchanged: false,

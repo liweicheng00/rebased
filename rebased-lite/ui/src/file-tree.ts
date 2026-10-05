@@ -38,7 +38,8 @@ function allFiles(d: TreeDir): number[] {
 }
 
 export interface TreeVisitor {
-  dir: (label: string, full: string, depth: number, open: boolean, count: number, viewed: number) => void;
+  /** `files` holds the indexes of all files under the folder. */
+  dir: (label: string, full: string, depth: number, open: boolean, count: number, viewed: number, files: number[]) => void;
   file: (index: number, depth: number) => void;
   /** True when the file counts as viewed, for the count of a folder. */
   viewed?: (index: number) => boolean;
@@ -57,7 +58,7 @@ export function walkTree(d: TreeDir, collapsed: Set<string>, v: TreeVisitor, pat
     const full = path + label + "/";
     const open = !collapsed.has(full);
     const files = allFiles(node);
-    v.dir(label, full, depth, open, files.length, v.viewed ? files.filter(v.viewed).length : 0);
+    v.dir(label, full, depth, open, files.length, v.viewed ? files.filter(v.viewed).length : 0, files);
     if (open) walkTree(node, collapsed, v, full, depth + 1);
   }
   for (const i of [...d.files]) v.file(i, depth);

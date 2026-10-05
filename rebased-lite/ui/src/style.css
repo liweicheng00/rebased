@@ -331,6 +331,10 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .cl-comment { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 100 auto; font-style: italic; }
 .cl-check { margin: 0; flex: 0 0 auto; }
 .cl-file { padding-left: 24px; align-items: center; }
+.cl-dir { display: flex; align-items: center; gap: 6px; height: 22px; padding-right: 8px; white-space: nowrap; cursor: default; }
+.cl-dir:hover { background: var(--hover); }
+.cl-dir .twisty { width: 10px; color: var(--muted); }
+.cl-dir .dir-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .cl-file.selected { background: var(--select); }
 .commit-tree:focus .cl-file.active { background: var(--select-strong); }
 .status-\? , .status-text-\? { color: var(--muted) !important; }

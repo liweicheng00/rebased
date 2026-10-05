@@ -4,6 +4,7 @@
 import type { Change, ChangeListView, LocalChanges } from "./api";
 import { statusName } from "./changes-panel";
 import { fileIcon } from "./file-icon";
+import { buildTree, treeOrder, walkTree } from "./file-tree";
 import { h } from "./dom";
 import { save, settings } from "./settings";
 
@@ -105,6 +106,18 @@ export class CommitPanel {
       this.collapsed.clear();
       this.render();
     });
+    const treeBtn = h("button", { class: "icon-button changes-tree-toggle" });
+    const paintTreeBtn = () => {
+      treeBtn.textContent = settings.localChangesAsTree ? "☰" : "🗀";
+      treeBtn.title = settings.localChangesAsTree ? "Show as a flat list" : "Group by folder";
+    };
+    paintTreeBtn();
+    treeBtn.addEventListener("click", () => {
+      settings.localChangesAsTree = !settings.localChangesAsTree;
+      save();
+      paintTreeBtn();
+      this.render();
+    });
     const collapse = h("button", { class: "icon-button", title: "Collapse all" }, "⊟");
     collapse.addEventListener("click", () => {
       for (const l of this.data?.lists ?? []) this.collapsed.add(l.id);
@@ -148,7 +161,7 @@ export class CommitPanel {
     this.el = h(
       "section",
       { class: "commit-panel" },
-      h("div", { class: "commit-toolbar" }, refresh, rollback, newList, h("span", { class: "spacer" }), expand, collapse),
+      h("div", { class: "commit-toolbar" }, refresh, rollback, newList, h("span", { class: "spacer" }), treeBtn, expand, collapse),
       this.tree,
       h(
         "div",
@@ -464,18 +477,83 @@ export class CommitPanel {
     }
     for (const l of this.data.lists) {
       frag.append(this.header(l.id, l.name, l.changes.map((c) => this.tracked(l.id, c).key), l));
-      if (!this.collapsed.has(l.id)) for (const c of l.changes) frag.append(this.fileRow(this.tracked(l.id, c)));
+      if (!this.collapsed.has(l.id)) this.appendFiles(frag, l.id, l.changes.map((c) => this.tracked(l.id, c)));
     }
     if (this.data.unversioned.length) {
       frag.append(this.header(UNVERSIONED, UNVERSIONED, this.data.unversioned.map((p) => `u:${p}`), null));
       if (!this.collapsed.has(UNVERSIONED)) {
-        for (const p of this.data.unversioned) frag.append(this.fileRow({ key: `u:${p}`, change: { status: "?", path: p, old_path: null }, list: null }));
+        this.appendFiles(frag, UNVERSIONED, this.data.unversioned.map((p) => ({ key: `u:${p}`, change: { status: "?", path: p, old_path: null }, list: null })));
       }
     }
     if (!this.files.length) frag.append(h("div", { class: "muted commit-empty" }, "There are no local changes."));
     this.tree.replaceChildren(frag);
     this.setActiveFile(this.activeKey);
     this.updateSummary();
+  }
+
+  /** The rows of the files of one changelist: a flat list, or a tree of folders. */
+  private appendFiles(frag: DocumentFragment, listId: string, files: LocalFile[]) {
+    if (!settings.localChangesAsTree) {
+      for (const f of files) frag.append(this.fileRow(f));
+      return;
+    }
+    const sorted = [...files].sort((a, b) => treeOrder(a.change.path, b.change.path));
+    const tree = buildTree(sorted.map((f, index) => ({ path: f.change.path, index })));
+    // The folders of each changelist open and close on their own.
+    const prefix = `${listId}\0`;
+    const closed = new Set([...this.collapsed].filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length)));
+    walkTree(tree, closed, {
+      dir: (label, full, depth, open, _count, _viewed, indexes) => frag.append(this.dirRow(prefix + full, label, depth, open, indexes.map((i) => sorted[i]))),
+      file: (index, depth) => frag.append(this.fileRow(sorted[index], depth)),
+    });
+  }
+
+  /** A folder in the tree. Its box checks all of its files, and the menu and a drag take all of them. */
+  private dirRow(id: string, label: string, depth: number, open: boolean, files: LocalFile[]): HTMLElement {
+    const keys = files.map((f) => f.key);
+    const n = keys.filter((k) => this.included.has(k)).length;
+    const box = h("input", { type: "checkbox", class: "cl-check" });
+    box.checked = n === keys.length;
+    box.indeterminate = n > 0 && n < keys.length;
+    box.addEventListener("click", (e) => e.stopPropagation());
+    box.addEventListener("change", () => {
+      for (const k of keys) {
+        if (box.checked) this.included.add(k);
+        else this.included.delete(k);
+        this.partial.delete(k);
+      }
+      this.render();
+      this.updateTarget();
+    });
+    const row = h(
+      "div",
+      { class: "cl-dir", style: { paddingLeft: `${10 + depth * 14}px` }, title: id.slice(id.indexOf("\0") + 1), draggable: files.some((f) => f.list !== null) },
+      h("span", { class: "twisty" }, open ? "▾" : "▸"),
+      box,
+      h("span", { class: "dir-name" }, label),
+      h("span", { class: "cl-count" }, String(files.length)),
+    );
+    row.addEventListener("click", () => {
+      if (open) this.collapsed.add(id);
+      else this.collapsed.delete(id);
+      this.render();
+    });
+    const selectAll = () => {
+      this.selection = new Set(keys);
+      this.paintSelection();
+    };
+    row.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      selectAll();
+      this.onFileMenu(this.selectedFiles(), e);
+    });
+    row.addEventListener("dragstart", (e) => {
+      selectAll();
+      const paths = files.filter((x) => x.list !== null).map((x) => x.change.path);
+      e.dataTransfer?.setData("text/x-rebased-paths", JSON.stringify(paths));
+      e.dataTransfer?.setData("text/plain", paths.join("\n"));
+    });
+    return row;
   }
 
   private header(id: string, name: string, keys: string[], list: ChangeListView | null): HTMLElement {
@@ -531,7 +609,8 @@ export class CommitPanel {
     return row;
   }
 
-  private fileRow(f: LocalFile): HTMLElement {
+  /** A file row. `depth` is its level in the tree, or undefined in the flat list. */
+  private fileRow(f: LocalFile, depth?: number): HTMLElement {
     const c = f.change;
     const slash = c.path.lastIndexOf("/");
     const box = h("input", {
@@ -564,13 +643,14 @@ export class CommitPanel {
       box,
       fileIcon(c.path),
       h("span", { class: `path status-text-${status}` }, c.path.slice(slash + 1)),
-      c.old_path ? h("span", { class: "dir" }, `← ${c.old_path}`) : slash > 0 ? h("span", { class: "dir" }, c.path.slice(0, slash)) : "",
+      c.old_path ? h("span", { class: "dir" }, `← ${c.old_path}`) : slash > 0 && depth === undefined ? h("span", { class: "dir" }, c.path.slice(0, slash)) : "",
       f.split ? h("span", { class: "cl-split", title: this.splitTitle(f) }, `${this.hunksOf(c.path)!.filter((x) => x.list === f.list).length}/${this.hunksOf(c.path)!.length}`) : "",
       h("span", { class: `status status-end status-${status}`, title: status === "?" ? "Unversioned" : c.status === "U" ? "Conflict" : statusName(c.status) }, status),
     );
     // A press on a file of a multiple selection keeps the selection, so that a drag moves all of the
     // files. A click without a drag then selects that file only.
     let keepForDrag = false;
+    if (depth !== undefined) row.style.paddingLeft = `${24 + depth * 14}px`;
     row.addEventListener("mousedown", (e) => {
       keepForDrag = false;
       if (e.button !== 0 || (e.target as HTMLElement).tagName === "INPUT") return;
