@@ -129,7 +129,7 @@ async function loadRepo(r: ViewResult, state: TabState | null) {
   commitPanel.setTemplate(await api.commitTemplate().catch(() => null));
   const target = state?.selected ?? r.headOid;
   // The user can choose a commit while the repository loads; that choice stays.
-  if (target && !app.selected.length) await jumpToOid(target, true);
+  if (target && !log.hasSelection()) await jumpToOid(target, true, true);
 }
 
 export async function applyView(r: ViewResult, keepSelection: boolean) {
@@ -257,8 +257,11 @@ export async function loadRemoteTags(remote?: string) {
   }
 }
 
-export async function jumpToOid(oid: string, select: boolean): Promise<boolean> {
+/** Shows a commit in the log, and selects it when `select` is set. With `unlessChosen`, it does nothing
+ * when the user chose a commit while the log looked for this one. */
+export async function jumpToOid(oid: string, select: boolean, unlessChosen = false): Promise<boolean> {
   const f = await api.find(oid);
+  if (unlessChosen && log.hasSelection()) return false;
   if (f.row === null) {
     if (f.oid) statusActivity.textContent = `Commit ${f.oid.slice(0, 8)} is hidden by the current filter.`;
     return false;

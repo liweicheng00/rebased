@@ -148,7 +148,7 @@ await page.waitForSelector(".review-window", { state: "detached" });
 // A remote base: the review shows, and Merge is off.
 await newReview("feature/tree", "origin/main");
 await within("the remote base shows", async () => (await text(".review-window .merge-header")).includes("origin/main"));
-check("Merge is off for a remote base", await page.isDisabled(".review-window .review-merge"));
+await within("Merge is off for a remote base", () => page.isDisabled(".review-window .review-merge"));
 await page.keyboard.press("Escape");
 await within("the panel lists the remote review", async () => (await text(".review-panel")).includes("origin/feature/cli"));
 console.log("errors:", JSON.stringify(errors));

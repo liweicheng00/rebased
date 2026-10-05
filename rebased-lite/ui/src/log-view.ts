@@ -342,6 +342,11 @@ export class LogView {
 
   private selectionTimer = 0;
 
+  /** True when rows are selected. It does not wait for the selection debounce. */
+  hasSelection(): boolean {
+    return this.selection.length > 0;
+  }
+
   /** The selected rows now, sorted top to bottom. It does not wait for the selection debounce. */
   async selectedRows(): Promise<Row[]> {
     const rows = await Promise.all([...this.selection].sort((a, b) => a - b).map((i) => this.rowAsync(i)));
