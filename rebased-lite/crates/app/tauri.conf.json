@@ -10,7 +10,7 @@
     "beforeBuildCommand": "npm --prefix ../ui run build"
   },
   "app": {
-    "windows": [{ "title": "Rebased Lite", "width": 1400, "height": 900, "minWidth": 600, "minHeight": 400 }],
+    "windows": [{ "title": "Rebased Lite", "width": 1400, "height": 900, "minWidth": 600, "minHeight": 400, "dragDropEnabled": false }],
     "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; img-src 'self' data:" }
   },
   "bundle": {

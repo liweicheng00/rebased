@@ -334,12 +334,18 @@ export class CommitPanel {
     return [...this.tree.querySelectorAll<HTMLElement>(".cl-file")].map((e) => e.dataset.key!);
   }
 
-  private open(key: string) {
+  private open(key: string, redraw = true) {
     const f = this.files.find((x) => x.key === key);
     if (!f) return;
-    this.render();
+    if (redraw) this.render();
+    else this.paintSelection();
     this.setActiveFile(key);
     this.onOpen(f);
+  }
+
+  /** Marks the selected rows without new rows. A mouse press keeps its row, so WebKit can start a drag from it. */
+  private paintSelection() {
+    for (const el of this.tree.querySelectorAll<HTMLElement>(".cl-file")) el.classList.toggle("selected", this.selection.has(el.dataset.key!));
   }
 
   private onKey(e: KeyboardEvent) {
@@ -562,31 +568,45 @@ export class CommitPanel {
       f.split ? h("span", { class: "cl-split", title: this.splitTitle(f) }, `${this.hunksOf(c.path)!.filter((x) => x.list === f.list).length}/${this.hunksOf(c.path)!.length}`) : "",
       h("span", { class: `status status-end status-${status}`, title: status === "?" ? "Unversioned" : c.status === "U" ? "Conflict" : statusName(c.status) }, status),
     );
+    // A press on a file of a multiple selection keeps the selection, so that a drag moves all of the
+    // files. A click without a drag then selects that file only.
+    let keepForDrag = false;
     row.addEventListener("mousedown", (e) => {
+      keepForDrag = false;
       if (e.button !== 0 || (e.target as HTMLElement).tagName === "INPUT") return;
       if (e.ctrlKey || e.metaKey) {
         if (this.selection.has(f.key)) this.selection.delete(f.key);
         else this.selection.add(f.key);
         this.anchor = f.key;
-        this.render();
+        this.paintSelection();
         return;
       }
       if (e.shiftKey && this.anchor) {
         const order = this.visibleKeys();
         const [a, b] = [order.indexOf(this.anchor), order.indexOf(f.key)].sort((x, y) => x - y);
         this.selection = new Set(order.slice(a, b + 1));
-        this.render();
+        this.paintSelection();
         return;
       }
-      // The first click renders the rows again, so the second click has a new row and no dblclick
-      // event comes. The click count of the mousedown still counts it.
+      // The click count of the mousedown counts a double click, also when a render replaced the row.
       if (e.detail === 2) {
         this.onActivate(f);
         return;
       }
+      if (this.selection.has(f.key) && this.selection.size > 1) {
+        keepForDrag = true;
+        return;
+      }
       this.selection = new Set([f.key]);
       this.anchor = f.key;
-      this.open(f.key);
+      this.open(f.key, false);
+    });
+    row.addEventListener("click", (e) => {
+      if (!keepForDrag || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      keepForDrag = false;
+      this.selection = new Set([f.key]);
+      this.anchor = f.key;
+      this.open(f.key, false);
     });
     row.addEventListener("contextmenu", (e) => {
       e.preventDefault();
@@ -598,6 +618,7 @@ export class CommitPanel {
       this.onFileMenu(this.selectedFiles(), e);
     });
     row.addEventListener("dragstart", (e) => {
+      keepForDrag = false;
       if (!this.selection.has(f.key)) {
         this.selection = new Set([f.key]);
         this.render();
