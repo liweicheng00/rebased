@@ -5,6 +5,7 @@ import { WORKTREE } from "./compare-view";
 import { menuBelow, type MenuItem, showMenu } from "./context-menu";
 import { copyText } from "./dom";
 import { showHistory } from "./history-flow";
+import { openInEditor } from "./editor-flow";
 import { keymap } from "./keyboard";
 import { addWorktree, checkoutBranch, checkoutCommit, currentBranch, deleteBranch, deleteMergedBranches, interactiveRebase, mergeIntoCurrent, newBranch, newTag, rebaseCurrentOnto, renameBranch, resetTo, rewriteSelected, runOp } from "./operations";
 import { compareBranches, fetchRemote, manageRemotes, openOnRemote, remoteRefItems, toggleFavorite } from "./remotes";
@@ -12,7 +13,7 @@ import { startReview } from "./review-flow";
 import { askForRepo, fetchAll, jumpToOid, openRepo, refresh } from "./repo";
 import { collapse, compare, comparedCommits, compareWithWorktree, fileChangesAction, openFile, short, showSelection } from "./selection";
 import { settings } from "./settings";
-import { changes, fetchBtn, filterBar, log, openBtn, refreshBtn, sidebar, toggleDiff } from "./shell";
+import { changes, diff, fetchBtn, filterBar, log, openBtn, refreshBtn, sidebar, toggleDiff } from "./shell";
 import { app } from "./state";
 import { pushBranch, updateBranch } from "./sync";
 
@@ -133,6 +134,15 @@ changes.onContextMenu = (files, e) => {
       action: () => {
         toggleDiff(true);
         void openFile(app.changeList.indexOf(c));
+      },
+    },
+    {
+      label: "Open in Editor",
+      shortcut: keymap.shortcut("openInEditor"),
+      disabled: files.length !== 1 || c.status === "D",
+      action: () => {
+        const p = diff.currentPath === c.path ? diff.editorPosition() : { line: 1, column: 1 };
+        void openInEditor(c.path, p.line, p.column);
       },
     },
     { label: "Show History", disabled: files.length !== 1 || c.status === "D", action: () => showHistory(c.path) },

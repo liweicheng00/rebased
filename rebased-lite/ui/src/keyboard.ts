@@ -1,6 +1,7 @@
 // The keymap actions and the key handler.
 
 import { copyText } from "./dom";
+import { openInEditorHere } from "./editor-flow";
 import { showLocalHistory } from "./history-flow";
 import { isMac, type KeyAction, Keymap } from "./keymap";
 import { undoLast } from "./operations";
@@ -47,6 +48,7 @@ for (const a of [
   { id: "stash", label: "Stash Tab", defaults: ["Mod+3"], run: () => showLeftTab("stash") },
   { id: "reviews", label: "Reviews Tab", defaults: ["Mod+4"], run: () => showLeftTab("reviews") },
   { id: "diffPanel", label: "Diff Panel", defaults: ["Mod+`"], run: () => toggleDiff() },
+  { id: "openInEditor", label: "Open in Editor", defaults: ["F4"], run: (t: HTMLElement) => app.view && openInEditorHere(t) },
   { id: "localHistory", label: "Local History", defaults: [], run: () => app.view && showLocalHistory("") },
   { id: "nextTab", label: "Next Tab", defaults: ["Mod+PageDown"], run: () => nextTab(1) },
   { id: "previousTab", label: "Previous Tab", defaults: ["Mod+PageUp"], run: () => nextTab(-1) },
@@ -68,7 +70,8 @@ for (const a of [
 ] as KeyAction[]) keymap.add(a);
 
 window.addEventListener("keydown", (e) => {
-  // An open dialog handles its own keys.
-  if (document.querySelector(".overlay, .merge-overlay")) return;
+  // An open dialog handles its own keys. A window, such as Compare or Review, takes Open in Editor only.
+  if (document.querySelector(".overlay")) return;
+  if (document.querySelector(".merge-overlay")) return void keymap.handle(e, (a) => a.id === "openInEditor");
   keymap.handle(e);
 });

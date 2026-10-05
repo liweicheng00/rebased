@@ -274,6 +274,7 @@ export const api = {
   review: (branch: string) => call<ReviewDetail>("review", { branch }),
   reviewEdit: (edit: ReviewEdit) => call<null>("review_edit", edit),
   /** Opens a web page: the default browser in the app, a new tab in a browser. */
+  openInEditor: (path: string, line: number, column: number) => call<null>("open_in_editor", { path, line, column }),
   openUrl: (url: string) => (inTauri ? call<null>("open_url", { url }) : Promise.resolve(void window.open(url, "_blank", "noopener")).then(() => null)),
   tagInfo: (name: string) => call<TagInfo>("tag_info", { name }),
   remoteTags: (remote: string) => call<string[]>("remote_tags", { remote }),

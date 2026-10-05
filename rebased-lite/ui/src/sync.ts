@@ -1,5 +1,7 @@
 // Push and Update, and the context menu of local files.
 
+import { openInEditor } from "./editor-flow";
+import { keymap } from "./keyboard";
 import { api } from "./api";
 import { changeListOp, deleteUnversioned, editChangeList, newChangeList, removeChangeList, rollback, showLocalDiff } from "./commit-flow";
 import { mergeFile } from "./conflicts";
@@ -10,7 +12,7 @@ import { showHistory, showLocalHistory } from "./history-flow";
 import { toast } from "./notify";
 import { currentBranch, runOp } from "./operations";
 import { save, settings } from "./settings";
-import { commitPanel, mod, pushBtn, updateBtn } from "./shell";
+import { commitPanel, diff, mod, pushBtn, updateBtn } from "./shell";
 import { stashChanges } from "./stash-flow";
 import { app } from "./state";
 
@@ -68,6 +70,15 @@ commitPanel.onFileMenu = (files, e) => {
         ]
       : []),
     { label: "Show Diff", disabled: files.length !== 1, action: () => void showLocalDiff(files[0]) },
+    {
+      label: "Open in Editor",
+      shortcut: keymap.shortcut("openInEditor"),
+      disabled: files.length !== 1 || files[0].change.status === "D",
+      action: () => {
+        const p = diff.currentPath === files[0].change.path ? diff.editorPosition() : { line: 1, column: 1 };
+        void openInEditor(files[0].change.path, p.line, p.column);
+      },
+    },
     { label: "Show History", disabled: files.length !== 1 || files[0].list === null || files[0].change.status === "A", action: () => showHistory(files[0].change.old_path ?? files[0].change.path) },
     { label: "Show Local History", disabled: files.length !== 1, action: () => showLocalHistory(files[0].change.path) },
     { label: "Rollback…", shortcut: `${mod}⌥Z`, disabled: !tracked.length, action: () => void rollback(tracked) },

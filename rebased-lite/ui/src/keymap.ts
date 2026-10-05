@@ -12,7 +12,7 @@ export interface KeyAction {
   label: string;
   /** The keys without user changes. */
   defaults: string[];
-  run: () => void;
+  run: (target: HTMLElement) => void;
   /** False: the key does nothing here and keeps its normal meaning, for example Copy in a text field. */
   when?: (target: HTMLElement) => boolean;
 }
@@ -65,15 +65,16 @@ export class Keymap {
   }
 
   /** Runs the action of a key. Returns true when an action ran. */
-  handle(e: KeyboardEvent): boolean {
+  handle(e: KeyboardEvent, only?: (a: KeyAction) => boolean): boolean {
     const key = eventKey(e);
     if (!key) return false;
     const target = e.target as HTMLElement;
     for (const a of this.actions) {
+      if (only && !only(a)) continue;
       if (!this.keysOf(a.id).includes(key)) continue;
       if (a.when && !a.when(target)) continue;
       e.preventDefault();
-      a.run();
+      a.run(target);
       return true;
     }
     return false;

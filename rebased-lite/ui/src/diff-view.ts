@@ -52,6 +52,10 @@ export class DiffView {
   onBlameClick: (oid: string) => void = () => {};
   onHistory: (path: string) => void = () => {};
   onHide: () => void = () => {};
+  /** Open in Editor: the file of the right side, at a line and a column. */
+  onOpenInEditor: (path: string, line: number, column: number) => void = () => {};
+  /** The place of the cursor after the user moved it in the file. Null until then. */
+  private userPos: { line: number; column: number } | null = null;
   /** Local changes only: which changes go into the next commit. */
   private selectable: { excluded: Set<string>; onChange: (excluded: Set<string>, content: string | null) => void } | null = null;
   private hunkDeco: string[] = [];
@@ -91,6 +95,8 @@ export class DiffView {
     this.annotateBox.addEventListener("change", () => void this.annotate());
     const annotate = h("label", { class: "diff-option", title: "Show the commit that last changed each line (git blame). Click an annotation to go to its commit." }, this.annotateBox, "Annotate");
     this.historyBtn = btn("🕘", "Show the history of this file", () => this.source && this.onHistory(this.source.path));
+    const editBtn = btn("✎", "Open in the editor (F4)", () => this.openInEditor());
+    editBtn.classList.add("diff-open-editor");
     const toolbar = h(
       "div",
       { class: "diff-toolbar" },
@@ -101,6 +107,7 @@ export class DiffView {
       this.title,
       copyPath,
       this.historyBtn,
+      editBtn,
       this.stats,
       h("span", { class: "spacer" }),
       this.sides,
@@ -132,6 +139,7 @@ export class DiffView {
       this.renderListHunks();
       this.renderNotes();
     });
+    this.trackCursor(this.editor.getModifiedEditor());
     this.editor.getModifiedEditor().onMouseDown((ev) => {
       if (!this.selectable || ev.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) return;
       const line = ev.target.position?.lineNumber;
@@ -180,6 +188,7 @@ export class DiffView {
         ...editorFont(),
       });
       this.listenForBlameClicks(this.singleEditor);
+      this.trackCursor(this.singleEditor);
     }
     return this.singleEditor;
   }
@@ -284,6 +293,35 @@ export class DiffView {
     return this.singleHost.hidden ? this.editor.getModifiedEditor() : this.single;
   }
 
+  private trackCursor(e: monaco.editor.ICodeEditor) {
+    e.onDidChangeCursorPosition((ev) => {
+      if (ev.source === "mouse" || ev.source === "keyboard") this.userPos = { line: ev.position.lineNumber, column: ev.position.column };
+    });
+  }
+
+  /** The file of the right side, or "" when the view shows no file. */
+  get currentPath(): string {
+    return this.path;
+  }
+
+  /** Where Open in Editor goes: the cursor after the user moved it, else the first change on the screen,
+   * else the first line on the screen. */
+  editorPosition(): { line: number; column: number } {
+    if (this.userPos) return this.userPos;
+    const ed = this.rightEditor();
+    const top = ed.getVisibleRanges()[0];
+    if (!top) return { line: 1, column: 1 };
+    const changes = this.singleHost.hidden ? (this.editor.getLineChanges() ?? []) : [];
+    const first = changes.map((c) => Math.max(1, c.modifiedStartLineNumber)).find((l) => l >= top.startLineNumber && l <= top.endLineNumber);
+    return { line: first ?? top.startLineNumber, column: 1 };
+  }
+
+  openInEditor() {
+    if (!this.path) return;
+    const p = this.editorPosition();
+    this.onOpenInEditor(this.path, p.line, p.column);
+  }
+
   /** The line of the cursor on the right side, 1-based. */
   cursorLine(): number {
     return this.rightEditor().getPosition()?.lineNumber ?? 1;
@@ -293,6 +331,7 @@ export class DiffView {
     const ed = this.rightEditor();
     ed.revealLineInCenter(line);
     ed.setPosition({ lineNumber: line, column: 1 });
+    this.userPos = { line, column: 1 };
   }
 
   private renderNotes() {
@@ -436,6 +475,7 @@ export class DiffView {
     this.clearBlame();
     this.setSource(null);
     this.path = "";
+    this.userPos = null;
     this.sides.textContent = "";
     this.title.textContent = title;
     this.stats.textContent = "";
@@ -452,6 +492,7 @@ export class DiffView {
     const same = change.path === this.path && this.notice.hidden && this.singleHost.hidden;
     this.keepView = same ? this.editor.getModifiedEditor().saveViewState() : null;
     this.revealFirst = !same;
+    if (!same) this.userPos = null;
     this.path = change.path;
     this.title.replaceChildren(
       h("span", { class: `status status-${change.status}`, title: statusName(change.status) }, change.status),

@@ -12,7 +12,25 @@ export interface SettingsContext {
   pickFile: () => Promise<string | null>;
 }
 
-type Page = "general" | "git" | "commit" | "diff" | "history" | "keymap";
+type Page = "general" | "git" | "editor" | "commit" | "diff" | "history" | "keymap";
+
+/** Editors and their commands for Open in Editor. A JetBrains IDE needs its command-line launcher:
+ * Tools › Create Command-line Launcher, or the shell scripts of the Toolbox app. */
+export const EDITORS: [string, string][] = [
+  ["", "The default app of the system (no line)"],
+  ["code --goto {file}:{line}:{column}", "Visual Studio Code"],
+  ["cursor --goto {file}:{line}:{column}", "Cursor"],
+  ["windsurf --goto {file}:{line}:{column}", "Windsurf"],
+  ["zed {file}:{line}:{column}", "Zed"],
+  ["subl {file}:{line}:{column}", "Sublime Text"],
+  ["idea --line {line} --column {column} {file}", "IntelliJ IDEA"],
+  ["pycharm --line {line} --column {column} {file}", "PyCharm"],
+  ["webstorm --line {line} --column {column} {file}", "WebStorm"],
+  ["goland --line {line} --column {column} {file}", "GoLand"],
+  ["rustrover --line {line} --column {column} {file}", "RustRover"],
+  ["studio --line {line} --column {column} {file}", "Android Studio"],
+  ["xed --line {line} {file}", "Xcode"],
+];
 
 export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | null> {
   const draft: Settings = structuredClone(settings);
@@ -55,6 +73,7 @@ export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | nul
     const pages: [Page, string][] = [
       ["general", "General"],
       ["git", "Git"],
+      ["editor", "Editor"],
       ["commit", "Commit"],
       ["diff", "Diff"],
       ["history", "Local History"],
@@ -125,6 +144,32 @@ export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | nul
         row("Git executable", h("div", { class: "dialog-field-row" }, input, browse, test)),
         status,
         h("p", { class: "settings-hint" }, "Rebased Lite runs this program for all git commands. An empty field uses git from PATH."),
+      ];
+    };
+
+    const editor = () => {
+      const custom: [string, string] = ["custom", "Other command"];
+      const pick = h("select", { class: "dialog-input editor-preset" }, ...[...EDITORS, custom].map(([v, l]) => h("option", { value: v }, l)));
+      const input = text(() => draft.editor, (v) => (draft.editor = v), "Empty: the default app of the system");
+      input.classList.add("editor-command");
+      const sync = () => (pick.value = EDITORS.some(([v]) => v === draft.editor) ? draft.editor : "custom");
+      sync();
+      pick.addEventListener("change", () => {
+        if (pick.value === "custom") return input.focus();
+        draft.editor = pick.value;
+        input.value = pick.value;
+      });
+      input.addEventListener("input", sync);
+      return [
+        row("Editor", pick),
+        row("Command", input),
+        h(
+          "p",
+          { class: "settings-hint" },
+          "Open in Editor (F4) runs this command. {file} is the full path of the file, and {line} and {column} are the place of the cursor in the diff. " +
+            "A command without {file} gets the file at its end. No shell runs the command. Rebased Lite also looks for the program in the PATH of your login shell. " +
+            "A JetBrains IDE needs its command-line launcher: Tools › Create Command-line Launcher, or the shell scripts of the Toolbox app.",
+        ),
       ];
     };
 
@@ -210,7 +255,7 @@ export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | nul
           return b;
         }),
       );
-      const body = { general, git, commit, diff, history, keymap: keymapPage }[page]();
+      const body = { general, git, editor, commit, diff, history, keymap: keymapPage }[page]();
       content.replaceChildren(h("h3", { class: "settings-title" }, pages.find((p) => p[0] === page)![1]), ...body);
     };
 

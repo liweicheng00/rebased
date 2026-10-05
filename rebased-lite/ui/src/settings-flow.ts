@@ -29,7 +29,7 @@ export async function applyBackendSettings() {
   } catch {
     return;
   }
-  const local = { gitPath: settings.gitPath, history: { days: settings.historyDays, maxMb: settings.historyMaxMb } };
+  const local = { gitPath: settings.gitPath, editor: settings.editor, history: { days: settings.historyDays, maxMb: settings.historyMaxMb } };
   const changedLocally = local.gitPath !== "" || local.history.days !== b.history.days || local.history.maxMb !== b.history.maxMb;
   if (!b.stored && changedLocally) {
     try {
@@ -40,6 +40,7 @@ export async function applyBackendSettings() {
     }
   }
   settings.gitPath = b.gitPath;
+  settings.editor = b.editor;
   settings.historyDays = b.history.days;
   settings.historyMaxMb = b.history.maxMb;
   save();
@@ -49,14 +50,15 @@ export async function openSettings() {
   const next = await openSettingsDialog({ keymap, testGit: (p) => api.gitVersion(p), pickFile: () => pickFile("Git executable") });
   if (!next) return;
   const gitChanged = next.gitPath !== settings.gitPath;
-  const backendChanged = gitChanged || next.historyDays !== settings.historyDays || next.historyMaxMb !== settings.historyMaxMb;
+  const backendChanged = gitChanged || next.editor !== settings.editor || next.historyDays !== settings.historyDays || next.historyMaxMb !== settings.historyMaxMb;
   if (backendChanged) {
     try {
-      const version = await api.setBackendSettings({ gitPath: next.gitPath, history: { days: next.historyDays, maxMb: next.historyMaxMb }, stored: true });
+      const version = await api.setBackendSettings({ gitPath: next.gitPath, editor: next.editor, history: { days: next.historyDays, maxMb: next.historyMaxMb }, stored: true });
       statusActivity.textContent = `git ${version}`;
     } catch (e) {
       toast(String(e).replace(/^Error: /, ""), "error");
       next.gitPath = settings.gitPath;
+      next.editor = settings.editor;
       next.historyDays = settings.historyDays;
       next.historyMaxMb = settings.historyMaxMb;
     }

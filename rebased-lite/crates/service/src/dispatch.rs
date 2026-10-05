@@ -72,6 +72,7 @@ impl Service {
             "tag_info" => serde_json::to_string(&self.tag_info(parse(body)?)?),
             "remote_tags" => serde_json::to_string(&self.remote_tags(parse(body)?)?),
             "open_url" => serde_json::to_string(&self.open_url(parse(body)?)?),
+            "open_in_editor" => serde_json::to_string(&self.open_in_editor(parse(body)?)?),
             "merged_into" => serde_json::to_string(&self.merged_into(parse(body)?)?),
             "merged_branches" => serde_json::to_string(&self.merged_branches(parse(body)?)?),
             "compare_refs" => serde_json::to_string(&self.compare_refs(parse(body)?)?),

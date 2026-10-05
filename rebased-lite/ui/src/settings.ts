@@ -38,6 +38,9 @@ export interface Settings {
   recent: string[];
   /** The git program; empty means git from PATH. */
   gitPath: string;
+  /** The command of Open in Editor, with {file}, {line} and {column}. Empty uses the default app. The
+   * backend keeps it; this is a copy for the dialog. */
+  editor: string;
   /** Fetch all remotes of the active repository every this many minutes; 0 turns it off. */
   autoFetchMinutes: number;
   diffFontSize: number;
@@ -97,6 +100,7 @@ const DEFAULTS: Settings = {
   tabs: [],
   activeTab: null,
   gitPath: "",
+  editor: "",
   autoFetchMinutes: 0,
   diffFontSize: 12,
   diffFontFamily: "",

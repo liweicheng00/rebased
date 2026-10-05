@@ -16,6 +16,9 @@ pub struct BackendSettings {
     /// The git program; empty means git from PATH.
     pub git_path: String,
     pub history: Limits,
+    /// The command that opens a file at a line, with `{file}`, `{line}` and `{column}`. Empty opens the
+    /// file with the default app of the system.
+    pub editor: String,
     /// False until the settings were saved once. The front end then moves its old copy here.
     pub stored: bool,
 }

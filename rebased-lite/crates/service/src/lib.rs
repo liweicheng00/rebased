@@ -9,6 +9,7 @@ pub mod config;
 pub mod errors;
 pub mod events;
 mod dispatch;
+pub mod editor;
 pub mod history;
 mod ops;
 mod queries;

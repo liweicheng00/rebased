@@ -23,7 +23,7 @@ fn settings_file() {
     assert!(!dir.join("settings.json").exists());
 
     // Good settings are applied and written.
-    let good = BackendSettings { git_path: String::new(), history: Limits { days: 9, max_mb: 50 }, stored: false };
+    let good = BackendSettings { git_path: String::new(), history: Limits { days: 9, max_mb: 50 }, editor: "code --goto {file}:{line}".into(), stored: false };
     let version = s.set_backend_settings(good).unwrap();
     assert!(version.chars().next().unwrap().is_ascii_digit());
     assert!(dir.join("settings.json").exists());
@@ -33,5 +33,6 @@ fn settings_file() {
     let read = t.backend_settings().unwrap();
     assert!(read.stored);
     assert_eq!(read.history, Limits { days: 9, max_mb: 50 });
+    assert_eq!(read.editor, "code --goto {file}:{line}");
     assert_eq!(s.git_version(rebased_service::PathArgs { path: String::new() }).unwrap(), version);
 }

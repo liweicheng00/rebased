@@ -130,6 +130,16 @@ pub struct RemoteArgs {
     pub remote: String,
 }
 
+/// A file of the working tree and a line in it, both 1-based.
+#[derive(Deserialize)]
+pub struct EditorArgs {
+    pub path: String,
+    #[serde(default)]
+    pub line: u32,
+    #[serde(default)]
+    pub column: u32,
+}
+
 #[derive(Deserialize)]
 pub struct UrlArgs {
     pub url: String,
