@@ -1,5 +1,6 @@
 // UI scenario for the diff panel: hide and show it with the shortcut, the close button, the View menu and
-// a double click, and keep its size. It also checks that the HEAD row of the sidebar goes to HEAD.
+// a double click, and keep its size. It also checks that the HEAD row of the sidebar goes to HEAD, and
+// that a double click on a ref label shows only that ref.
 // Start the dev server first (see README). Build a fresh repository with make-demo-repo.sh, then:
 // node e2e/diff-panel.mjs <repo> <screenshot-dir>.
 // Set CHROMIUM to a Chromium binary when Playwright has no downloaded browser.
@@ -88,6 +89,23 @@ await within("ArrowDown selects the next commit", async () => (await page.textCo
 await page.keyboard.press("ArrowUp");
 await page.keyboard.press("ArrowUp");
 await within("ArrowUp goes back up", async () => (await page.textContent(".log-row.selected").catch(() => "")) === (await rowText(1)));
+
+// A double click on a ref label of a row shows only that ref in the log; a second one shows all refs.
+const branchFilter = async () => ((await page.textContent(".filter-bar button:has-text('Branch')").catch(() => "")) ?? "").trim();
+const rows = () => page.$$eval(".log-row", (e) => e.length);
+const selectedText = async () => (await page.textContent(".log-row.selected").catch(() => "")) ?? "";
+const all = await rows();
+await page.dblclick(".log-row .ref:text-is('fix/readme')");
+await within("the filter shows only fix/readme", async () => (await branchFilter()).includes("fix/readme"));
+await within("the log has fewer rows", async () => (await rows()) < all);
+await within("the row of the label is selected", async () => (await selectedText()).includes("Document the build"));
+await shot("dp3-only-ref");
+await page.dblclick(".log-row .ref:text-is('fix/readme')");
+await within("a second double click shows all refs", async () => (await branchFilter()).includes("All") && (await rows()) === all);
+await page.dblclick(".log-row .ref:text-is('v0.1.0')");
+await within("a tag label works too", async () => (await branchFilter()).includes("v0.1.0") && (await selectedText()).includes("Add math module"));
+await page.dblclick(".log-row .ref:text-is('v0.1.0')");
+await within("all refs again", async () => (await rows()) === all);
 console.log("errors:", JSON.stringify(errors));
 await browser.close();
 if (errors.length) process.exit(1);

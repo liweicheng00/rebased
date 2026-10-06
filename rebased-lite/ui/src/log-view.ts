@@ -31,6 +31,8 @@ export class LogView {
   selection: number[] = [];
   private anchor = -1;
   onSelectionChange: (rows: Row[]) => void = () => {};
+  /** A double click on a ref label of a row: the log shows only that ref, or all refs again. */
+  onRefDoubleClick: (name: string, r: Row) => void | Promise<void> = () => {};
   onContextMenu: (row: Row, e: MouseEvent) => void = () => {};
   onRowsLoaded: (rows: Row[]) => void = () => {};
   onExpandEdge: (up: number, down: number) => void = () => {};
@@ -246,7 +248,9 @@ export class LogView {
       if (collapsedEdges.length) canvas.style.cursor = "pointer";
     }
     const subject = h("span", { class: "subject", title: r.subject });
-    for (const ref of r.refs) subject.append(h("span", { class: `ref ref-${ref.kind}`, title: ref.name }, ref.name));
+    for (const ref of r.refs) {
+      subject.append(h("span", { class: `ref ref-${ref.kind}`, title: `${ref.name}\nDouble-click to show only ${ref.name} in the log`, "data-ref": ref.name }, ref.name));
+    }
     subject.append(h("span", { class: "subject-text" }, r.subject));
     const div = h(
       "div",
@@ -260,6 +264,13 @@ export class LogView {
     div.style.top = `${r.row * ROW_HEIGHT}px`;
     div.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
+      // The first click draws the rows again, so no dblclick event comes. The click count still counts.
+      const ref = (e.target as HTMLElement).closest<HTMLElement>(".ref")?.dataset.ref;
+      if (ref && e.detail === 2) {
+        e.preventDefault();
+        void this.onRefDoubleClick(ref, r);
+        return;
+      }
       // The click draws the rows again, so this row goes away. The default action of the mousedown
       // then has no row to focus and moves the focus to the body, and the arrow keys stop. onClick
       // focuses the list itself.

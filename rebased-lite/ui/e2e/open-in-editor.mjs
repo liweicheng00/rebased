@@ -58,7 +58,7 @@ await page.waitForSelector(".diff .editor.modified .view-line");
 await page.waitForTimeout(800);
 await page.keyboard.press("F4");
 await expectOpened("F4 opens the file at the first change", 4);
-check("the status bar says so", ((await page.textContent(".sb-activity")) ?? "").includes("main.rs:4"));
+await within("the status bar says so", async () => ((await page.textContent(".sb-activity")) ?? "").includes("main.rs:4"));
 
 // A click on line 2 of the diff, then the button of the diff toolbar.
 rmSync(log, { force: true });

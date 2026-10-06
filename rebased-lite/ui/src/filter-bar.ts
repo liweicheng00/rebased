@@ -86,6 +86,13 @@ export class FilterBar {
     menuBelow(this.branchBtn, items);
   }
 
+  /** Shows only this branch in the log. When the log shows only it already, it shows all branches again.
+   * Without `notify`, the caller reloads the log. */
+  onlyBranch(name: string, notify = true) {
+    const only = this.value.branches.length === 1 && this.value.branches[0] === name;
+    this.set({ ...this.value, branches: only ? [] : [name] }, notify);
+  }
+
   toggleBranch(name: string) {
     const b = this.value.branches.includes(name) ? this.value.branches.filter((x) => x !== name) : [...this.value.branches, name];
     this.update({ branches: b });

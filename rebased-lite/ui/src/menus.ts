@@ -10,7 +10,7 @@ import { keymap } from "./keyboard";
 import { addWorktree, checkoutBranch, checkoutCommit, currentBranch, deleteBranch, deleteMergedBranches, interactiveRebase, mergeIntoCurrent, newBranch, newTag, rebaseCurrentOnto, renameBranch, resetTo, rewriteSelected, runOp } from "./operations";
 import { compareBranches, fetchRemote, manageRemotes, openOnRemote, remoteRefItems, toggleFavorite } from "./remotes";
 import { startReview } from "./review-flow";
-import { askForRepo, fetchAll, jumpToOid, openRepo, refresh } from "./repo";
+import { askForRepo, fetchAll, jumpToOid, openRepo, refresh, reloadView } from "./repo";
 import { collapse, compare, comparedCommits, compareWithWorktree, fileChangesAction, openFile, short, showSelection } from "./selection";
 import { settings } from "./settings";
 import { changes, diff, fetchBtn, filterBar, log, openBtn, refreshBtn, sidebar, toggleDiff } from "./shell";
@@ -70,6 +70,11 @@ log.onContextMenu = (r, e) => void rowMenu(r, e);
 sidebar.onLocalMenu = (e) => showMenu(e.clientX, e.clientY, [{ label: "Delete Merged Branches…", action: () => void deleteMergedBranches() }]);
 sidebar.onNavigate = (b) => void jumpToOid(b.oid, true);
 sidebar.onToggleFilter = (b) => filterBar.toggleBranch(b.name);
+log.onRefDoubleClick = async (name, r) => {
+  filterBar.onlyBranch(name, false);
+  await reloadView();
+  await jumpToOid(r.oid, true);
+};
 sidebar.onContextMenu = (b, e) => {
   const current = app.refs.find((x) => x.current);
   const cur = currentBranch();
