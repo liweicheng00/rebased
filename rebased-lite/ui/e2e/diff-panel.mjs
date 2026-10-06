@@ -1,5 +1,5 @@
-// UI scenario for the diff panel: hide and show it with the shortcut, the close button, the View menu and
-// a double click, and keep its size. It also checks that the HEAD row of the sidebar goes to HEAD, and
+// UI scenario for the diff panel: hide it with Esc and the close button, show it with the View menu and a
+// double click, and keep its size. It also checks that the HEAD row of the sidebar goes to HEAD, and
 // that a double click on a ref label shows only that ref.
 // Start the dev server first (see README). Build a fresh repository with make-demo-repo.sh, then:
 // node e2e/diff-panel.mjs <repo> <screenshot-dir>.
@@ -40,38 +40,56 @@ await page.mouse.up();
 const tall = await diffHeight();
 check("the drag makes the panel taller", tall > before + 100);
 
-// The shortcut hides the panel, and the log takes the space.
+const showByMenu = async () => {
+  await page.click(".tb-button:has-text('View')");
+  await page.click(".menu-item:has-text('Diff Panel')");
+};
+
+// Esc hides the panel, and the log takes the space.
 await page.click(".log-row >> nth=2");
-await page.keyboard.press("Control+Backquote");
-await within("the shortcut hides the panel", async () => (await diffHeight()) === 0);
+await page.keyboard.press("Escape");
+await within("Esc hides the panel", async () => (await diffHeight()) === 0);
 check("the log takes the space", (await logHeight()) > 800);
 await shot("dp1-hidden");
 
-// The shortcut shows it again with the same size.
-await page.keyboard.press("Control+Backquote");
-await within("the shortcut shows the panel with its size", async () => Math.abs((await diffHeight()) - tall) < 3);
+// The View menu shows it again with the same size.
+await showByMenu();
+await within("the View menu shows the panel with its size", async () => Math.abs((await diffHeight()) - tall) < 3);
 
-// The close button, then the View menu.
+// Esc that closes a menu, or Esc in a text field, does not hide the panel.
+await page.click(".log-row >> nth=2", { button: "right" });
+await page.waitForSelector(".menu");
+await page.keyboard.press("Escape");
+await within("Esc closes the menu", async () => !(await page.$(".menu")));
+check("and the panel stays", (await diffHeight()) > 0);
+await page.click(".filter-text");
+await page.keyboard.press("Escape");
+check("Esc in the filter field keeps the panel", (await diffHeight()) > 0);
+
+// The close button.
 await page.click(".diff-toolbar button[title='Hide the diff panel']");
 await within("the close button hides the panel", async () => (await diffHeight()) === 0);
-await page.click(".tb-button:has-text('View')");
-await page.click(".menu-item:has-text('Diff Panel')");
-await within("the View menu shows the panel", async () => (await diffHeight()) > 0);
 
 // A double click on a changed file shows a hidden panel.
-await page.keyboard.press("Control+Backquote");
-await within("hidden again", async () => (await diffHeight()) === 0);
 await page.dblclick(".changes-panel .change >> nth=0");
 await within("a double click shows the panel", async () => (await diffHeight()) > 0);
 
 // The state and the size stay after a reload.
-await page.keyboard.press("Control+Backquote");
+await page.click(".log-row >> nth=2");
+await page.keyboard.press("Escape");
+await within("hidden again", async () => (await diffHeight()) === 0);
 await page.reload();
 await page.waitForSelector(".log-row", { timeout: 30000 });
 await within("the panel stays hidden after a reload", async () => (await diffHeight()) === 0);
 await page.click(".log-row >> nth=2");
-await page.keyboard.press("Control+Backquote");
+await showByMenu();
 await within("the size stays after a reload", async () => Math.abs((await diffHeight()) - tall) < 3);
+
+// With one project open, Mod+` shows the Open menu with the recent projects.
+await page.keyboard.press("Control+Backquote");
+await within("Mod+` opens the Open menu", async () => ((await page.textContent(".menu").catch(() => "")) ?? "").includes("Clone Repository"));
+await shot("dp2-open-menu");
+await page.keyboard.press("Escape");
 await shot("dp2-shown");
 
 // A click on the HEAD row of the sidebar selects the commit of HEAD.

@@ -8,13 +8,18 @@ import { undoLast } from "./operations";
 import { askForRepo, fetchAll, refresh, switchTab } from "./repo";
 import { settings } from "./settings";
 import { openSettings } from "./settings-flow";
-import { changes, commitPanel, diff, filterBar, showLeftTab, statusActivity, toggleDiff, toggleSidebar } from "./shell";
+import { changes, commitPanel, diff, filterBar, openBtn, showLeftTab, statusActivity, toggleDiff, toggleSidebar } from "./shell";
 import { app } from "./state";
 import { pushBranch, updateBranch } from "./sync";
 import { resetZoom, zoomBy } from "./zoom";
 
 export const keymap = new Keymap();
 const typing = (t: HTMLElement) => t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || !!t.closest(".monaco-editor");
+/** The next open project, as Cmd+` in macOS. With one project open, the Open menu shows the recent ones. */
+const switchProject = (d: number) => {
+  if (settings.tabs.length < 2) return openBtn.click();
+  nextTab(d);
+};
 const nextTab = (d: number) => {
   if (settings.tabs.length < 2) return;
   const i = settings.tabs.indexOf(settings.activeTab ?? "");
@@ -48,7 +53,10 @@ for (const a of [
   },
   { id: "stash", label: "Stash Tab", defaults: ["Mod+3"], run: () => showLeftTab("stash") },
   { id: "reviews", label: "Reviews Tab", defaults: ["Mod+4"], run: () => showLeftTab("reviews") },
-  { id: "diffPanel", label: "Diff Panel", defaults: ["Mod+`"], run: () => toggleDiff() },
+  { id: "diffPanel", label: "Diff Panel (show or hide)", defaults: [], run: () => toggleDiff() },
+  { id: "hideDiff", label: "Hide the Diff Panel", defaults: ["Escape"], run: () => toggleDiff(false), when: (t: HTMLElement) => !typing(t) && settings.showDiff },
+  { id: "switchProject", label: "Switch Project", defaults: ["Mod+`"], run: () => switchProject(1) },
+  { id: "switchProjectBack", label: "Switch Project (back)", defaults: ["Mod+Shift+`"], run: () => switchProject(-1) },
   { id: "openInEditor", label: "Open in Editor", defaults: ["F4"], run: (t: HTMLElement) => app.view && openInEditorHere(t) },
   { id: "localHistory", label: "Local History", defaults: [], run: () => app.view && showLocalHistory("") },
   { id: "nextTab", label: "Next Tab", defaults: ["Mod+PageDown"], run: () => nextTab(1) },
@@ -73,11 +81,17 @@ for (const a of [
   { id: "settings", label: "Settings", defaults: [isMac ? "Mod+Comma" : "Mod+Alt+S"], run: () => void openSettings() },
 ] as KeyAction[]) keymap.add(a);
 
+/** The dialogs and windows that were open when the key came. A window can close on the key (Esc) before
+ * the handler below runs; the key still belongs to that window then. The capture phase of the window
+ * comes before all other handlers. */
+let openAtKey = { dialog: false, window: false };
+window.addEventListener("keydown", () => (openAtKey = { dialog: !!document.querySelector(".overlay"), window: !!document.querySelector(".merge-overlay") }), true);
+
 window.addEventListener("keydown", (e) => {
   // An open dialog handles its own keys. A window, such as Compare or Review, takes Open in Editor only.
-  if (document.querySelector(".overlay")) return;
+  if (openAtKey.dialog || document.querySelector(".overlay")) return;
   // The zoom keys work in every window, as in a browser.
   if (keymap.handle(e, (a) => a.id.startsWith("zoom"))) return;
-  if (document.querySelector(".merge-overlay")) return void keymap.handle(e, (a) => a.id === "openInEditor");
+  if (openAtKey.window || document.querySelector(".merge-overlay")) return void keymap.handle(e, (a) => a.id === "openInEditor");
   keymap.handle(e);
 });

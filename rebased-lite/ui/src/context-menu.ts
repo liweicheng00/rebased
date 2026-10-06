@@ -52,5 +52,16 @@ export function menuBelow(anchor: HTMLElement, items: MenuItem[]) {
 window.addEventListener("mousedown", (e) => {
   if (current && !current.contains(e.target as Node)) closeMenu();
 });
-window.addEventListener("keydown", (e) => e.key === "Escape" && closeMenu());
+// Esc closes an open menu and does nothing else: the capture phase of the window comes first, and the
+// event stops there, so the keys of the app and of the windows do not see it.
+window.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.key !== "Escape" || !current) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    closeMenu();
+  },
+  true,
+);
 window.addEventListener("blur", closeMenu);

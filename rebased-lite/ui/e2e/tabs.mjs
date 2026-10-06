@@ -67,6 +67,11 @@ await within("the local changes of the first repository", async () => (await pag
 await page.click(".log-row >> nth=0");
 await page.keyboard.press("Control+PageDown");
 await within("Ctrl+PageDown shows the second repository", async () => (await firstSubject()).includes("Second in second"));
+// Mod+` switches the project, and Mod+Shift+` goes back.
+await page.keyboard.press("Control+Backquote");
+await within("Mod+` shows the first repository", async () => !(await page.textContent(".tab.on")).includes("-second"));
+await page.keyboard.press("Control+Shift+Backquote");
+await within("Mod+Shift+` shows the second repository again", async () => (await page.textContent(".tab.on")).includes("-second"));
 
 // A reload opens the same tabs, with the second one active.
 await page.goto("http://127.0.0.1:5174/");

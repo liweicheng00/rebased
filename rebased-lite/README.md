@@ -131,8 +131,8 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   menu of the Tags group pushes all tags to a remote, and marks the tags that a remote does not have.
   The commit details show the message, the tagger and the date of an annotated tag, and whether it is
   signed (Rebased Lite does not check the signature).
-- **Diff panel**: View > Diff Panel, the ✕ button of the diff, or Mod+` hides and shows the diff
-  panel below the log. The log then uses all the height. The panel keeps the size that it had. A
+- **Diff panel**: Esc or the ✕ button of the diff hides the diff panel below the log, and View >
+  Diff Panel shows it again. The log then uses all the height. The panel keeps the size that it had. A
   double click on a changed file shows the panel again. "Show Diff" in the context menu also shows it.
 - **Delete Merged Branches**: the context menu of the Local group, a branch, or a remote. Two ways
   find the branches:
@@ -192,7 +192,7 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   light, dark or system theme, and a status bar.
 
 Keyboard (the defaults; change them in Settings → Keymap): `Ctrl/Cmd+O` open, `Ctrl/Cmd+1` to `Ctrl/Cmd+4` the Branches, Changes, Stash and Reviews tabs, `Ctrl/Cmd+K` commit, `Ctrl/Cmd+Shift+K` push, `Ctrl/Cmd+T` update,
-`Ctrl/Cmd+Enter` commit from the message field, `Ctrl/Cmd+Alt+K` commit and push, `Ctrl/Cmd+R` or `F5` refresh, `Ctrl/Cmd+F` filter, `Ctrl/Cmd+`` ` the diff panel,
+`Ctrl/Cmd+Enter` commit from the message field, `Ctrl/Cmd+Alt+K` commit and push, `Ctrl/Cmd+R` or `F5` refresh, `Ctrl/Cmd+F` filter, `Esc` hides the diff panel, `Ctrl/Cmd+`` ` and `Ctrl/Cmd+Shift+`` ` switch the project,
 arrow keys, Page Up, Page Down, Home and End in the log, `Shift` with arrows to select a range,
 `Ctrl/Cmd+C` copy the hash, `Ctrl/Cmd+Z` undo the last operation, `Ctrl/Cmd+PageDown` and `Ctrl/Cmd+PageUp` next and previous tab, `F7` and `Shift+F7` next and previous change, `Alt+Down` and `Alt+Up` next
 and previous file.
