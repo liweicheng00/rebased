@@ -20,9 +20,36 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
+/** The place and the time of the last mouse press, for the copy hint. */
+let lastPress = { x: 0, y: 0, time: 0 };
+window.addEventListener("mousedown", (e) => (lastPress = { x: e.clientX, y: e.clientY, time: Date.now() }), true);
+
+/** A short hint that the text is on the clipboard: next to the mouse after a click, else at the bottom of
+ * the window after a key. It goes away by itself. */
+function showCopied(text: string) {
+  const lines = text.split("\n");
+  const first = lines[0].length > 48 ? lines[0].slice(0, 47) + "…" : lines[0];
+  const what = lines.length > 1 ? `${lines.length} lines` : first;
+  document.querySelector(".copy-hint")?.remove();
+  const el = h("div", { class: "copy-hint", role: "status" }, h("span", { class: "copy-hint-check" }, "✓"), " Copied ", h("span", { class: "copy-hint-text" }, what));
+  const nearMouse = Date.now() - lastPress.time < 1500;
+  if (nearMouse) Object.assign(el.style, { left: `${lastPress.x + 12}px`, top: `${lastPress.y + 14}px` });
+  else el.classList.add("bottom");
+  document.body.append(el);
+  if (nearMouse) {
+    // Keep the hint in the window.
+    const r = el.getBoundingClientRect();
+    if (r.right > window.innerWidth - 8) el.style.left = `${Math.max(8, window.innerWidth - 8 - r.width)}px`;
+    if (r.bottom > window.innerHeight - 8) el.style.top = `${lastPress.y - r.height - 10}px`;
+  }
+  setTimeout(() => el.classList.add("out"), 1100);
+  setTimeout(() => el.remove(), 1400);
+}
+
 export async function copyText(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
+    showCopied(text);
     return;
   } catch {}
   // The text field takes the focus for the copy; the focus then goes back, so the keys of a list still work.
@@ -33,6 +60,7 @@ export async function copyText(text: string): Promise<void> {
   document.execCommand("copy");
   ta.remove();
   focused?.focus({ preventScroll: true });
+  showCopied(text);
 }
 
 export function formatDate(seconds: number): string {

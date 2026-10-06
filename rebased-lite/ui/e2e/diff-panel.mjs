@@ -100,6 +100,14 @@ await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
 await page.click(".log-row .ref:text-is('fix/readme')");
 await within("a click copies the name", async () => (await page.evaluate(() => navigator.clipboard.readText())) === "fix/readme");
 check("the status bar says so", ((await page.textContent(".sb-activity")) ?? "") === "Copied fix/readme");
+await within("a hint next to the mouse shows the copy", async () => ((await page.textContent(".copy-hint").catch(() => "")) ?? "").includes("fix/readme"));
+check("the hint is next to the mouse", !(await page.$eval(".copy-hint", (e) => e.classList.contains("bottom"))));
+await shot("dp5-copy-hint");
+await within("the hint goes away", async () => (await page.$(".copy-hint")) === null, 3000);
+// A copy with a key shows the hint at the bottom.
+await page.waitForTimeout(1600);
+await page.keyboard.press("Control+c");
+await within("a copy with a key shows the hint at the bottom", async () => !!(await page.$(".copy-hint.bottom")));
 await within("the click selects the row", async () => (await selectedText()).includes("Document the build"));
 await page.dblclick(".log-row .ref:text-is('fix/readme')");
 await within("the filter shows only fix/readme", async () => (await branchFilter()).includes("fix/readme"));
