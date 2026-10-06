@@ -46,6 +46,11 @@ function showCopied(text: string) {
   setTimeout(() => el.remove(), 1400);
 }
 
+/** An icon of the style sheet, for example icon("refresh"). It takes the color of the text. */
+export function icon(name: "refresh" | "revert"): HTMLElement {
+  return h("span", { class: `icon icon-${name}`, "aria-hidden": "true" });
+}
+
 export async function copyText(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);

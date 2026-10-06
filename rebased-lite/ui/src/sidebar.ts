@@ -2,7 +2,7 @@
 
 import type { BranchInfo, RecentBranch, Submodule, Worktree } from "./api";
 import { compareTags } from "./version-sort";
-import { h } from "./dom";
+import { h, icon } from "./dom";
 
 export class Sidebar {
   readonly el: HTMLElement;
@@ -218,7 +218,7 @@ export class Sidebar {
     if (!this.submodules.length) return;
     const title = "Submodules";
     const open = !this.collapsed.has(title);
-    const update = h("button", { class: "icon-button group-action", title: "Update all submodules: init, and checkout the recorded commits" }, "⟳");
+    const update = h("button", { class: "icon-button group-action", title: "Update all submodules: init, and checkout the recorded commits" }, icon("refresh"));
     update.addEventListener("click", (e) => {
       e.stopPropagation();
       this.onUpdateSubmodules();

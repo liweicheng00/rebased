@@ -6,7 +6,7 @@ import { CommitPanel } from "./commit-panel";
 import { menuBelow } from "./context-menu";
 import { DetailsPanel } from "./details-panel";
 import { DiffView, setMonacoTheme } from "./diff-view";
-import { dragResize, h } from "./dom";
+import { dragResize, h, icon } from "./dom";
 import { FilterBar } from "./filter-bar";
 import { LogView } from "./log-view";
 import { toast } from "./notify";
@@ -33,7 +33,7 @@ export const banner = new OpBanner();
 export const authors = new Set<string>();
 
 export const openBtn = h("button", { class: "tb-button", title: `Open a repository (${mod}O)` }, "📂 Open ▾");
-export const refreshBtn = h("button", { class: "tb-button", title: `Reload commits and branches (${mod}R)`, disabled: true }, "⟳ Refresh");
+export const refreshBtn = h("button", { class: "tb-button", title: `Reload commits and branches (${mod}R)`, disabled: true }, icon("refresh"), "Refresh");
 export const fetchBtn = h("button", { class: "tb-button", title: "Fetch all remotes, or one remote", disabled: true }, "⇣ Fetch ▾");
 export const updateBtn = h("button", { class: "tb-button", title: `Update the current branch: fetch, then merge or rebase (${mod}T)`, disabled: true }, "↧ Update");
 export const pushBtn = h("button", { class: "tb-button", title: `Push the current branch (${mod}⇧K)`, disabled: true }, "↥ Push");

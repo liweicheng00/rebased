@@ -5,7 +5,7 @@ import type { Change, ChangeListView, LocalChanges } from "./api";
 import { statusName } from "./changes-panel";
 import { fileIcon } from "./file-icon";
 import { buildTree, treeOrder, walkTree } from "./file-tree";
-import { h } from "./dom";
+import { h, icon } from "./dom";
 import { save, settings } from "./settings";
 
 /** A file row: a tracked change in a changelist, or an unversioned file. */
@@ -92,9 +92,9 @@ export class CommitPanel {
   private historyBtn: HTMLButtonElement;
 
   constructor() {
-    const refresh = h("button", { class: "icon-button", title: "Refresh the local changes" }, "⟳");
+    const refresh = h("button", { class: "icon-button", title: "Refresh the local changes" }, icon("refresh"));
     refresh.addEventListener("click", () => this.onRefresh());
-    const rollback = h("button", { class: "icon-button", title: "Roll back the selected files" }, h("span", { class: "icon-revert" }));
+    const rollback = h("button", { class: "icon-button", title: "Roll back the selected files" }, icon("revert"));
     rollback.addEventListener("click", () => {
       const sel = this.selectedFiles().filter((f) => f.list !== null);
       if (sel.length) this.onRollback(sel);

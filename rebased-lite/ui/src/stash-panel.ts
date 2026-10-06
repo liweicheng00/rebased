@@ -1,7 +1,7 @@
 // Stash tab: the stashes of the repository, newest first.
 
 import type { Stash } from "./api";
-import { formatDate, h } from "./dom";
+import { formatDate, h, icon } from "./dom";
 
 export class StashPanel {
   readonly el: HTMLElement;
@@ -16,7 +16,7 @@ export class StashPanel {
   constructor() {
     const stash = h("button", { class: "tb-button stash-all", title: "Stash all local changes" }, "Stash Changes…");
     stash.addEventListener("click", () => this.onStashAll());
-    const refresh = h("button", { class: "icon-button", title: "Refresh" }, "⟳");
+    const refresh = h("button", { class: "icon-button", title: "Refresh" }, icon("refresh"));
     refresh.addEventListener("click", () => this.onRefresh());
     this.list = h("div", { class: "stash-list", tabIndex: 0 });
     this.list.addEventListener("keydown", (e) => {
