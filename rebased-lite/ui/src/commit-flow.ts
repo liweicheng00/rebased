@@ -41,6 +41,8 @@ export async function showLocalDiff(f: LocalFile) {
     const hunks = f.split ? commitPanel.hunksOf(f.change.path) ?? [] : [];
     diff.setListHunks(hunks.filter((x) => x.list !== f.list).map((x) => ({ start: x.newStart, lines: x.newLines, label: names.get(x.list) ?? x.list })));
     diff.setMoveChange(f.list !== null && text && f.change.status === "M" ? (line, at) => moveChangeMenu(f, line, at) : null);
+    // Revert This Change rolls back one change of the file to HEAD.
+    diff.setRevert(text && f.change.status === "M" ? (p, t, expected) => void runOp({ op: "writeFile", path: p, text: t, expected }, `Rolling back a change of ${p}`) : null);
     diff.show(change, pair.left, pair.right);
   } catch (e) {
     if (req === localRequest) diff.message(String(e));

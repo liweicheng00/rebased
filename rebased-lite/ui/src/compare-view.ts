@@ -4,6 +4,7 @@
 import type { Change, FileContent, OutgoingCommit, RevSpec } from "./api";
 import { statusName } from "./changes-panel";
 import { dragResize, formatDate, h, rowSplitter } from "./dom";
+import { showMenu } from "./context-menu";
 import { save, settings } from "./settings";
 import { sharedDiff } from "./history-view";
 
@@ -19,6 +20,12 @@ export interface CompareCallbacks {
   showInLog: (oid: string) => void;
   /** The ref of HEAD, for a comparison with the working tree. */
   head: string;
+  /** Makes working-tree files the same as at `rev`, after a question. True when it did. */
+  revertFiles: (rev: string, name: string, paths: string[]) => Promise<boolean>;
+  /** Writes the text of a working-tree file when the text on disk is still `expected`. True when it did. */
+  writeFile: (path: string, text: string, expected: string) => Promise<boolean>;
+  openInEditor: (path: string) => void;
+  copyText: (text: string) => void;
 }
 
 /** Opens the window. `path` is the file to show first; without it, the first file. */
@@ -68,6 +75,7 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
   }, () => {});
 
   const close = () => {
+    d.setRevert(null);
     overlay.remove();
     document.removeEventListener("keydown", onKey, true);
   };
@@ -139,13 +147,42 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
     try {
       const cmp = await cb.compareRefs(left, worktree ? cb.head : right);
       if (req !== request) return;
+      // The commits of the working tree are the commits of HEAD.
+      const rightCommits = worktree ? `${cb.head} (HEAD of the working tree)` : right;
       commitsEl.replaceChildren(
-        commitList(`In ${left}, not in ${worktree ? cb.head : right}`, cmp.onlyLeft),
-        commitList(`In ${worktree ? cb.head : right}, not in ${left}`, cmp.onlyRight),
+        ...(worktree && cmp.left === cmp.right
+          ? [h("div", { class: "muted-inline compare-none" }, `The working tree is on ${cb.head}, at the same commit as ${left}. The files below are its local changes.`)]
+          : [commitList(`In ${left}, not in ${rightCommits}`, cmp.onlyLeft), commitList(`In ${rightCommits}, not in ${left}`, cmp.onlyRight)]),
       );
       const l: RevSpec = { commit: fromBase && cmp.base ? cmp.base : cmp.left };
       const r: RevSpec = worktree ? "worktree" : { commit: cmp.right };
       revs = { l, r };
+      const leftName = fromBase ? `the common ancestor ${cmp.base?.slice(0, 8) ?? ""}` : left;
+      const leftRev = fromBase && cmp.base ? cmp.base : cmp.left;
+      // A change of the working tree can go back to the left side.
+      d.setRevert(
+        worktree
+          ? async (p, text, expected) => {
+              if (await cb.writeFile(p, text, expected)) await reload(p);
+            }
+          : null,
+      );
+      const fileMenu = (c: Change, e: MouseEvent) => {
+        e.preventDefault();
+        const paths = c.old_path && c.old_path !== c.path ? [c.path, c.old_path] : [c.path];
+        showMenu(e.clientX, e.clientY, [
+          {
+            label: `Revert to ${leftName}…`,
+            disabled: !worktree,
+            action: async () => {
+              if (await cb.revertFiles(leftRev, leftName, paths)) await reload(c.path);
+            },
+          },
+          { label: "Open in Editor", disabled: !worktree || c.status === "D", action: () => cb.openInEditor(c.path) },
+          { separator: true },
+          { label: "Copy Path", action: () => cb.copyText(c.path) },
+        ]);
+      };
       files = await cb.changes(l, r);
       if (req !== request) return;
       d.setSides(fromBase ? `common ancestor ${cmp.base?.slice(0, 8) ?? "(none)"}` : left, rightName);
@@ -160,7 +197,11 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
             h("span", { class: "rebase-subject" }, c.path.slice(slash + 1)),
             h("span", { class: "rebase-author" }, slash > 0 ? c.path.slice(0, slash) : ""),
           );
-          row.addEventListener("mousedown", () => void select(i));
+          row.addEventListener("mousedown", (e) => e.button === 0 && void select(i));
+          row.addEventListener("contextmenu", (e) => {
+            void select(i);
+            fileMenu(c, e);
+          });
           return row;
         }),
       );
@@ -175,6 +216,12 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
         d.message("");
       }
     }
+  };
+
+  /** Loads the files again after a revert, and shows the same file when it still differs. */
+  const reload = async (p: string) => {
+    path = p;
+    await load();
   };
 
   leftSel.addEventListener("change", () => {

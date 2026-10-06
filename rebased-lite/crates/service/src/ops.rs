@@ -63,6 +63,10 @@ pub enum Op {
     ResolveSide { paths: Vec<String>, side: Side },
     ApplyFileChanges { from: String, to: String, paths: Vec<String>, #[serde(default)] reverse: bool },
     GetFromRevision { rev: String, paths: Vec<String> },
+    /// Makes working-tree files the same as at a revision; a file that it does not have is deleted.
+    RevertToRevision { rev: String, paths: Vec<String> },
+    /// Writes the text of a working-tree file. `expected` is the text that the caller changed.
+    WriteFile { path: String, text: String, expected: String },
     AddRemote { name: String, url: String },
     RemoveRemote { name: String },
     RenameRemote { from: String, to: String },
@@ -103,6 +107,8 @@ fn at_risk(repo: &Repo, op: &Op) -> Option<(&'static str, Vec<PathBuf>)> {
         Op::RollbackHunks { path, .. } => ("Before Rollback", files(std::slice::from_ref(path))),
         Op::DeleteUnversioned { paths } => ("Before Delete", files(paths)),
         Op::GetFromRevision { paths, .. } => ("Before Get from Revision", files(paths)),
+        Op::RevertToRevision { paths, .. } => ("Before Revert", files(paths)),
+        Op::WriteFile { path, .. } => ("Before Revert", files(std::slice::from_ref(path))),
         Op::ApplyFileChanges { paths, .. } => ("Before Apply Changes", files(paths)),
         Op::ResolveText { path, .. } => ("Before Resolve", files(std::slice::from_ref(path))),
         Op::ResolveSide { paths, .. } => ("Before Resolve", files(paths)),
@@ -277,6 +283,8 @@ impl Service {
             Op::ResolveSide { paths, side } => repo.resolve_with_side(&paths, side),
             Op::ApplyFileChanges { from, to, paths, reverse } => repo.apply_file_changes(&from, &to, &paths, reverse),
             Op::GetFromRevision { rev, paths } => repo.get_from_revision(&rev, &paths),
+            Op::RevertToRevision { rev, paths } => repo.revert_to_revision(&rev, &paths),
+            Op::WriteFile { path, text, expected } => repo.write_file(&path, &text, &expected),
             Op::UpdateSubmodules { paths } => repo.update_submodules(&paths),
             Op::AddRemote { name, url } => repo.add_remote(&name, &url),
             Op::RemoveRemote { name } => repo.remove_remote(&name),

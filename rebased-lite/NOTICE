@@ -15,3 +15,6 @@ This product includes the file icons of Material Icon Theme
 (https://github.com/material-extensions/vscode-material-icon-theme), Copyright (c) 2025
 Material Extensions, licensed under the MIT License. The npm package material-icon-theme
 carries the icons and its LICENSE; ui/src/file-icons.gen.ts is generated from its icon map.
+
+This product includes the "undo-2" icon of Lucide (https://lucide.dev), Copyright (c) Lucide
+Contributors, licensed under the ISC License. ui/src/style.css carries its path as the revert icon.

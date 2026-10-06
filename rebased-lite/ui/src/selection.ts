@@ -61,6 +61,7 @@ export async function openFile(i: number) {
     diff.setSelectable(null);
     diff.setListHunks([]);
     diff.setMoveChange(null);
+    diff.setRevert(null);
     diff.show(c, pair.left, pair.right);
   } catch (e) {
     if (req === app.request) diff.message(String(e));

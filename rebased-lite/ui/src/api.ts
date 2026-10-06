@@ -217,7 +217,9 @@ export type Op =
   | { op: "resolveText"; path: string; text: string }
   | { op: "resolveSide"; paths: string[]; side: "ours" | "theirs" }
   | { op: "applyFileChanges"; from: string; to: string; paths: string[]; reverse: boolean }
-  | { op: "getFromRevision"; rev: string; paths: string[] };
+  | { op: "getFromRevision"; rev: string; paths: string[] }
+  | { op: "revertToRevision"; rev: string; paths: string[] }
+  | { op: "writeFile"; path: string; text: string; expected: string };
 
 export type ChangeListOp =
   | { op: "create"; name: string; comment?: string; makeActive?: boolean; paths?: string[] }

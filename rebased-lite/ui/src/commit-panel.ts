@@ -94,7 +94,7 @@ export class CommitPanel {
   constructor() {
     const refresh = h("button", { class: "icon-button", title: "Refresh the local changes" }, "⟳");
     refresh.addEventListener("click", () => this.onRefresh());
-    const rollback = h("button", { class: "icon-button", title: "Roll back the selected files" }, "↶");
+    const rollback = h("button", { class: "icon-button", title: "Roll back the selected files" }, h("span", { class: "icon-revert" }));
     rollback.addEventListener("click", () => {
       const sel = this.selectedFiles().filter((f) => f.list !== null);
       if (sel.length) this.onRollback(sel);

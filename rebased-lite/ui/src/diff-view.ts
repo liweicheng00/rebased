@@ -1,5 +1,6 @@
 // Monaco diff of one file, with a toolbar for navigation and diff options.
 
+import { revertChange } from "./revert-change";
 import * as monaco from "./monaco";
 import "monaco-editor/esm/vs/basic-languages/monaco.contribution";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
@@ -71,6 +72,13 @@ export class DiffView {
   /** Local changes only: move the change at a working-tree line to another changelist. */
   onMoveChange: ((line: number, at: { x: number; y: number }) => void) | null = null;
   private hunks: { id: string; glyphLine: number; change: monaco.editor.ILineChange }[] = [];
+  /** The texts of the two sides as they came, for Revert This Change. */
+  private texts = { left: "", right: "" };
+  /** The right side is the working tree: Revert This Change writes the file. Null turns it off. */
+  private onRevert: ((path: string, text: string, expected: string) => void) | null = null;
+  private revertKey: monaco.editor.IContextKey<boolean>;
+  private revertDeco: string[] = [];
+  private revertGlyphs: { line: number; change: monaco.editor.ILineChange }[] = [];
 
   constructor() {
     const btn = (label: string, title: string, fn: () => void) => {
@@ -138,10 +146,14 @@ export class DiffView {
       this.renderHunks();
       this.renderListHunks();
       this.renderNotes();
+      this.renderRevert();
     });
     this.trackCursor(this.editor.getModifiedEditor());
     this.editor.getModifiedEditor().onMouseDown((ev) => {
-      if (!this.selectable || ev.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) return;
+      if (ev.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) return;
+      const glyph = this.revertGlyphs.find((g) => g.line === ev.target.position?.lineNumber);
+      if (!this.selectable && glyph) return this.revertChange(glyph.change);
+      if (!this.selectable) return;
       const line = ev.target.position?.lineNumber;
       const hunk = this.hunks.find((x) => x.glyphLine === line);
       if (!hunk) return;
@@ -167,7 +179,57 @@ export class DiffView {
         if (line && fn) setTimeout(() => fn(line, this.menuAt), 50);
       },
     });
+    this.revertKey = modified.createContextKey("rebasedCanRevert", false);
+    modified.addAction({
+      id: "rebased.revertChange",
+      label: "Revert This Change",
+      precondition: "rebasedCanRevert",
+      contextMenuGroupId: "0_changelist",
+      contextMenuOrder: 0,
+      run: (ed) => {
+        const line = ed.getPosition()?.lineNumber ?? 0;
+        const c = (this.editor.getLineChanges() ?? []).find((x) =>
+          x.modifiedEndLineNumber === 0 ? line === x.modifiedStartLineNumber || line === x.modifiedStartLineNumber + 1 : line >= x.modifiedStartLineNumber && line <= x.modifiedEndLineNumber,
+        );
+        if (c) this.revertChange(c);
+      },
+    });
     this.message("Select a file to see the diff.");
+  }
+
+  /**
+   * The right side is the working tree: each change gets a revert button, and the menu gets Revert This
+   * Change. `fn` writes the new text of the file when the text on disk is still `expected`. Null turns
+   * it off. Call it before show().
+   */
+  setRevert(fn: ((path: string, text: string, expected: string) => void) | null) {
+    this.onRevert = fn;
+    this.renderRevert();
+  }
+
+  private revertChange(c: monaco.editor.ILineChange) {
+    if (!this.onRevert || !this.path) return;
+    this.onRevert(this.path, revertChange(this.texts.left, this.texts.right, c), this.texts.right);
+  }
+
+  /** The revert buttons, in the glyph margin of the right side. The check boxes of a commit win there. */
+  private renderRevert() {
+    const ed = this.editor.getModifiedEditor();
+    const on = !!this.onRevert && this.notice.hidden && this.singleHost.hidden;
+    this.revertKey?.set(on);
+    // The menu item works always; the buttons only where no check boxes are.
+    const changes = on && !this.selectable ? this.editor.getLineChanges() ?? [] : [];
+    const last = ed.getModel()?.getLineCount() ?? 1;
+    // A delete has no lines on the right: its button is on the line after it.
+    this.revertGlyphs = changes.map((c) => ({ line: Math.min(last, Math.max(1, c.modifiedEndLineNumber === 0 ? c.modifiedStartLineNumber + 1 : c.modifiedStartLineNumber)), change: c }));
+    if (!this.selectable) ed.updateOptions({ glyphMargin: changes.length > 0 || on });
+    this.revertDeco = ed.deltaDecorations(
+      this.revertDeco,
+      this.revertGlyphs.map((g) => ({
+        range: new monaco.Range(g.line, 1, g.line, 1),
+        options: { glyphMarginClassName: "revert-glyph", glyphMarginHoverMessage: { value: "Revert this change: the file gets the lines of the left side" } },
+      })),
+    );
   }
 
   private listenForBlameClicks(e: monaco.editor.IStandaloneCodeEditor | monaco.editor.ICodeEditor) {
@@ -547,6 +609,7 @@ export class DiffView {
   private revealFirst = true;
 
   private setModels(a: string, b: string, lang: string | undefined) {
+    this.texts = { left: a, right: b };
     this.host.hidden = false;
     this.singleHost.hidden = true;
     const old = this.editor.getModel();

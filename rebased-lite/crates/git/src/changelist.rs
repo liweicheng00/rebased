@@ -9,7 +9,7 @@
 //! its new hunks. Another changelist can hold some hunks of the file; see [`crate::hunks`].
 
 use crate::hunks::Hunk;
-use crate::ops::{OpResult, UndoAction, UndoMode};
+use crate::ops::{safe, OpResult, UndoAction, UndoMode};
 use crate::{parse_name_status, Change, GitError, Repo, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -589,6 +589,59 @@ impl Repo {
         args.extend(paths.iter().map(String::as_str));
         self.git_write(&args, &[]).map_err(|(_, e)| GitError(e))?;
         Ok(OpResult::ok_msg(format!("Added {} file{} to Git", paths.len(), if paths.len() == 1 { "" } else { "s" })))
+    }
+
+    /// Makes working-tree files the same as at `rev`, for a compare with the working tree. A file that
+    /// `rev` does not have is deleted; a new file of the index also leaves the index. The index keeps the
+    /// other files, so the result shows as a local change against HEAD.
+    pub fn revert_to_revision(&self, rev: &str, paths: &[String]) -> Result<OpResult> {
+        let rev = safe(rev)?;
+        if paths.is_empty() {
+            return Err(GitError("Select the files to revert".into()));
+        }
+        let mut present = Vec::new();
+        let mut absent = Vec::new();
+        for p in paths {
+            inside(&self.root, p)?;
+            if self.git(&["cat-file", "-e", &format!("{rev}:{p}")]).is_ok() {
+                present.push(p.as_str());
+            } else {
+                absent.push(p.as_str());
+            }
+        }
+        if !present.is_empty() {
+            let source = format!("--source={rev}");
+            let mut args = vec!["restore", source.as_str(), "--worktree", "--"];
+            args.extend(&present);
+            self.git_write(&args, &[]).map_err(|(_, e)| GitError(e))?;
+        }
+        for p in absent {
+            let in_index = self.git(&["ls-files", "--error-unmatch", "--", p]).is_ok();
+            let in_head = self.git(&["cat-file", "-e", &format!("HEAD:{p}")]).is_ok();
+            if in_index && !in_head {
+                self.git_write(&["rm", "-q", "-f", "--cached", "--", p], &[]).map_err(|(_, e)| GitError(e))?;
+            }
+            let full = self.root.join(p);
+            if full.symlink_metadata().is_ok() {
+                std::fs::remove_file(&full).map_err(|e| GitError(format!("Cannot delete {p}: {e}")))?;
+            }
+        }
+        let n = paths.len();
+        Ok(OpResult::ok_msg(format!("Reverted {n} file{} to {}", if n == 1 { "" } else { "s" }, &rev[..rev.len().min(12)])))
+    }
+
+    /// Writes a new text to a working-tree file, for example after one change of a diff was reverted.
+    /// `expected` is the text that the caller saw. Another text on disk stops the write, so an edit of the
+    /// user in the meantime stays.
+    pub fn write_file(&self, path: &str, text: &str, expected: &str) -> Result<OpResult> {
+        let full = inside(&self.root, path)?;
+        let now = std::fs::read(&full).map_err(|e| GitError(format!("Cannot read {path}: {e}")))?;
+        let now = String::from_utf8(now).map_err(|_| GitError(format!("{path} is not UTF-8 text. Revert the whole file")))?;
+        if now != expected {
+            return Err(GitError(format!("{path} changed on disk. The diff shows it again now; try again")));
+        }
+        std::fs::write(&full, text).map_err(|e| GitError(format!("Cannot write {path}: {e}")))?;
+        Ok(OpResult::ok_msg(format!("Reverted a change of {path}")))
     }
 
     /// Deletes unversioned files from the working tree. It refuses a tracked file.

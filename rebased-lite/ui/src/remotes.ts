@@ -16,6 +16,8 @@ import { openSettings } from "./settings-flow";
 import { log, remoteBtn, sidebar, toggleDiff, toggleSidebar, viewBtn } from "./shell";
 import { app } from "./state";
 import { branchUrl, commitUrl, webUrl } from "./web-url";
+import { copyText } from "./dom";
+import { openInEditor } from "./editor-flow";
 
 export async function fetchRemote(name: string) {
   const out = await runOp({ op: "fetchRemote", name }, `Fetching ${name}`);
@@ -87,6 +89,15 @@ export function compareBranches(leftRef: string, rightRef: string, path?: string
     changes: async (l, r) => (await api.compare(l, r)).changes,
     pair: api.filePair,
     showInLog: (oid) => void jumpToOid(oid, true),
+    revertFiles: async (rev, name, paths) => {
+      const what = paths.length === 1 ? paths[0] : `${paths.length} files`;
+      const text = `${what} in the working tree gets the content of ${name}. A file that ${name} does not have is deleted. Local History keeps the version of now.`;
+      if (!(await confirmDialog("Revert", text, "Revert", true))) return false;
+      return !!(await runOp({ op: "revertToRevision", rev, paths }, "Reverting"))?.result.ok;
+    },
+    writeFile: async (p, text, expected) => !!(await runOp({ op: "writeFile", path: p, text, expected }, `Reverting a change of ${p}`))?.result.ok,
+    openInEditor: (p) => void openInEditor(p),
+    copyText: (t) => void copyText(t),
   }, path);
 }
 
