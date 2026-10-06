@@ -77,8 +77,9 @@ export class DiffView {
   /** The right side is the working tree: Revert This Change writes the file. Null turns it off. */
   private onRevert: ((path: string, text: string, expected: string) => void) | null = null;
   private revertKey: monaco.editor.IContextKey<boolean>;
-  private revertDeco: string[] = [];
-  private revertGlyphs: { line: number; change: monaco.editor.ILineChange }[] = [];
+  private revertDeco = { left: [] as string[], right: [] as string[] };
+  /** The revert buttons: on the left side when the sides are side by side, as in IntelliJ, else on the right. */
+  private revertGlyphs: { side: "left" | "right"; line: number; change: monaco.editor.ILineChange }[] = [];
 
   constructor() {
     const btn = (label: string, title: string, fn: () => void) => {
@@ -149,9 +150,14 @@ export class DiffView {
       this.renderRevert();
     });
     this.trackCursor(this.editor.getModifiedEditor());
+    this.editor.getOriginalEditor().onMouseDown((ev) => {
+      if (ev.target.type !== monaco.editor.MouseTargetType.GUTTER_LINE_DECORATIONS) return;
+      const glyph = this.revertGlyphs.find((g) => g.side === "left" && g.line === ev.target.position?.lineNumber);
+      if (glyph) this.revertChange(glyph.change);
+    });
     this.editor.getModifiedEditor().onMouseDown((ev) => {
       if (ev.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) return;
-      const glyph = this.revertGlyphs.find((g) => g.line === ev.target.position?.lineNumber);
+      const glyph = this.revertGlyphs.find((g) => g.side === "right" && g.line === ev.target.position?.lineNumber);
       if (!this.selectable && glyph) return this.revertChange(glyph.change);
       if (!this.selectable) return;
       const line = ev.target.position?.lineNumber;
@@ -212,24 +218,41 @@ export class DiffView {
     this.onRevert(this.path, revertChange(this.texts.left, this.texts.right, c), this.texts.right);
   }
 
-  /** The revert buttons, in the glyph margin of the right side. The check boxes of a commit win there. */
+  /**
+   * The revert buttons (») of the changes. Side by side, they are in the gutter of the left side, as in
+   * IntelliJ, so the commit check boxes of the right side stay. In one column only the right side shows,
+   * and the check boxes win there.
+   */
   private renderRevert() {
-    const ed = this.editor.getModifiedEditor();
+    const left = this.editor.getOriginalEditor();
+    const right = this.editor.getModifiedEditor();
     const on = !!this.onRevert && this.notice.hidden && this.singleHost.hidden;
     this.revertKey?.set(on);
-    // The menu item works always; the buttons only where no check boxes are.
-    const changes = on && !this.selectable ? this.editor.getLineChanges() ?? [] : [];
+    const side: "left" | "right" = settings.sideBySide ? "left" : "right";
+    const changes = on && (side === "left" || !this.selectable) ? this.editor.getLineChanges() ?? [] : [];
+    const ed = side === "left" ? left : right;
     const last = ed.getModel()?.getLineCount() ?? 1;
-    // A delete has no lines on the right: its button is on the line after it.
-    this.revertGlyphs = changes.map((c) => ({ line: Math.min(last, Math.max(1, c.modifiedEndLineNumber === 0 ? c.modifiedStartLineNumber + 1 : c.modifiedStartLineNumber)), change: c }));
-    if (!this.selectable) ed.updateOptions({ glyphMargin: changes.length > 0 || on });
-    this.revertDeco = ed.deltaDecorations(
-      this.revertDeco,
-      this.revertGlyphs.map((g) => ({
-        range: new monaco.Range(g.line, 1, g.line, 1),
-        options: { glyphMarginClassName: "revert-glyph", glyphMarginHoverMessage: { value: "Revert this change: the file gets the lines of the left side" } },
-      })),
-    );
+    // A side without lines in the change gets the button on the line after the change.
+    this.revertGlyphs = changes.map((c) => {
+      const [start, end] = side === "left" ? [c.originalStartLineNumber, c.originalEndLineNumber] : [c.modifiedStartLineNumber, c.modifiedEndLineNumber];
+      return { side, line: Math.min(last, Math.max(1, end === 0 ? start + 1 : start)), change: c };
+    });
+    const hover = { value: "Revert this change: the working tree gets the lines of the left side" };
+    // On the left side the button is between the line numbers and the text, as in IntelliJ.
+    const deco = (s: "left" | "right") =>
+      this.revertGlyphs
+        .filter((g) => g.side === s)
+        .map((g) => ({
+          range: new monaco.Range(g.line, 1, g.line, 1),
+          options:
+            s === "left"
+              ? { linesDecorationsClassName: "revert-glyph", linesDecorationsTooltip: hover.value }
+              : { glyphMarginClassName: "revert-glyph", glyphMarginHoverMessage: hover },
+        }));
+    left.updateOptions({ lineDecorationsWidth: side === "left" && changes.length > 0 ? 18 : 10 });
+    if (!this.selectable) right.updateOptions({ glyphMargin: side === "right" && changes.length > 0 });
+    this.revertDeco.left = left.deltaDecorations(this.revertDeco.left, deco("left"));
+    this.revertDeco.right = right.deltaDecorations(this.revertDeco.right, deco("right"));
   }
 
   private listenForBlameClicks(e: monaco.editor.IStandaloneCodeEditor | monaco.editor.ICodeEditor) {
@@ -268,6 +291,8 @@ export class DiffView {
       ignoreTrimWhitespace: settings.ignoreWhitespace,
       hideUnchangedRegions: { enabled: settings.collapseUnchanged },
     });
+    // The revert buttons move with the layout.
+    if (this.revertKey) this.renderRevert();
   }
 
   goToDiff(target: "next" | "previous") {
