@@ -24,6 +24,7 @@ import { settings } from "./settings";
 import { applyBackendSettings, scheduleAutoFetch } from "./settings-flow";
 import { applyLayout, applyTheme, showLeftTab } from "./shell";
 import { showWorkspace } from "./welcome";
+import { applyZoom } from "./zoom";
 
 // No spell check, autocorrect or automatic capitals in the fields: branch names, paths and hashes are
 // not prose. The attributes go on each field when it gets the focus, so fields made later get them too.
@@ -41,6 +42,7 @@ document.addEventListener(
 applyLayout();
 showLeftTab(settings.leftTab);
 applyTheme();
+applyZoom();
 showWorkspace(false);
 await applyBackendSettings();
 scheduleAutoFetch();

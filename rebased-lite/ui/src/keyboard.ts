@@ -11,6 +11,7 @@ import { openSettings } from "./settings-flow";
 import { changes, commitPanel, diff, filterBar, showLeftTab, statusActivity, toggleDiff, toggleSidebar } from "./shell";
 import { app } from "./state";
 import { pushBranch, updateBranch } from "./sync";
+import { resetZoom, zoomBy } from "./zoom";
 
 export const keymap = new Keymap();
 const typing = (t: HTMLElement) => t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || !!t.closest(".monaco-editor");
@@ -66,12 +67,17 @@ for (const a of [
     },
     when: (t: HTMLElement) => !typing(t) && !!t.closest(".log") && app.selected.length > 0,
   },
+  { id: "zoomIn", label: "Zoom In", defaults: ["Mod+=", "Mod+Shift+="], run: () => zoomBy(1) },
+  { id: "zoomOut", label: "Zoom Out", defaults: ["Mod+-"], run: () => zoomBy(-1) },
+  { id: "zoomReset", label: "Actual Size", defaults: ["Mod+0"], run: () => resetZoom() },
   { id: "settings", label: "Settings", defaults: [isMac ? "Mod+Comma" : "Mod+Alt+S"], run: () => void openSettings() },
 ] as KeyAction[]) keymap.add(a);
 
 window.addEventListener("keydown", (e) => {
   // An open dialog handles its own keys. A window, such as Compare or Review, takes Open in Editor only.
   if (document.querySelector(".overlay")) return;
+  // The zoom keys work in every window, as in a browser.
+  if (keymap.handle(e, (a) => a.id.startsWith("zoom"))) return;
   if (document.querySelector(".merge-overlay")) return void keymap.handle(e, (a) => a.id === "openInEditor");
   keymap.handle(e);
 });

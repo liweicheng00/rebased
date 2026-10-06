@@ -1,5 +1,6 @@
 // Remotes, the tracked branch, favorite branches and Compare Branches.
 
+import { resetZoom, zoomBy } from "./zoom";
 import { api, type BranchInfo, type Op, type RemoteInfo } from "./api";
 import { openCompare, WORKTREE } from "./compare-view";
 import { menuBelow, type MenuItem, showMenu } from "./context-menu";
@@ -206,6 +207,11 @@ viewBtn.addEventListener("click", () => {
     { separator: true },
     { label: "Branches Panel", checked: settings.showSidebar, shortcut: keymap.shortcut("branches"), action: toggleSidebar },
     { label: "Diff Panel", checked: settings.showDiff, shortcut: keymap.shortcut("diffPanel"), action: () => toggleDiff() },
+    { separator: true },
+    { label: `Zoom In`, shortcut: keymap.shortcut("zoomIn"), action: () => zoomBy(1) },
+    { label: `Zoom Out`, shortcut: keymap.shortcut("zoomOut"), action: () => zoomBy(-1) },
+    { label: `Actual Size (${Math.round(settings.zoom * 100)}%)`, shortcut: keymap.shortcut("zoomReset"), action: () => resetZoom() },
+    { separator: true },
     { label: "Go to HEAD", disabled: !app.view?.headOid, action: () => app.view?.headOid && void jumpToOid(app.view.headOid, true) },
     { separator: true },
     { label: "Settings…", shortcut: keymap.shortcut("settings"), action: () => void openSettings() },

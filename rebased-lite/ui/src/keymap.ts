@@ -27,6 +27,9 @@ export function eventKey(e: KeyboardEvent): string | null {
   else if (e.key === ",") key = "Comma";
   // The key left of 1, by its place: e.key differs between keyboard layouts.
   else if (e.code === "Backquote") key = "`";
+  // By their place too, so Shift does not change them: Shift+= gives "+", which joins the parts.
+  else if (e.code === "Equal" || e.code === "NumpadAdd") key = "=";
+  else if (e.code === "Minus" || e.code === "NumpadSubtract") key = "-";
   else key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
   const parts: string[] = [];
   if (isMac ? e.metaKey : e.ctrlKey) parts.push("Mod");

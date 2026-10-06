@@ -305,6 +305,16 @@ export async function initialPath(): Promise<string | null> {
   return invoke<string | null>("initial_path");
 }
 
+/** Zooms the window. A browser has its own zoom keys, so the dev server zooms the page with CSS. */
+export async function setZoom(level: number): Promise<void> {
+  if (inTauri) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("set_zoom", { level });
+    return;
+  }
+  document.documentElement.style.zoom = level === 1 ? "" : String(level);
+}
+
 /** Asks for a folder with the native dialog. Returns null in a browser, where the caller shows a text field. */
 /** Asks for a file with the native dialog. Returns null in a browser. */
 export async function pickFile(title: string): Promise<string | null> {

@@ -20,6 +20,13 @@ fn initial_path() -> Option<String> {
     std::env::args().nth(1).filter(|a| !a.starts_with('-'))
 }
 
+/// Zooms the page of the window, as the zoom of a browser: 1.0 is 100%. The text and the layout scale
+/// together, so the editors keep their mouse positions.
+#[tauri::command]
+fn set_zoom(webview: tauri::Webview, level: f64) -> Result<(), String> {
+    webview.set_zoom(level.clamp(0.5, 3.0)).map_err(|e| e.to_string())
+}
+
 /// WebKitGTK draws with OpenGL. Without a GPU render node, Mesa runs OpenGL on the CPU (llvmpipe), and the
 /// GL buffers live in normal memory: about 280 MB more on git/git, and more CPU time. The software path of
 /// WebKit is cheaper then. A user setting of the variable wins.
@@ -54,7 +61,7 @@ fn main() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![initial_path, call])
+        .invoke_handler(tauri::generate_handler![initial_path, call, set_zoom])
         .run(tauri::generate_context!())
         .expect("error while running Rebased Lite");
 }

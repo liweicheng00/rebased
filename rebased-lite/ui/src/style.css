@@ -481,7 +481,9 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 
 /* Settings dialog */
 .settings-dialog { width: min(820px, calc(100vw - 32px)); max-height: calc(100vh - 80px); }
-.settings-body { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; min-height: 360px; max-height: calc(100vh - 220px); }
+/* A fixed height that fits the window: a long page scrolls inside, the buttons stay on the screen, and the
+   dialog keeps its size from page to page. */
+.settings-body { display: grid; grid-template-columns: 150px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 16px; height: min(560px, calc(100vh - 220px)); }
 .settings-nav { display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--border); padding-right: 8px; }
 .settings-page { text-align: left; border: none; background: none; color: var(--fg); padding: 6px 10px; border-radius: 4px; cursor: pointer; font: inherit; }
 .settings-page:hover { background: var(--hover); }
