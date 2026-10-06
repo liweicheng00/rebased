@@ -1,7 +1,7 @@
 // The welcome screen.
 
 import { h } from "./dom";
-import { askForRepo, openRepo } from "./repo";
+import { askForRepo, cloneRepo, openRepo } from "./repo";
 import { removeRecent, settings } from "./settings";
 import { welcome, workspace } from "./shell";
 
@@ -14,6 +14,8 @@ export function showWorkspace(show: boolean) {
 function renderWelcome() {
   const open = h("button", { class: "primary big" }, "Open Repository…");
   open.addEventListener("click", () => void askForRepo());
+  const clone = h("button", { class: "big" }, "Clone Repository…");
+  clone.addEventListener("click", () => void cloneRepo());
   const recentList = h("div", { class: "recent" });
   for (const p of settings.recent) {
     const item = h("div", { class: "recent-item", title: p }, h("span", { class: "recent-name" }, p.split(/[\\/]/).pop() ?? p), h("span", { class: "recent-path" }, p));
@@ -34,7 +36,7 @@ function renderWelcome() {
       h("div", { class: "welcome-logo" }, h("span", { class: "dot a" }), h("span", { class: "dot b" }), h("span", { class: "dot c" })),
       h("h1", {}, "Rebased Lite"),
       h("p", { class: "muted-inline" }, "A light git log viewer with the Rebased commit graph."),
-      open,
+      h("div", { class: "welcome-actions" }, open, clone),
       settings.recent.length ? h("div", { class: "recent-title" }, "Recent repositories") : "",
       recentList,
     ),

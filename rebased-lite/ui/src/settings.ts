@@ -43,6 +43,8 @@ export interface Settings {
   /** The command of Open in Editor, with {file}, {line} and {column}. Empty uses the default app. The
    * backend keeps it; this is a copy for the dialog. */
   editor: string;
+  /** The folder of the last clone, for the next Clone Repository. */
+  cloneDir: string;
   /** Fetch all remotes of the active repository every this many minutes; 0 turns it off. */
   autoFetchMinutes: number;
   diffFontSize: number;
@@ -104,6 +106,7 @@ const DEFAULTS: Settings = {
   activeTab: null,
   gitPath: "",
   editor: "",
+  cloneDir: "",
   autoFetchMinutes: 0,
   diffFontSize: 12,
   diffFontFamily: "",

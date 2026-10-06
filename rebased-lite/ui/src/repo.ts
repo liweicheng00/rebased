@@ -9,6 +9,8 @@ import { addRecent, save, settings } from "./settings";
 import { authors, banner, commitPanel, fetchBtn, filterBar, localHistoryBtn, log, mod, pushBtn, refreshBtn, remoteBtn, reviewPanel, sidebar, stashPanel, statusActivity, tabBar, tabCommit, tabReviews, tabStash, task, updateBtn, updateStatus } from "./shell";
 import { app } from "./state";
 import { showWorkspace } from "./welcome";
+import { formDialog } from "./dialogs";
+import { toast } from "./notify";
 
 function viewSettings() {
   return { intelliSort: settings.intelliSort, showLongEdges: settings.showLongEdges, collapseLinear: settings.collapseLinear, filter: filterBar.filter };
@@ -63,6 +65,42 @@ export async function openRepo(path: string) {
   if (!settings.tabs.includes(r.root)) settings.tabs.push(r.root);
   tabStates.delete(r.root);
   await showRepo(r, null);
+}
+
+/** Clone Repository: asks for the URL and the folder, clones, and opens the clone in a new tab. */
+export async function cloneRepo() {
+  const recentParent = settings.recent[0]?.replace(/[\\/][^\\/]+[\\/]?$/, "") ?? "";
+  const f = await formDialog(
+    "Clone Repository",
+    [
+      { key: "url", label: "URL", placeholder: "https://github.com/owner/repo.git or git@github.com:owner/repo.git" },
+      { key: "parent", label: "Into the folder", value: settings.cloneDir || recentParent, placeholder: "/path/to/projects", browse: () => pickFolder("Choose the folder for the clone") },
+      { key: "name", label: "Folder name", placeholder: "From the URL" },
+    ],
+    "Clone",
+    "A remote that needs a password or a passphrase asks for it. The clone opens in a new tab.",
+  );
+  if (!f) return;
+  const url = String(f.url).trim();
+  const parent = String(f.parent).trim();
+  app.busy++;
+  statusActivity.textContent = `Cloning ${url}…`;
+  statusActivity.className = "sb-activity busy";
+  try {
+    const path = await api.cloneRepo(url, parent, String(f.name));
+    statusActivity.textContent = "";
+    statusActivity.className = "sb-activity";
+    settings.cloneDir = parent;
+    save();
+    await openRepo(path);
+  } catch (e) {
+    const message = String(e).replace(/^Error: /, "");
+    statusActivity.textContent = "The clone failed";
+    statusActivity.className = "sb-activity error";
+    toast(`The clone failed: ${message}`, "error");
+  } finally {
+    app.busy--;
+  }
 }
 
 export async function switchTab(root: string) {

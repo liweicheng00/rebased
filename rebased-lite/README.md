@@ -8,6 +8,8 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 ## Features
 
 - **Open**: a welcome screen, a native folder dialog, recent repositories, and `rebased-lite <path>` on the command line.
+- **Clone**: Open > Clone Repository… clones a URL into a folder and opens the clone in a new tab. An empty
+  folder name uses the name of the URL. A remote that needs a password asks for it.
 - **Branches panel**: recent branches (from the HEAD reflog), local branches with ahead and behind
   counts, remote branches by remote, tags, and worktrees. Click to go to the commit.
   Double-click a branch to check it out. Use the filter button to show only that branch.

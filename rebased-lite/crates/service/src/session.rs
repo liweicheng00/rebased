@@ -72,6 +72,12 @@ impl Service {
     }
 
     /// The version of a git program, for the Test button of the settings. It changes nothing.
+    /// Clones a repository and returns the path of the new folder. The caller opens it then.
+    pub fn clone_repo(&self, args: crate::CloneArgs) -> Result<String> {
+        let path = rebased_git::clone(&args.url, Path::new(&args.parent), &args.name).map_err(err)?;
+        Ok(path.to_string_lossy().into_owned())
+    }
+
     pub fn git_version(&self, args: PathArgs) -> Result<String> {
         rebased_git::git_version(&args.path).map_err(err)
     }

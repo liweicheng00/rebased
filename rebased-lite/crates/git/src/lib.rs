@@ -69,6 +69,45 @@ pub fn git_version(program: &str) -> Result<String> {
     Ok(text.strip_prefix("git version ").ok_or_else(|| GitError(format!("{candidate} is not git: {text}")))?.to_string())
 }
 
+/// The folder name that `git clone` makes for a URL: the last part, without ".git".
+pub fn clone_name(url: &str) -> String {
+    let u = url.trim().trim_end_matches(['/', '\\']);
+    let last = u.rsplit(['/', '\\', ':']).next().unwrap_or(u);
+    last.strip_suffix(".git").unwrap_or(last).to_string()
+}
+
+/// Clones `url` into the folder `name` in `parent`, and returns the path of the new repository. An empty
+/// name uses the name of the URL. The folder must not exist, or be empty. A remote that needs a password
+/// asks with the askpass program of the app.
+pub fn clone(url: &str, parent: &Path, name: &str) -> Result<PathBuf> {
+    let url = url.trim();
+    if url.is_empty() || url.starts_with('-') {
+        return Err(GitError("Enter the URL of the repository".into()));
+    }
+    let name = if name.trim().is_empty() { clone_name(url) } else { name.trim().to_string() };
+    if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\']) {
+        return Err(GitError(format!("{name:?} is not a folder name")));
+    }
+    if !parent.is_dir() {
+        return Err(GitError(format!("{} is not a folder", parent.display())));
+    }
+    let target = parent.join(&name);
+    if target.exists() && std::fs::read_dir(&target).map(|mut d| d.next().is_some()).unwrap_or(true) {
+        return Err(GitError(format!("{} exists and is not empty", target.display())));
+    }
+    let out = git_command()
+        .args(["clone", "--", url])
+        .arg(&target)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .envs(network_env())
+        .output()
+        .map_err(|e| GitError(format!("cannot run git: {e}")))?;
+    if !out.status.success() {
+        return Err(GitError(String::from_utf8_lossy(&out.stderr).trim().to_string()));
+    }
+    Ok(target)
+}
+
 /// True when the git program that the settings choose has at least this version (major, minor).
 pub fn git_at_least(min: (u32, u32)) -> bool {
     let program = GIT_PROGRAM.read().unwrap().clone();

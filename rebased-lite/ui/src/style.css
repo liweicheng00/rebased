@@ -236,7 +236,8 @@ input { font: inherit; }
 .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; }
 .dialog-buttons button, .primary { padding: 4px 14px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); cursor: pointer; }
 .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.primary.big { padding: 8px 20px; font-size: 14px; }
+.primary.big, .big { padding: 8px 20px; font-size: 14px; }
+.welcome-actions { display: flex; gap: 10px; justify-content: center; }
 
 .dialog.wide { width: min(760px, calc(100vw - 32px)); }
 .dialog button { color: var(--fg); }

@@ -10,7 +10,7 @@ import { keymap } from "./keyboard";
 import { addWorktree, checkoutBranch, checkoutCommit, currentBranch, deleteBranch, deleteMergedBranches, interactiveRebase, mergeIntoCurrent, newBranch, newTag, rebaseCurrentOnto, renameBranch, resetTo, rewriteSelected, runOp } from "./operations";
 import { compareBranches, fetchRemote, manageRemotes, openOnRemote, remoteRefItems, toggleFavorite } from "./remotes";
 import { startReview } from "./review-flow";
-import { askForRepo, fetchAll, jumpToOid, openRepo, refresh, reloadView } from "./repo";
+import { askForRepo, cloneRepo, fetchAll, jumpToOid, openRepo, refresh, reloadView } from "./repo";
 import { collapse, compare, comparedCommits, compareWithWorktree, fileChangesAction, openFile, short, showSelection } from "./selection";
 import { settings } from "./settings";
 import { changes, diff, fetchBtn, filterBar, log, openBtn, refreshBtn, sidebar, statusActivity, toggleDiff } from "./shell";
@@ -168,6 +168,7 @@ changes.onContextMenu = (files, e) => {
 openBtn.addEventListener("click", () =>
   menuBelow(openBtn, [
     { label: "Open Repository…", shortcut: keymap.shortcut("open"), action: () => void askForRepo() },
+    { label: "Clone Repository…", action: () => void cloneRepo() },
     ...(settings.recent.length ? [{ separator: true } as MenuItem, { header: "Recent" } as MenuItem] : []),
     ...settings.recent.map((p) => ({ label: p, action: () => void openRepo(p) })),
   ]),

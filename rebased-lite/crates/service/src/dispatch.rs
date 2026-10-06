@@ -28,6 +28,7 @@ impl Service {
             "set_view" => serde_json::to_string(&self.set_view(parse(body)?)?),
             "refresh" => serde_json::to_string(&self.refresh()?),
             "git_version" => serde_json::to_string(&self.git_version(parse(body)?)?),
+            "clone" => serde_json::to_string(&self.clone_repo(parse(body)?)?),
             "backend_settings" => serde_json::to_string(&self.backend_settings()?),
             "set_backend_settings" => serde_json::to_string(&self.set_backend_settings(parse(body)?)?),
             "favorites" => serde_json::to_string(&self.favorites()?),

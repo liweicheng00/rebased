@@ -130,6 +130,16 @@ pub struct RemoteArgs {
     pub remote: String,
 }
 
+/// Clone Repository: the URL, the folder to put the clone in, and the name of the new folder. An empty
+/// name uses the name of the URL.
+#[derive(Deserialize)]
+pub struct CloneArgs {
+    pub url: String,
+    pub parent: String,
+    #[serde(default)]
+    pub name: String,
+}
+
 /// A file of the working tree and a line in it, both 1-based.
 #[derive(Deserialize)]
 pub struct EditorArgs {
