@@ -91,10 +91,16 @@ await page.keyboard.press("ArrowUp");
 await within("ArrowUp goes back up", async () => (await page.textContent(".log-row.selected").catch(() => "")) === (await rowText(1)));
 
 // A double click on a ref label of a row shows only that ref in the log; a second one shows all refs.
-const branchFilter = async () => ((await page.textContent(".filter-bar button:has-text('Branch')").catch(() => "")) ?? "").trim();
+const branchFilter = async () => ((await page.textContent(".filter-bar .filter-label").catch(() => "")) ?? "").trim();
 const rows = () => page.$$eval(".log-row", (e) => e.length);
 const selectedText = async () => (await page.textContent(".log-row.selected").catch(() => "")) ?? "";
 const all = await rows();
+// A click on a label copies its name and selects its row.
+await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+await page.click(".log-row .ref:text-is('fix/readme')");
+await within("a click copies the name", async () => (await page.evaluate(() => navigator.clipboard.readText())) === "fix/readme");
+check("the status bar says so", ((await page.textContent(".sb-activity")) ?? "") === "Copied fix/readme");
+await within("the click selects the row", async () => (await selectedText()).includes("Document the build"));
 await page.dblclick(".log-row .ref:text-is('fix/readme')");
 await within("the filter shows only fix/readme", async () => (await branchFilter()).includes("fix/readme"));
 await within("the log has fewer rows", async () => (await rows()) < all);
@@ -104,8 +110,11 @@ await page.dblclick(".log-row .ref:text-is('fix/readme')");
 await within("a second double click shows all refs", async () => (await branchFilter()).includes("All") && (await rows()) === all);
 await page.dblclick(".log-row .ref:text-is('v0.1.0')");
 await within("a tag label works too", async () => (await branchFilter()).includes("v0.1.0") && (await selectedText()).includes("Add math module"));
-await page.dblclick(".log-row .ref:text-is('v0.1.0')");
-await within("all refs again", async () => (await rows()) === all);
+check("the Branch button shows its clear icon", await page.isVisible(".filter-bar .filter-x"));
+await shot("dp4-filter-x");
+await page.click(".filter-bar .filter-x");
+await within("the clear icon shows all branches again", async () => (await branchFilter()) === "Branch: All" && (await rows()) === all);
+check("the clear icon hides without a branch filter", !(await page.isVisible(".filter-bar .filter-x")));
 console.log("errors:", JSON.stringify(errors));
 await browser.close();
 if (errors.length) process.exit(1);

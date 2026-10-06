@@ -131,6 +131,10 @@ input { font: inherit; }
 .filter-path { width: 150px; }
 .filter-button { padding: 1px 8px; height: 24px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); cursor: pointer; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .filter-button.active { border-color: var(--accent); color: var(--accent); }
+.filter-button:has(.filter-x:not([hidden])) { display: inline-flex; align-items: center; gap: 4px; padding-right: 3px; }
+.filter-button .filter-label { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.filter-x { flex: none; width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 50%; font-size: 10px; }
+.filter-x:hover { background: var(--accent); color: var(--bg); }
 .filter-clear { border: 0; background: transparent; color: var(--accent); cursor: pointer; }
 .filter-info { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
 

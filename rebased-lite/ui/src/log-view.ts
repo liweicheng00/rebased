@@ -33,6 +33,8 @@ export class LogView {
   onSelectionChange: (rows: Row[]) => void = () => {};
   /** A double click on a ref label of a row: the log shows only that ref, or all refs again. */
   onRefDoubleClick: (name: string, r: Row) => void | Promise<void> = () => {};
+  /** A click on a ref label: it copies the name. The click also selects the row. */
+  onRefClick: (name: string) => void = () => {};
   onContextMenu: (row: Row, e: MouseEvent) => void = () => {};
   onRowsLoaded: (rows: Row[]) => void = () => {};
   onExpandEdge: (up: number, down: number) => void = () => {};
@@ -249,7 +251,7 @@ export class LogView {
     }
     const subject = h("span", { class: "subject", title: r.subject });
     for (const ref of r.refs) {
-      subject.append(h("span", { class: `ref ref-${ref.kind}`, title: `${ref.name}\nDouble-click to show only ${ref.name} in the log`, "data-ref": ref.name }, ref.name));
+      subject.append(h("span", { class: `ref ref-${ref.kind}`, title: `${ref.name}\nClick to copy the name. Double-click to show only ${ref.name} in the log`, "data-ref": ref.name }, ref.name));
     }
     subject.append(h("span", { class: "subject-text" }, r.subject));
     const div = h(
@@ -271,6 +273,7 @@ export class LogView {
         void this.onRefDoubleClick(ref, r);
         return;
       }
+      if (ref && e.detail === 1) this.onRefClick(ref);
       // The click draws the rows again, so this row goes away. The default action of the mousedown
       // then has no row to focus and moves the focus to the body, and the arrow keys stop. onClick
       // focuses the list itself.

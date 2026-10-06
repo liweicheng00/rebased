@@ -25,11 +25,14 @@ export async function copyText(text: string): Promise<void> {
     await navigator.clipboard.writeText(text);
     return;
   } catch {}
+  // The text field takes the focus for the copy; the focus then goes back, so the keys of a list still work.
+  const focused = document.activeElement as HTMLElement | null;
   const ta = h("textarea", { value: text, style: { position: "fixed", opacity: "0" } });
   document.body.append(ta);
   ta.select();
   document.execCommand("copy");
   ta.remove();
+  focused?.focus({ preventScroll: true });
 }
 
 export function formatDate(seconds: number): string {

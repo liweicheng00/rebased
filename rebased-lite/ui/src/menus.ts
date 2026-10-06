@@ -13,7 +13,7 @@ import { startReview } from "./review-flow";
 import { askForRepo, fetchAll, jumpToOid, openRepo, refresh, reloadView } from "./repo";
 import { collapse, compare, comparedCommits, compareWithWorktree, fileChangesAction, openFile, short, showSelection } from "./selection";
 import { settings } from "./settings";
-import { changes, diff, fetchBtn, filterBar, log, openBtn, refreshBtn, sidebar, toggleDiff } from "./shell";
+import { changes, diff, fetchBtn, filterBar, log, openBtn, refreshBtn, sidebar, statusActivity, toggleDiff } from "./shell";
 import { app } from "./state";
 import { pushBranch, updateBranch } from "./sync";
 
@@ -70,6 +70,10 @@ log.onContextMenu = (r, e) => void rowMenu(r, e);
 sidebar.onLocalMenu = (e) => showMenu(e.clientX, e.clientY, [{ label: "Delete Merged Branches…", action: () => void deleteMergedBranches() }]);
 sidebar.onNavigate = (b) => void jumpToOid(b.oid, true);
 sidebar.onToggleFilter = (b) => filterBar.toggleBranch(b.name);
+log.onRefClick = (name) => {
+  void copyText(name);
+  statusActivity.textContent = `Copied ${name}`;
+};
 log.onRefDoubleClick = async (name, r) => {
   filterBar.onlyBranch(name, false);
   await reloadView();

@@ -24,6 +24,8 @@ export class FilterBar {
   private path: HTMLInputElement;
   private since: HTMLButtonElement;
   private branchBtn: HTMLButtonElement;
+  private branchLabel: HTMLElement;
+  private branchClear: HTMLElement;
   private clear: HTMLButtonElement;
   private info: HTMLElement;
   private authors: HTMLDataListElement;
@@ -41,7 +43,9 @@ export class FilterBar {
     this.author.setAttribute("list", "authors");
     this.path = h("input", { class: "filter-path", placeholder: "Path", spellcheck: false, type: "search" });
     this.since = h("button", { class: "filter-button" }, "Date: Any");
-    this.branchBtn = h("button", { class: "filter-button" }, "Branch: All");
+    this.branchLabel = h("span", { class: "filter-label" }, "Branch: All");
+    this.branchClear = h("span", { class: "filter-x", title: "Show all branches", role: "button", hidden: true }, "✕");
+    this.branchBtn = h("button", { class: "filter-button" }, this.branchLabel, this.branchClear);
     this.clear = h("button", { class: "filter-clear", title: "Clear all filters", hidden: true }, "✕ Clear");
     this.info = h("span", { class: "filter-info" });
     for (const input of [this.text, this.author, this.path]) {
@@ -62,6 +66,10 @@ export class FilterBar {
       menuBelow(this.since, DATE_OPTIONS.map(([v, label]) => ({ label, checked: this.value.since === v, action: () => this.update({ since: v }) }))),
     );
     this.branchBtn.addEventListener("click", () => this.branchMenu());
+    this.branchClear.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.update({ branches: [] });
+    });
     this.clear.addEventListener("click", () => this.set(emptyFilter(), true));
     this.el = h("div", { class: "filter-bar" }, this.text, this.branchBtn, this.author, this.authors, this.path, this.since, this.clear, this.info);
   }
@@ -121,13 +129,15 @@ export class FilterBar {
     this.since.classList.toggle("active", !!f.since);
     const include = f.branches.filter((b) => !b.startsWith("^"));
     const exclude = f.branches.filter((b) => b.startsWith("^")).map((b) => b.slice(1));
-    this.branchBtn.textContent =
+    this.branchLabel.textContent =
       f.branches.length === 0
         ? "Branch: All"
         : exclude.length
           ? `${include.join(", ") || "All"} not in ${exclude.join(", ")}`
           : `Branch: ${f.branches.length === 1 ? f.branches[0] : `${f.branches.length} selected`}`;
     this.branchBtn.classList.toggle("active", f.branches.length > 0);
+    this.branchBtn.title = f.branches.join(", ");
+    this.branchClear.hidden = f.branches.length === 0;
     this.clear.hidden = !(f.branches.length || f.author || f.text || f.path || f.since);
     if (notify) this.onChange(f);
   }
