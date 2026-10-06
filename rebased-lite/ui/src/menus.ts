@@ -33,7 +33,7 @@ async function rowMenu(r: Row, e: MouseEvent) {
   if (rows.length === 2) items.push({ label: "Compare Selected Commits", action: () => showSelection(rows) });
   items.push({ separator: true }, { header: "Branch" });
   items.push(
-    { label: "Check Out Revision…", disabled: multi, action: () => void checkoutCommit(r.oid) },
+    { label: "Checkout Revision…", disabled: multi, action: () => void checkoutCommit(r.oid) },
     { label: "New Branch…", disabled: multi, action: () => void newBranch(r.oid, short(r.oid)) },
     { label: "New Tag…", disabled: multi, action: () => void newTag(r.oid, short(r.oid)) },
     { label: "New Worktree…", disabled: multi, action: () => void addWorktree(r.oid, short(r.oid)) },
@@ -80,7 +80,7 @@ sidebar.onContextMenu = (b, e) => {
   const cur = currentBranch();
   const isCurrent = b.current;
   showMenu(e.clientX, e.clientY, [
-    { label: b.kind === "remote" ? "Check Out as Local Branch" : "Check Out", disabled: isCurrent, action: () => void checkoutBranch(b) },
+    { label: b.kind === "remote" ? "Checkout as Local Branch" : "Checkout", disabled: isCurrent, action: () => void checkoutBranch(b) },
     { label: "New Branch from Here…", action: () => void newBranch(b.oid, b.name) },
     { label: "New Worktree…", action: () => void addWorktree(b.kind === "local" ? b.name : b.oid, b.name) },
     { separator: true },

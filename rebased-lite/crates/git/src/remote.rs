@@ -69,7 +69,7 @@ impl Repo {
     }
 
     fn current_branch(&self) -> Result<String> {
-        self.git(&["symbolic-ref", "-q", "--short", "HEAD"]).map(text).map_err(|_| GitError("HEAD is detached. Check out a branch first".into()))
+        self.git(&["symbolic-ref", "-q", "--short", "HEAD"]).map(text).map_err(|_| GitError("HEAD is detached. Checkout a branch first".into()))
     }
 
     /// The tracked branch as `remote/branch`, split into its parts.

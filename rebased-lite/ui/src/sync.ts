@@ -38,7 +38,7 @@ export async function pushBranch(branch?: string) {
 export async function updateBranch(): Promise<boolean> {
   const branch = currentBranch();
   if (!branch) {
-    toast("HEAD is detached. Check out a branch first.", "error");
+    toast("HEAD is detached. Checkout a branch first.", "error");
     return false;
   }
   const upstream = app.refs.find((b) => b.kind === "local" && b.name === branch)?.upstream ?? null;

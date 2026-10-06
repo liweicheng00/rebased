@@ -405,7 +405,7 @@ impl Repo {
         let s = all.iter().find(|r| r.branch == branch).ok_or_else(|| GitError(format!("There is no review of {branch}")))?;
         let base = s.base.clone();
         if self.is_remote_branch(&base) {
-            return Err(GitError(format!("{base} is a remote branch. Merge needs a local base. Change the base, or check out {base} as a local branch")));
+            return Err(GitError(format!("{base} is a remote branch. Merge needs a local base. Change the base, or checkout {base} as a local branch")));
         }
         let branch_local = self.branch_oid(branch).is_some();
         let head = self.review_oid(branch).ok_or_else(|| GitError(format!("{branch} does not exist")))?;
@@ -448,7 +448,7 @@ impl Repo {
                 let conflicts = self.merge_conflicts(&base_old, &head);
                 if !conflicts.is_empty() {
                     return Err(GitError(format!(
-                        "{} file(s) conflict: {}. Check out {base} and finish there to resolve them",
+                        "{} file(s) conflict: {}. Checkout {base} and finish there to resolve them",
                         conflicts.len(),
                         conflicts.join(", ")
                     )));

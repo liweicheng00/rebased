@@ -218,7 +218,7 @@ export class Sidebar {
     if (!this.submodules.length) return;
     const title = "Submodules";
     const open = !this.collapsed.has(title);
-    const update = h("button", { class: "icon-button group-action", title: "Update all submodules: init, and check out the recorded commits" }, "⟳");
+    const update = h("button", { class: "icon-button group-action", title: "Update all submodules: init, and checkout the recorded commits" }, "⟳");
     update.addEventListener("click", (e) => {
       e.stopPropagation();
       this.onUpdateSubmodules();

@@ -61,14 +61,14 @@ export async function checkoutBranch(b: BranchInfo) {
 }
 
 export async function checkoutCommit(oid: string, label = short(oid)) {
-  if (!(await confirmDialog("Check out a commit", `HEAD will point to ${label} directly (detached HEAD). New commits will not be on a branch until you create one.`, "Check Out"))) return;
+  if (!(await confirmDialog("Checkout a commit", `HEAD will point to ${label} directly (detached HEAD). New commits will not be on a branch until you create one.`, "Checkout"))) return;
   await runOp({ op: "checkout", target: oid, kind: "commit" }, `Checking out ${label}`);
 }
 
 export async function newBranch(at: string, atLabel: string) {
   const r = await formDialog(`New branch from ${atLabel}`, [
     { key: "name", label: "Branch name", placeholder: "feature/my-change" },
-    { key: "checkout", label: "Check out the new branch", type: "checkbox", value: true },
+    { key: "checkout", label: "Checkout the new branch", type: "checkbox", value: true },
   ], "Create");
   if (!r || !String(r.name).trim()) return;
   await runOp({ op: "createBranch", name: String(r.name).trim(), at, checkout: !!r.checkout }, "Creating branch");
@@ -85,13 +85,13 @@ export async function newTag(at: string, atLabel: string) {
 
 export async function mergeIntoCurrent(rev: string, label: string) {
   const cur = currentBranch();
-  if (!cur) return toast("HEAD is detached. Check out a branch first.", "error");
+  if (!cur) return toast("HEAD is detached. Checkout a branch first.", "error");
   await runOp({ op: "merge", rev }, `Merging ${label} into ${cur}`);
 }
 
 export async function rebaseCurrentOnto(rev: string, label: string) {
   const cur = currentBranch();
-  if (!cur) return toast("HEAD is detached. Check out a branch first.", "error");
+  if (!cur) return toast("HEAD is detached. Checkout a branch first.", "error");
   if (!(await confirmDialog("Rebase", `Rebase ${cur} onto ${label}? The commits of ${cur} get new hashes.`, "Rebase"))) return;
   await runOp({ op: "rebase", onto: rev }, `Rebasing ${cur} onto ${label}`);
 }
@@ -216,7 +216,7 @@ export async function addWorktree(at = "HEAD", atLabel = "HEAD") {
   const root = app.view?.root ?? "";
   const r = await formDialog(`New worktree from ${atLabel}`, [
     { key: "branch", label: "Branch", placeholder: "feature/in-worktree" },
-    { key: "newBranch", label: "Create this branch (clear to check out an existing branch)", type: "checkbox", value: true },
+    { key: "newBranch", label: "Create this branch (clear to checkout an existing branch)", type: "checkbox", value: true },
     { key: "path", label: "Folder", value: `${root}-worktree`, browse: inTauri ? () => pickFolder("Choose the Worktree Folder") : undefined },
     { key: "open", label: "Open the worktree after it is created", type: "checkbox", value: false },
   ], "Create", "An empty branch name creates a worktree with a detached HEAD.");

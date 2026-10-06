@@ -110,7 +110,7 @@ impl Repo {
             return Err(GitError(format!("Finish or abort the {} first", state.operation)));
         }
         if state.branch.is_none() {
-            return Err(GitError("HEAD is detached. Check out a branch first".into()));
+            return Err(GitError("HEAD is detached. Checkout a branch first".into()));
         }
         let base = self.resolve(base).ok_or_else(|| GitError(format!("unknown commit {base}")))?;
         if self.git(&["merge-base", "--is-ancestor", &base, "HEAD"]).is_err() {
