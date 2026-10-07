@@ -2,7 +2,7 @@
 
 import type { LogFilter } from "./api";
 import { menuBelow } from "./context-menu";
-import { h } from "./dom";
+import { h, icon } from "./dom";
 
 export const DATE_OPTIONS: [string, string][] = [
   ["", "Any date"],
@@ -44,9 +44,9 @@ export class FilterBar {
     this.path = h("input", { class: "filter-path", placeholder: "Path", spellcheck: false, type: "search" });
     this.since = h("button", { class: "filter-button" }, "Date: Any");
     this.branchLabel = h("span", { class: "filter-label" }, "Branch: All");
-    this.branchClear = h("span", { class: "filter-x", title: "Show all branches", role: "button", hidden: true }, "✕");
+    this.branchClear = h("span", { class: "filter-x", title: "Show all branches", role: "button", hidden: true }, icon("close"));
     this.branchBtn = h("button", { class: "filter-button" }, this.branchLabel, this.branchClear);
-    this.clear = h("button", { class: "filter-clear", title: "Clear all filters", hidden: true }, "✕ Clear");
+    this.clear = h("button", { class: "filter-clear", title: "Clear all filters", hidden: true }, icon("close"), "Clear");
     this.info = h("span", { class: "filter-info" });
     for (const input of [this.text, this.author, this.path]) {
       input.addEventListener("input", () => this.debounce());

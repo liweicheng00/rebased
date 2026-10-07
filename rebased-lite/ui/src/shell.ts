@@ -32,18 +32,18 @@ export const reviewPanel = new ReviewPanel();
 export const banner = new OpBanner();
 export const authors = new Set<string>();
 
-export const openBtn = h("button", { class: "tb-button", title: `Open a repository (${mod}O)` }, "📂 Open ▾");
+export const openBtn = h("button", { class: "tb-button", title: `Open a repository (${mod}O)` }, icon("open"), "Open", icon("chevron-down", "icon-caret"));
 export const refreshBtn = h("button", { class: "tb-button", title: `Reload commits and branches (${mod}R)`, disabled: true }, icon("refresh"), "Refresh");
-export const fetchBtn = h("button", { class: "tb-button", title: "Fetch all remotes, or one remote", disabled: true }, "⇣ Fetch ▾");
-export const updateBtn = h("button", { class: "tb-button", title: `Update the current branch: fetch, then merge or rebase (${mod}T)`, disabled: true }, "↧ Update");
-export const pushBtn = h("button", { class: "tb-button", title: `Push the current branch (${mod}⇧K)`, disabled: true }, "↥ Push");
-export const remoteBtn = h("button", { class: "tb-button", title: "Open the current branch on the web page of its remote", disabled: true }, "🌐 Remote");
-export const localHistoryBtn = h("button", { class: "tb-button", title: "Local History: the recent versions of changed files", disabled: true }, "🕘 Local History");
+export const fetchBtn = h("button", { class: "tb-button", title: "Fetch all remotes, or one remote", disabled: true }, icon("fetch"), "Fetch", icon("chevron-down", "icon-caret"));
+export const updateBtn = h("button", { class: "tb-button", title: `Update the current branch: fetch, then merge or rebase (${mod}T)`, disabled: true }, icon("update"), "Update");
+export const pushBtn = h("button", { class: "tb-button", title: `Push the current branch (${mod}⇧K)`, disabled: true }, icon("push"), "Push");
+export const remoteBtn = h("button", { class: "tb-button", title: "Open the current branch on the web page of its remote", disabled: true }, icon("remote"), "Remote");
+export const localHistoryBtn = h("button", { class: "tb-button", title: "Local History: the recent versions of changed files", disabled: true }, icon("history"), "Local History");
 const repoLabel = h("span", { class: "tb-repo" });
-export const branchBtn = h("button", { class: "tb-button tb-branch-button", title: "Switch branch (recent branches first)", hidden: true }, "⑂ ▾");
-export const viewBtn = h("button", { class: "tb-button", title: "View options" }, "View ▾");
-const themeBtn = h("button", { class: "tb-button", title: "Theme" }, "◐");
-export const settingsBtn = h("button", { class: "tb-button", title: "Settings" }, "⚙");
+export const branchBtn = h("button", { class: "tb-button tb-branch-button", title: "Switch branch (recent branches first)", hidden: true }, icon("branch"), icon("chevron-down", "icon-caret"));
+export const viewBtn = h("button", { class: "tb-button", title: "View options" }, "View", icon("chevron-down", "icon-caret"));
+const themeBtn = h("button", { class: "tb-button", title: "Theme" }, icon("theme"));
+export const settingsBtn = h("button", { class: "tb-button", title: "Settings" }, icon("settings"));
 const toolbar = h("header", { class: "toolbar" }, openBtn, refreshBtn, fetchBtn, updateBtn, pushBtn, remoteBtn, localHistoryBtn, repoLabel, branchBtn, h("span", { class: "spacer" }), viewBtn, themeBtn, settingsBtn);
 
 export const tabBar = h("nav", { class: "tabbar", hidden: true });
@@ -170,7 +170,7 @@ export function updateStatus() {
     : (app.view.head?.replace("refs/heads/", "") ?? (app.view.headOid ? `detached at ${app.view.headOid.slice(0, 8)}` : "no commits"));
   repoLabel.replaceChildren(h("b", {}, app.view.root.split(/[\\/]/).pop() ?? app.view.root));
   branchBtn.hidden = false;
-  branchBtn.textContent = `⑂ ${branch} ▾`;
+  branchBtn.replaceChildren(icon("branch"), branch, icon("chevron-down", "icon-caret"));
   const changed = app.repoState?.changedFiles ?? 0;
   statusLeft.textContent = app.view.root + (changed ? `  ·  ${changed} changed file${changed === 1 ? "" : "s"}` : "");
   statusMid.textContent = app.view.filtered

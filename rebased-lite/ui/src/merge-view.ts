@@ -6,7 +6,7 @@ import * as monaco from "./monaco";
 import { editorFont } from "./diff-view";
 import { languageFor } from "./diff-view";
 import { merge3, splitLines, type Chunk } from "./diff3";
-import { h } from "./dom";
+import { h, icon } from "./dom";
 
 export interface MergeInput {
   path: string;
@@ -61,7 +61,7 @@ class MergeWindow {
     this.chunks = merge3(baseLines, this.oursLines, this.theirsLines).map((c) => ({ ...c, res: [c.base[0], c.base[1]], applied: [], ignored: false }));
 
     const lang = languageFor(input.path);
-    const btn = (label: string, title: string, run: () => void, cls = "") => {
+    const btn = (label: string | Node, title: string, run: () => void, cls = "") => {
       const b = h("button", { class: "tb-button " + cls, title }, label);
       b.addEventListener("click", run);
       return b;
@@ -79,8 +79,8 @@ class MergeWindow {
       h(
         "div",
         { class: "merge-toolbar" },
-        btn("↑", "Previous change (Shift+F7)", () => this.go(-1)),
-        btn("↓", "Next change (F7)", () => this.go(1)),
+        btn(icon("up"), "Previous change (Shift+F7)", () => this.go(-1)),
+        btn(icon("down"), "Next change (F7)", () => this.go(1)),
         h("span", { class: "merge-sep" }),
         h("span", { class: "muted-inline" }, "Apply non-conflicting changes:"),
         btn("« Left", "Apply the non-conflicting changes from yours", () => this.applyNonConflicting("ours")),

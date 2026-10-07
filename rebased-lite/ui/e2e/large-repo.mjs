@@ -78,7 +78,7 @@ log("details:", (await page.textContent(".details-subject")) ?? "");
 await page.click(".toolbar button:has-text('View')");
 await shot("09-view-menu");
 await page.keyboard.press("Escape");
-await page.click(".toolbar button:has-text('◐')");
+await page.click(".toolbar button[title='Theme']");
 await page.click(".menu-item:has-text('Dark')");
 await page.click('.log-row >> nth=5');
 await page.waitForTimeout(2500);

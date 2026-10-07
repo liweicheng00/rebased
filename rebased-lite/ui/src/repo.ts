@@ -1,7 +1,7 @@
 // Opening repositories in tabs, loading the log and the refs, and moving in the log.
 
 import { api, type BranchInfo, inTauri, type LogFilter, pickFolder, type RecentBranch, setRepoRoot, type Submodule, type ViewResult, type Worktree } from "./api";
-import { h } from "./dom";
+import { h, icon } from "./dom";
 import { emptyFilter } from "./filter-bar";
 import { loadFavorites } from "./remotes";
 import { clearCompare } from "./selection";
@@ -28,7 +28,7 @@ export function renderTabs() {
   tabBar.replaceChildren(
     ...settings.tabs.map((root) => {
       const name = root.split(/[\\/]/).pop() ?? root;
-      const close = h("button", { class: "tab-close", title: "Close the tab" }, "✕");
+      const close = h("button", { class: "tab-close", title: "Close the tab" }, icon("close"));
       close.addEventListener("click", (e) => {
         e.stopPropagation();
         void closeTab(root);

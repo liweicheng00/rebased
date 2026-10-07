@@ -3,7 +3,7 @@
 
 import type { Change, FileContent, ReviewComment, ReviewDetail, ReviewEdit, ReviewSummary, RevSpec } from "./api";
 import { statusName } from "./changes-panel";
-import { dragResize, formatDate, h, rowSplitter } from "./dom";
+import { dragResize, formatDate, h, icon, rowSplitter, twisty } from "./dom";
 import { fileIcon } from "./file-icon";
 import { buildTree, treeOrder, walkTree } from "./file-tree";
 import { sharedDiff } from "./history-view";
@@ -142,7 +142,7 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
     const parts: (Node | string)[] = [];
     if (s.merged) parts.push(h("span", { class: "review-ok" }, `✓ ${s.base} has all the commits of ${s.branch}.`));
     else if (!s.exists) parts.push(h("span", { class: "danger-text" }, `${s.branch} or ${s.base} does not exist any more.`));
-    else if (s.conflicts.length) parts.push(h("span", { class: "danger-text" }, `⚠ ${s.conflicts.length} file(s) conflict with ${s.base}: ${s.conflicts.join(", ")}`));
+    else if (s.conflicts.length) parts.push(h("span", { class: "danger-text" }, icon("warning"), ` ${s.conflicts.length} file(s) conflict with ${s.base}: ${s.conflicts.join(", ")}`));
     else parts.push(h("span", { class: "review-ok" }, `✓ No conflicts with ${s.base}.`));
     if (s.behind) parts.push(h("span", { class: "muted-inline" }, ` ${s.base} has ${s.behind} commit(s) that ${s.branch} does not have.`));
     status.replaceChildren(...parts);
@@ -197,7 +197,7 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
       fileIcon(f.path),
       h("span", { class: `rebase-subject status-text-${f.status}` }, f.path.slice(slash + 1)),
       h("span", { class: "rebase-author" }, withDir && slash > 0 ? f.path.slice(0, slash) : ""),
-      f.comments ? h("span", { class: "review-file-notes", title: `${f.comments} note(s)` }, `💬${f.comments}`) : h("span", {}),
+      f.comments ? h("span", { class: "review-file-notes", title: `${f.comments} note(s)` }, icon("note"), ` ${f.comments}`) : h("span", {}),
       h("span", { class: `status status-end status-${f.status}`, title: statusName(f.status) }, f.status),
     );
     row.addEventListener("mousedown", () => void select(i));
@@ -205,7 +205,7 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
   };
 
   const renderFiles = () => {
-    treeBtn.textContent = settings.reviewAsTree ? "☰" : "🗀";
+    treeBtn.replaceChildren(icon(settings.reviewAsTree ? "list" : "tree"));
     treeBtn.title = settings.reviewAsTree ? "Show as a flat list" : "Group by folder";
     if (!settings.reviewAsTree) {
       filesEl.replaceChildren(...rows.map((f, i) => fileRow(f, i, 0, true)));
@@ -218,7 +218,7 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
         const row = h(
           "div",
           { class: "history-row review-dir" + (count && viewed === count ? " viewed" : ""), style: { paddingLeft: `${8 + depth * 14}px` }, title: full },
-          h("span", { class: "twisty" }, open ? "▾" : "▸"),
+          twisty(open),
           h("span", { class: "dir-name" }, label),
           h("span", { class: "dir-count" }, scope === "all" ? `${viewed}/${count}` : String(count)),
         );
@@ -249,7 +249,7 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
     notesTitle.textContent = scope === "all" ? `Notes in ${f.path}` : "Notes are on the changes of the whole branch. Choose All changes to add one.";
     notesList.replaceChildren(
       ...list.map((c) => {
-        const del = h("button", { class: "icon-button", title: "Delete the note" }, "✕");
+        const del = h("button", { class: "icon-button", title: "Delete the note" }, icon("close"));
         del.addEventListener("click", async (e) => {
           e.stopPropagation();
           await cb.edit({ action: "deleteComment", branch: current, id: c.id });

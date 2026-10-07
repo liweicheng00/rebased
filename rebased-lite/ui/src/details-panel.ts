@@ -1,7 +1,7 @@
 // Commit details: message, hash, author, committer, parents and refs.
 
 import { api, type CommitInfo, type Row, type TagInfo } from "./api";
-import { copyText, formatDate, h } from "./dom";
+import { copyText, formatDate, h, icon } from "./dom";
 
 export class DetailsPanel {
   readonly el: HTMLElement;
@@ -83,7 +83,7 @@ export class DetailsPanel {
   }
 
   private render(c: CommitInfo) {
-    const copy = h("button", { class: "icon-button", title: "Copy the full hash" }, "⧉");
+    const copy = h("button", { class: "icon-button", title: "Copy the full hash" }, icon("copy"));
     copy.addEventListener("click", () => void copyText(c.oid));
     const refs = c.refs.length ? h("div", { class: "details-refs" }, ...c.refs.map((r) => h("span", { class: `ref ref-${r.kind}` }, r.name))) : "";
     const sameCommitter = c.committer === c.author && c.committer_email === c.author_email;

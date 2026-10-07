@@ -6,7 +6,7 @@ import "monaco-editor/esm/vs/basic-languages/monaco.contribution";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import type { Blame, Change, FileContent, RevSpec } from "./api";
 import { statusName } from "./changes-panel";
-import { copyText, h } from "./dom";
+import { copyText, h, icon } from "./dom";
 import { save, settings } from "./settings";
 
 (self as unknown as { MonacoEnvironment: object }).MonacoEnvironment = { getWorker: () => new EditorWorker() };
@@ -82,7 +82,7 @@ export class DiffView {
   private revertGlyphs: { side: "left" | "right"; line: number; change: monaco.editor.ILineChange }[] = [];
 
   constructor() {
-    const btn = (label: string, title: string, fn: () => void) => {
+    const btn = (label: string | Node, title: string, fn: () => void) => {
       const b = h("button", { class: "icon-button", title }, label);
       b.addEventListener("click", fn);
       return b;
@@ -99,20 +99,20 @@ export class DiffView {
     this.title = h("span", { class: "diff-title" });
     this.sides = h("span", { class: "diff-sides" });
     this.stats = h("span", { class: "diff-stats" });
-    const copyPath = btn("⧉", "Copy the file path", () => this.path && void copyText(this.path));
+    const copyPath = btn(icon("copy"), "Copy the file path", () => this.path && void copyText(this.path));
     this.annotateBox = h("input", { type: "checkbox" });
     this.annotateBox.addEventListener("change", () => void this.annotate());
     const annotate = h("label", { class: "diff-option", title: "Show the commit that last changed each line (git blame). Click an annotation to go to its commit." }, this.annotateBox, "Annotate");
-    this.historyBtn = btn("🕘", "Show the history of this file", () => this.source && this.onHistory(this.source.path));
-    const editBtn = btn("✎", "Open in the editor (F4)", () => this.openInEditor());
+    this.historyBtn = btn(icon("history"), "Show the history of this file", () => this.source && this.onHistory(this.source.path));
+    const editBtn = btn(icon("edit"), "Open in the editor (F4)", () => this.openInEditor());
     editBtn.classList.add("diff-open-editor");
     const toolbar = h(
       "div",
       { class: "diff-toolbar" },
-      btn("↑", "Previous change (Shift+F7)", () => this.goToDiff("previous")),
-      btn("↓", "Next change (F7)", () => this.goToDiff("next")),
-      btn("⇤", "Previous file (Alt+Up)", () => this.onPrevFile()),
-      btn("⇥", "Next file (Alt+Down)", () => this.onNextFile()),
+      btn(icon("up"), "Previous change (Shift+F7)", () => this.goToDiff("previous")),
+      btn(icon("down"), "Next change (F7)", () => this.goToDiff("next")),
+      btn(icon("prev-file"), "Previous file (Alt+Up)", () => this.onPrevFile()),
+      btn(icon("next-file"), "Next file (Alt+Down)", () => this.onNextFile()),
       this.title,
       copyPath,
       this.historyBtn,
@@ -124,7 +124,7 @@ export class DiffView {
       toggle("Side by side", "sideBySide", "Show the two versions side by side, or in one column"),
       toggle("Ignore whitespace", "ignoreWhitespace", "Ignore leading and trailing whitespace changes"),
       toggle("Collapse unchanged", "collapseUnchanged", "Hide unchanged regions"),
-      btn("✕", "Hide the diff panel", () => this.onHide()),
+      btn(icon("close"), "Hide the diff panel", () => this.onHide()),
     );
     this.notice = h("div", { class: "diff-notice" });
     this.host = h("div", { class: "diff-host" });

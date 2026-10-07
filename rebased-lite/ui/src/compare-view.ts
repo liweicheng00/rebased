@@ -3,7 +3,7 @@
 
 import type { Change, FileContent, OutgoingCommit, RevSpec } from "./api";
 import { statusName } from "./changes-panel";
-import { dragResize, formatDate, h, rowSplitter } from "./dom";
+import { dragResize, formatDate, h, icon, rowSplitter } from "./dom";
 import { showMenu } from "./context-menu";
 import { save, settings } from "./settings";
 import { sharedDiff } from "./history-view";
@@ -42,7 +42,7 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
   const option = (name: string, value = name) => h("option", { value }, name);
   const leftSel = h("select", { class: "dialog-input compare-select", title: "The left side" }, ...cb.refs.map((r) => option(r)));
   const rightSel = h("select", { class: "dialog-input compare-select", title: "The right side" }, ...cb.refs.map((r) => option(r)), option("Working tree", WORKTREE));
-  const swap = h("button", { class: "tb-button", title: "Swap the sides" }, "⇄");
+  const swap = h("button", { class: "tb-button", title: "Swap the sides" }, icon("swap"));
   const mode = h(
     "select",
     { class: "dialog-input compare-select", title: "Which file changes to show" },

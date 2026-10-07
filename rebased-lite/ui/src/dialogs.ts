@@ -1,7 +1,7 @@
 // Modal dialogs: forms, confirmations, the reset dialog, the message editor and the interactive rebase editor.
 
 import type { FinishMode, MergedBranches, PlanAction, PlanEntry, PushInfo, ReviewDetail, RewriteRange } from "./api";
-import { formatDate, h } from "./dom";
+import { formatDate, h, icon } from "./dom";
 
 interface DialogButton {
   label: string;
@@ -174,8 +174,8 @@ export async function interactiveRebaseDialog(range: RewriteRange): Promise<Plan
           l.action = select.value as PlanAction;
           render();
         });
-        const up = h("button", { class: "icon-button", title: "Move up (newer)", disabled: i === 0 }, "↑");
-        const down = h("button", { class: "icon-button", title: "Move down (older)", disabled: i === lines.length - 1 }, "↓");
+        const up = h("button", { class: "icon-button", title: "Move up (newer)", disabled: i === 0 }, icon("up"));
+        const down = h("button", { class: "icon-button", title: "Move down (older)", disabled: i === lines.length - 1 }, icon("down"));
         up.addEventListener("click", () => {
           [lines[i - 1], lines[i]] = [lines[i], lines[i - 1]];
           render();
@@ -557,7 +557,7 @@ export async function finishReviewDialog(d: ReviewDetail): Promise<{ mode: Finis
   });
   const del = h("input", { type: "checkbox", checked: true });
   const warnings: Node[] = [];
-  if (s.conflicts.length) warnings.push(h("p", { class: "dialog-note danger-text" }, `⚠ ${s.conflicts.length} file(s) conflict: ${s.conflicts.join(", ")}. Merge commit and Squash stop for the merge tool only when ${s.base} is checked out.`));
+  if (s.conflicts.length) warnings.push(h("p", { class: "dialog-note danger-text" }, icon("warning"), ` ${s.conflicts.length} file(s) conflict: ${s.conflicts.join(", ")}. Merge commit and Squash stop for the merge tool only when ${s.base} is checked out.`));
   if (s.viewed < s.files) warnings.push(h("p", { class: "dialog-note" }, `${s.files - s.viewed} of ${s.files} file(s) are not marked as viewed.`));
   const body = [
     h("p", { class: "dialog-text" }, h("b", {}, s.branch), " → ", h("b", {}, s.base)),

@@ -1,6 +1,6 @@
 // The welcome screen.
 
-import { h } from "./dom";
+import { h, icon } from "./dom";
 import { askForRepo, cloneRepo, openRepo } from "./repo";
 import { removeRecent, settings } from "./settings";
 import { welcome, workspace } from "./shell";
@@ -19,7 +19,7 @@ function renderWelcome() {
   const recentList = h("div", { class: "recent" });
   for (const p of settings.recent) {
     const item = h("div", { class: "recent-item", title: p }, h("span", { class: "recent-name" }, p.split(/[\\/]/).pop() ?? p), h("span", { class: "recent-path" }, p));
-    const remove = h("button", { class: "icon-button", title: "Remove from the list" }, "✕");
+    const remove = h("button", { class: "icon-button", title: "Remove from the list" }, icon("close"));
     remove.addEventListener("click", (e) => {
       e.stopPropagation();
       removeRecent(p);

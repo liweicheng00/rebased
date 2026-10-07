@@ -62,7 +62,7 @@ const baseFiles = git("diff", "--name-only", "main...feature/cli").split("\n").f
 await within("the files since the common ancestor show", async () => (await fileNames()).length === baseFiles.length);
 
 // Swap.
-await page.click(".compare-header button:has-text('⇄')");
+await page.click(".compare-header button[title='Swap the sides']");
 await within("swap exchanges the sides", async () => (await groups())[0]?.includes("In feature/cli, not in main"));
 
 // The working tree on the right: the local change of main.rs shows.

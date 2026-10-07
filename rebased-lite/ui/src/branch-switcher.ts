@@ -2,7 +2,7 @@
 
 import type { BranchInfo, RecentBranch } from "./api";
 import { closeMenu } from "./context-menu";
-import { h } from "./dom";
+import { h, icon } from "./dom";
 
 export function showBranchSwitcher(
   anchor: HTMLElement,
@@ -14,7 +14,7 @@ export function showBranchSwitcher(
   document.querySelector(".switcher")?.remove();
   const search = h("input", { class: "switcher-search", placeholder: "Search branches", spellcheck: false });
   const list = h("div", { class: "switcher-list" });
-  const newBtn = h("button", { class: "switcher-new" }, "＋ New Branch…");
+  const newBtn = h("button", { class: "switcher-new" }, icon("add"), " New Branch…");
   const pop = h("div", { class: "switcher menu" }, search, newBtn, list);
   const close = () => {
     pop.remove();
@@ -43,7 +43,7 @@ export function showBranchSwitcher(
         const el = h(
           "button",
           { class: "menu-item" + (b.current ? " current" : ""), title: b.subject },
-          h("span", { class: "menu-check" }, b.current ? "★" : ""),
+          h("span", { class: "menu-check" }, b.current ? icon("current") : ""),
           h("span", { class: "menu-label" }, b.name),
           h("span", { class: "menu-shortcut" }, b.ahead || b.behind ? `${b.ahead ? `↑${b.ahead}` : ""}${b.behind ? ` ↓${b.behind}` : ""}` : ""),
         );

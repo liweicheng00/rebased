@@ -5,7 +5,7 @@ import type { Change, ChangeListView, LocalChanges } from "./api";
 import { statusName } from "./changes-panel";
 import { fileIcon } from "./file-icon";
 import { buildTree, treeOrder, walkTree } from "./file-tree";
-import { h, icon } from "./dom";
+import { h, icon, twisty } from "./dom";
 import { save, settings } from "./settings";
 
 /** A file row: a tracked change in a changelist, or an unversioned file. */
@@ -99,16 +99,16 @@ export class CommitPanel {
       const sel = this.selectedFiles().filter((f) => f.list !== null);
       if (sel.length) this.onRollback(sel);
     });
-    const newList = h("button", { class: "icon-button", title: "New changelist" }, "＋");
+    const newList = h("button", { class: "icon-button", title: "New changelist" }, icon("add"));
     newList.addEventListener("click", () => this.onNewChangeList());
-    const expand = h("button", { class: "icon-button", title: "Expand all" }, "⊞");
+    const expand = h("button", { class: "icon-button", title: "Expand all" }, icon("expand"));
     expand.addEventListener("click", () => {
       this.collapsed.clear();
       this.render();
     });
     const treeBtn = h("button", { class: "icon-button changes-tree-toggle" });
     const paintTreeBtn = () => {
-      treeBtn.textContent = settings.localChangesAsTree ? "☰" : "🗀";
+      treeBtn.replaceChildren(icon(settings.localChangesAsTree ? "list" : "tree"));
       treeBtn.title = settings.localChangesAsTree ? "Show as a flat list" : "Group by folder";
     };
     paintTreeBtn();
@@ -118,7 +118,7 @@ export class CommitPanel {
       paintTreeBtn();
       this.render();
     });
-    const collapse = h("button", { class: "icon-button", title: "Collapse all" }, "⊟");
+    const collapse = h("button", { class: "icon-button", title: "Collapse all" }, icon("collapse"));
     collapse.addEventListener("click", () => {
       for (const l of this.data?.lists ?? []) this.collapsed.add(l.id);
       this.collapsed.add(UNVERSIONED);
@@ -144,7 +144,7 @@ export class CommitPanel {
         this.onMessageHistory(this.historyBtn);
       }
     });
-    this.historyBtn = h("button", { class: "icon-button commit-history", title: "Recent commit messages (Ctrl+M in the message)" }, "🕘");
+    this.historyBtn = h("button", { class: "icon-button commit-history", title: "Recent commit messages (Ctrl+M in the message)" }, icon("history"));
     this.historyBtn.addEventListener("click", () => this.onMessageHistory(this.historyBtn));
     this.signOff = h("input", { type: "checkbox", checked: settings.signOff });
     this.signOff.addEventListener("change", () => {
@@ -297,7 +297,7 @@ export class CommitPanel {
   checkMessage() {
     const w = this.messageWarnings;
     this.warnings.hidden = !w.length;
-    this.warnings.replaceChildren(...w.map((x) => h("div", {}, "⚠ ", x)));
+    this.warnings.replaceChildren(...w.map((x) => h("div", {}, icon("warning"), " ", x)));
   }
 
   get messageText(): string {
@@ -528,7 +528,7 @@ export class CommitPanel {
     const row = h(
       "div",
       { class: "cl-dir", style: { paddingLeft: `${10 + depth * 14}px` }, title: id.slice(id.indexOf("\0") + 1), draggable: files.some((f) => f.list !== null) },
-      h("span", { class: "twisty" }, open ? "▾" : "▸"),
+      twisty(open),
       box,
       h("span", { class: "dir-name" }, label),
       h("span", { class: "cl-count" }, String(files.length)),
@@ -572,11 +572,11 @@ export class CommitPanel {
       this.render();
       this.updateTarget();
     });
-    const twisty = h("span", { class: "twisty" }, open ? "▾" : "▸");
+    const twist = twisty(open);
     const row = h(
       "div",
       { class: "cl-header" + (list?.active ? " active-list" : "") + (list ? "" : " unversioned"), "data-list": id, title: list?.comment || name },
-      twisty,
+      twist,
       box,
       h("span", { class: "cl-name" }, name),
       h("span", { class: "cl-count" }, `${keys.length} file${keys.length === 1 ? "" : "s"}`),

@@ -1,7 +1,7 @@
 // The Settings dialog: appearance, Git, the diff, Local History and the keymap. The dialog edits a copy
 // of the settings; OK returns the copy and the caller applies it.
 
-import { h } from "./dom";
+import { h, icon } from "./dom";
 import { eventKey, formatKey, type Keymap } from "./keymap";
 import { settings, type Settings, type Theme } from "./settings";
 
@@ -210,7 +210,7 @@ export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | nul
             recording = { id: a.id, index: i };
             render();
           });
-          const remove = h("button", { class: "icon-button key-remove", title: "Remove this key" }, "✕");
+          const remove = h("button", { class: "icon-button key-remove", title: "Remove this key" }, icon("close"));
           remove.addEventListener("click", (e) => {
             e.preventDefault();
             draft.keymap[a.id] = keys.filter((_, j) => j !== i);
@@ -226,7 +226,7 @@ export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | nul
           render();
         });
         const changed = draft.keymap[a.id] !== undefined;
-        const reset = h("button", { class: "icon-button", title: "Use the default keys", disabled: !changed }, "↺");
+        const reset = h("button", { class: "icon-button", title: "Use the default keys", disabled: !changed }, icon("reset"));
         reset.addEventListener("click", (e) => {
           e.preventDefault();
           delete draft.keymap[a.id];

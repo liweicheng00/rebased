@@ -69,7 +69,7 @@ export class StashPanel {
             "div",
             { class: "stash-meta" },
             h("code", {}, `stash@{${s.index}}`),
-            s.branch ? h("span", { class: "stash-branch" }, `⑂ ${s.branch}`) : "",
+            s.branch ? h("span", { class: "stash-branch" }, icon("branch"), ` ${s.branch}`) : "",
             h("span", {}, formatDate(s.time)),
           ),
         );

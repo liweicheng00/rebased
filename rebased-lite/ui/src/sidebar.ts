@@ -2,7 +2,7 @@
 
 import type { BranchInfo, RecentBranch, Submodule, Worktree } from "./api";
 import { compareTags } from "./version-sort";
-import { h, icon } from "./dom";
+import { h, icon, twisty } from "./dom";
 
 export class Sidebar {
   readonly el: HTMLElement;
@@ -42,7 +42,7 @@ export class Sidebar {
     this.search = h("input", { class: "sidebar-search", placeholder: "Search branches and tags", spellcheck: false });
     this.search.addEventListener("input", () => this.render());
     this.list = h("div", { class: "sidebar-list" });
-    this.favBtn = h("button", { class: "icon-button fav-filter", title: "Show only the favorite branches" }, "★");
+    this.favBtn = h("button", { class: "icon-button fav-filter", title: "Show only the favorite branches" }, icon("star"));
     this.favBtn.addEventListener("click", () => {
       this.onlyFavorites = !this.onlyFavorites;
       this.favBtn.classList.toggle("on", this.onlyFavorites);
@@ -134,7 +134,7 @@ export class Sidebar {
       const header = h(
         "div",
         { class: "group-header" },
-        h("span", { class: "twisty" }, open ? "▾" : "▸"),
+        twisty(open),
         h("span", {}, title),
         h("span", { class: "group-count" }, String(items.length)),
       );
@@ -181,7 +181,7 @@ export class Sidebar {
     const header = h(
       "div",
       { class: "group-header" },
-      h("span", { class: "twisty" }, open ? "▾" : "▸"),
+      twisty(open),
       h("span", {}, title),
       h("span", { class: "group-count" }, String(this.worktrees.length)),
       add,
@@ -199,10 +199,10 @@ export class Sidebar {
       const el = h(
         "div",
         { class: "branch worktree" + (w.current ? " current" : ""), title: `${w.path}${w.locked ? "\nlocked" : ""}${w.prunable ? "\nprunable: the folder is missing" : ""}` },
-        h("span", { class: "branch-icon" }, w.current ? "●" : "▣"),
+        h("span", { class: "branch-icon" + (w.current ? " current" : "") }, icon("worktree")),
         h("span", { class: "branch-name" }, name),
         h("span", { class: "worktree-branch" }, detail),
-        w.prunable ? h("span", { class: "behind" }, "missing") : w.locked ? h("span", { class: "muted-inline" }, "🔒") : "",
+        w.prunable ? h("span", { class: "behind" }, "missing") : w.locked ? h("span", { class: "muted-inline", title: "Locked" }, icon("lock")) : "",
       );
       el.addEventListener("dblclick", () => !w.current && this.onOpenWorktree(w));
       el.addEventListener("contextmenu", (e) => {
@@ -226,7 +226,7 @@ export class Sidebar {
     const header = h(
       "div",
       { class: "group-header" },
-      h("span", { class: "twisty" }, open ? "▾" : "▸"),
+      twisty(open),
       h("span", {}, title),
       h("span", { class: "group-count" }, String(this.submodules.length)),
       update,
@@ -253,7 +253,7 @@ export class Sidebar {
           class: "branch submodule",
           title: `${s.path}\nrecorded ${s.recorded}${s.current ? `\nchecked out ${s.current}` : ""}${s.url ? `\n${s.url}` : ""}`,
         },
-        h("span", { class: "branch-icon" }, "⧉"),
+        h("span", { class: "branch-icon" }, icon("submodule")),
         h("span", { class: "branch-name" }, s.path),
         h("span", { class: "worktree-branch" }, commit),
         detail ? h("span", { class: s.state === "clean" ? "muted-inline" : "behind" }, detail) : "",
@@ -275,14 +275,14 @@ export class Sidebar {
     if (b.kind === "tag" && this.remoteTags && !this.remoteTags.names.has(b.name)) {
       badges.append(h("span", { class: "tag-local", title: `Not on ${this.remoteTags.remote}. Push it from the context menu.` }, "local"));
     }
-    const filterBtn = h("button", { class: "filter-toggle" + (filtered ? " on" : ""), title: filtered ? "Remove from the log filter" : "Show only this branch in the log" }, "⏷");
+    const filterBtn = h("button", { class: "filter-toggle" + (filtered ? " on" : ""), title: filtered ? "Remove from the log filter" : "Show only this branch in the log" }, icon("filter"));
     filterBtn.addEventListener("dblclick", (e) => e.stopPropagation());
     filterBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       this.onToggleFilter(b);
     });
     const fav = this.favorites.has(b.full);
-    const favBtn = h("button", { class: "fav-toggle" + (fav ? " on" : ""), title: fav ? "Remove from favorites" : "Add to favorites" }, fav ? "★" : "☆");
+    const favBtn = h("button", { class: "fav-toggle" + (fav ? " on" : ""), title: fav ? "Remove from favorites" : "Add to favorites" }, icon(fav ? "star-filled" : "star"));
     favBtn.addEventListener("dblclick", (e) => e.stopPropagation());
     favBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -291,7 +291,7 @@ export class Sidebar {
     const el = h(
       "div",
       { class: `branch branch-${b.kind}` + (b.current ? " current" : "") + (filtered ? " filtered" : "") + (fav ? " favorite" : ""), title: `${b.name}\n${b.subject}` },
-      h("span", { class: "branch-icon", title: b.current ? "The current branch" : "" }, b.kind === "tag" ? "⌗" : b.current ? "◉" : "⑂"),
+      h("span", { class: "branch-icon", title: b.current ? "The current branch" : "" }, icon(b.kind === "tag" ? "tag" : b.current ? "current" : "branch")),
       h("span", { class: "branch-name" }, label),
       badges,
       favBtn,

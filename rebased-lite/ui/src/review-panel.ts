@@ -1,7 +1,7 @@
 // Reviews tab: the local reviews of the repository, to switch between them fast.
 
 import type { ReviewSummary } from "./api";
-import { formatDate, h } from "./dom";
+import { formatDate, h, icon } from "./dom";
 
 export class ReviewPanel {
   readonly el: HTMLElement;
@@ -48,7 +48,7 @@ export class ReviewPanel {
           : !r.exists
             ? h("span", { class: "review-badge gone" }, "branch gone")
             : r.conflicts.length
-              ? h("span", { class: "review-badge conflict", title: r.conflicts.join("\n") }, `⚠ ${r.conflicts.length} conflict${r.conflicts.length === 1 ? "" : "s"}`)
+              ? h("span", { class: "review-badge conflict", title: r.conflicts.join("\n") }, icon("warning"), ` ${r.conflicts.length} conflict${r.conflicts.length === 1 ? "" : "s"}`)
               : h("span", { class: "review-badge ready" }, "no conflicts");
         const done = r.files ? Math.round((r.viewed / r.files) * 100) : 0;
         const finish = h("button", { class: "review-finish", title: `Merge ${r.branch} into ${r.base}`, disabled: !r.exists || r.merged || r.baseIsRemote }, "Merge…");
@@ -67,7 +67,7 @@ export class ReviewPanel {
             r.exists ? h("span", {}, `${r.commits} commit${r.commits === 1 ? "" : "s"}`) : "",
             r.behind ? h("span", { title: `${r.base} has ${r.behind} commit(s) that ${r.branch} does not have` }, `${r.behind} behind`) : "",
             r.exists ? h("span", {}, `${r.viewed}/${r.files} viewed`) : "",
-            r.comments ? h("span", {}, `💬 ${r.comments}`) : "",
+            r.comments ? h("span", {}, icon("note"), ` ${r.comments}`) : "",
             state,
           ),
           r.exists && h("div", { class: "review-progress" }, h("div", { class: "review-progress-bar", style: { width: `${done}%` } })),

@@ -1,7 +1,7 @@
 // Virtualized commit log: a header, then one row per commit with the graph, refs, subject, author, date and hash.
 
 import { api, type Row } from "./api";
-import { dragResize, formatDate, h } from "./dom";
+import { dragResize, formatDate, h, icon } from "./dom";
 import { ELEMENT_WIDTH, ROW_HEIGHT, maxPosition, paintRow } from "./graph-paint";
 import { save, settings } from "./settings";
 
@@ -75,8 +75,8 @@ export class LogView {
       }
       return c;
     };
-    const collapse = h("button", { class: "icon-button", title: "Collapse all linear branches" }, "⊟");
-    const expand = h("button", { class: "icon-button", title: "Expand all linear branches", disabled: !this.collapsed }, "⊞");
+    const collapse = h("button", { class: "icon-button", title: "Collapse all linear branches" }, icon("collapse"));
+    const expand = h("button", { class: "icon-button", title: "Expand all linear branches", disabled: !this.collapsed }, icon("expand"));
     collapse.addEventListener("click", () => this.onCollapseAll());
     expand.addEventListener("click", () => this.onExpandAll());
     const subject = col("subject", "Subject");

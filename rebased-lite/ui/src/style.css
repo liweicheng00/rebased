@@ -439,16 +439,17 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .blame-age-4 { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 
 /* partial commit */
-/* The icons, as masks, so they take the color of the text. They are from Lucide (ISC license): undo-2
-   for rollback, rotate-cw for refresh, and chevrons-right (») for the revert of a change of a diff, as
-   in IntelliJ. */
+/* The icons of icons.ts (Lucide, ISC license) are masks, so they take the color of the text. */
 .icon { display: inline-block; flex: none; width: 14px; height: 14px; vertical-align: -2px; background: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
-.icon-revert { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 14 4 9l5-5'/%3E%3Cpath d='M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11'/%3E%3C/svg%3E"); }
-.icon-refresh { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8'/%3E%3Cpath d='M21 3v5h-5'/%3E%3C/svg%3E"); }
 .tb-button .icon { margin-right: 4px; }
+.tb-button .icon-caret, .icon-caret { width: 12px; height: 12px; margin: 0 0 0 3px; opacity: 0.75; }
+.icon-button .icon { width: 15px; height: 15px; }
+.twisty .icon { width: 12px; height: 12px; vertical-align: -1px; transition: transform 0.1s; }
+.twisty.open .icon { transform: rotate(90deg); }
+.icon-star-filled { color: var(--tag); }
 .revert-glyph { cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--muted); }
 .revert-glyph:hover { color: var(--accent); }
-.revert-glyph::before { content: ""; display: inline-block; width: 14px; height: 14px; background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 17 5-5-5-5'/%3E%3Cpath d='m13 17 5-5-5-5'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 17 5-5-5-5'/%3E%3Cpath d='m13 17 5-5-5-5'/%3E%3C/svg%3E") center / contain no-repeat; }
+.revert-glyph::before { content: ""; display: inline-block; width: 14px; height: 14px; background: currentColor; -webkit-mask: var(--icon-apply) center / contain no-repeat; mask: var(--icon-apply) center / contain no-repeat; }
 .hunk-on, .hunk-off { cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .hunk-on::before, .hunk-off::before { content: ""; width: 11px; height: 11px; border-radius: 2px; box-sizing: border-box; }
 .hunk-on::before { background: var(--accent); border: 1px solid var(--accent); box-shadow: inset 0 0 0 2px var(--bg); }

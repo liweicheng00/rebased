@@ -2,7 +2,7 @@
 
 import type { Change } from "./api";
 import { fileIcon } from "./file-icon";
-import { h } from "./dom";
+import { h, icon, twisty } from "./dom";
 import { save, settings } from "./settings";
 
 interface Dir {
@@ -35,7 +35,7 @@ export class ChangesPanel {
       save();
       this.render();
     });
-    const swap = h("button", { class: "icon-button", title: "Swap left and right sides" }, "⇄");
+    const swap = h("button", { class: "icon-button", title: "Swap left and right sides" }, icon("swap"));
     swap.addEventListener("click", () => this.onSwap());
     this.list = h("div", { class: "changes", tabIndex: 0 });
     this.list.addEventListener("keydown", (e) => {
@@ -102,7 +102,7 @@ export class ChangesPanel {
   }
 
   private render() {
-    this.treeBtn.textContent = settings.changesAsTree ? "☰" : "🗀";
+    this.treeBtn.replaceChildren(icon(settings.changesAsTree ? "list" : "tree"));
     this.treeBtn.title = settings.changesAsTree ? "Show as a flat list" : "Group by directory";
     if (!this.changes.length) {
       this.list.replaceChildren(h("div", { class: "muted" }, "No changes."));
@@ -144,7 +144,7 @@ export class ChangesPanel {
       const row = h(
         "div",
         { class: "dir-row", style: { paddingLeft: `${8 + depth * 14}px` } },
-        h("span", { class: "twisty" }, open ? "▾" : "▸"),
+        twisty(open),
         h("span", { class: "dir-name" }, label),
         h("span", { class: "dir-count" }, String(count)),
       );
