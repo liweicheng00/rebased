@@ -6,7 +6,7 @@ import { emptyFilter } from "./filter-bar";
 import { loadFavorites } from "./remotes";
 import { clearCompare } from "./selection";
 import { addRecent, save, settings } from "./settings";
-import { authors, banner, commitPanel, fetchBtn, filterBar, localHistoryBtn, log, mod, pushBtn, refreshBtn, remoteBtn, reviewPanel, sidebar, stashPanel, statusActivity, tabBar, tabCommit, tabReviews, tabStash, task, updateBtn, updateStatus } from "./shell";
+import { authors, banner, commitPanel, details, fetchBtn, filterBar, localHistoryBtn, log, mod, pushBtn, refreshBtn, remoteBtn, reviewPanel, sidebar, stashPanel, statusActivity, tabBar, tabCommit, tabReviews, tabStash, task, updateBtn, updateStatus } from "./shell";
 import { app } from "./state";
 import { showWorkspace } from "./welcome";
 import { formDialog } from "./dialogs";
@@ -170,24 +170,44 @@ async function loadRepo(r: ViewResult, state: TabState | null) {
   if (target && !log.hasSelection()) await jumpToOid(target, true, true);
 }
 
+/**
+ * Shows a new view of the log. With `keepSelection` it is a reload: the view keeps its place, the same
+ * commits stay selected, and the file list and the diff stay as they are. A reload runs after each
+ * operation and after a change in the git directory, so it must not move the view of the user.
+ */
 export async function applyView(r: ViewResult, keepSelection: boolean) {
   const keepOids = keepSelection ? app.selected.map((s) => s.oid) : [];
+  const anchor = keepSelection ? log.viewAnchor() : null;
   app.view = r;
   document.title = `${r.root.split(/[\\/]/).pop()} – Rebased Lite`;
   refreshBtn.disabled = fetchBtn.disabled = updateBtn.disabled = pushBtn.disabled = remoteBtn.disabled = localHistoryBtn.disabled = false;
   updateStatus();
   log.setCollapsed(r.collapsed);
-  log.reset(r.rowCount, r.recommendedWidth);
-  app.selected = [];
-  if (keepOids.length) {
-    const rows = (await Promise.all(keepOids.map((o) => api.find(o)))).map((f) => f.row).filter((x): x is number => x !== null);
-    if (rows.length) {
-      log.jumpTo(rows[0], false);
-      log.select(rows);
-      return;
-    }
+  log.reset(r.rowCount, r.recommendedWidth, keepSelection);
+  if (anchor) {
+    const at = await api.find(anchor.oid).catch(() => null);
+    if (at?.row != null) log.scrollToRow(at.row, anchor.offset);
   }
-  clearCompare();
+  if (!keepSelection) {
+    app.selected = [];
+    return clearCompare();
+  }
+  // Nothing was selected: the file list and the diff, for example of a local change, stay.
+  if (!keepOids.length) return;
+  const rows = (await Promise.all(keepOids.map((o) => api.find(o)))).map((f) => f.row).filter((x): x is number => x !== null);
+  if (rows.length === keepOids.length) {
+    log.restoreSelection(rows);
+    app.selected = await log.selectedRows();
+    // The labels of the commits can change, so the details load again; the files and the diff stay.
+    void details.show(app.selected);
+    return;
+  }
+  // Some selected commits are gone, for example after an amend: a new selection.
+  app.selected = [];
+  if (rows.length) {
+    log.jumpTo(rows[0], false);
+    log.select(rows);
+  } else clearCompare();
 }
 
 export async function loadRefs() {

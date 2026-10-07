@@ -288,6 +288,30 @@ export class LogView {
     return div;
   }
 
+  /** Where the view is: the first selected row on the screen, else the top row, and its distance from the
+   * top of the view. A reload puts that commit back at the same height. */
+  viewAnchor(): { oid: string; offset: number } | null {
+    const top = this.scroller.scrollTop;
+    const first = Math.floor(top / ROW_HEIGHT);
+    const last = Math.floor((top + this.scroller.clientHeight) / ROW_HEIGHT);
+    const index = [...this.selection].sort((a, b) => a - b).find((i) => i >= first && i <= last) ?? first;
+    const oid = this.row(index)?.oid;
+    return oid ? { oid, offset: index * ROW_HEIGHT - top } : null;
+  }
+
+  /** Scrolls so that a row is at this distance from the top of the view. */
+  scrollToRow(row: number, offset: number) {
+    this.scroller.scrollTop = Math.max(0, row * ROW_HEIGHT - offset);
+    this.render();
+  }
+
+  /** Selects rows again after a reload, without the work of a new selection: the commits are the same. */
+  restoreSelection(rows: number[]) {
+    this.selection = rows;
+    this.anchor = rows[0] ?? -1;
+    this.render();
+  }
+
   select(rows: number[], anchor = rows[0] ?? -1) {
     this.selection = rows;
     this.anchor = anchor;
