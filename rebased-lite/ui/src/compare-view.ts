@@ -135,6 +135,52 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
     }
   };
 
+  /** The menu of a file row; load() sets it for the two sides. */
+  let fileMenu: (c: Change, e: MouseEvent) => void = () => {};
+  /** The text of the diff when the sides have the same files. */
+  let sameText = "";
+
+  const renderFiles = () => {
+    summary.textContent = `${files.length} file${files.length === 1 ? "" : "s"}`;
+    filesEl.replaceChildren(
+      ...files.map((c, i) => {
+        const slash = c.path.lastIndexOf("/");
+        const row = h(
+          "div",
+          { class: "history-row compare-file" + (i === selected ? " selected" : ""), title: c.old_path ? `${c.old_path} → ${c.path}` : c.path },
+          h("span", { class: `status status-${c.status}`, title: statusName(c.status) }, c.status),
+          h("span", { class: "rebase-subject" }, c.path.slice(slash + 1)),
+          h("span", { class: "rebase-author" }, slash > 0 ? c.path.slice(0, slash) : ""),
+        );
+        row.addEventListener("mousedown", (e) => e.button === 0 && void select(i));
+        row.addEventListener("contextmenu", (e) => {
+          void select(i);
+          fileMenu(c, e);
+        });
+        return row;
+      }),
+    );
+  };
+
+  /**
+   * After a revert only the files load again, not the commits. The diff stays on the same file, with its
+   * scroll position, while the file still differs; else the next file at that place shows.
+   */
+  const refreshFiles = async (p: string) => {
+    if (!revs) return;
+    const at = selected;
+    try {
+      files = await cb.changes(revs.l, revs.r);
+    } catch (e) {
+      return d.message(String(e));
+    }
+    const same = files.findIndex((f) => f.path === p);
+    selected = same >= 0 ? same : Math.min(at, files.length - 1);
+    renderFiles();
+    if (selected >= 0) await select(selected);
+    else d.message(sameText);
+  };
+
   const load = async () => {
     leftSel.value = left;
     rightSel.value = right;
@@ -163,11 +209,11 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
       d.setRevert(
         worktree
           ? async (p, text, expected) => {
-              if (await cb.writeFile(p, text, expected)) await reload(p);
+              if (await cb.writeFile(p, text, expected)) await refreshFiles(p);
             }
           : null,
       );
-      const fileMenu = (c: Change, e: MouseEvent) => {
+      fileMenu = (c: Change, e: MouseEvent) => {
         e.preventDefault();
         const paths = c.old_path && c.old_path !== c.path ? [c.path, c.old_path] : [c.path];
         showMenu(e.clientX, e.clientY, [
@@ -175,7 +221,7 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
             label: `Revert to ${leftName}…`,
             disabled: !worktree,
             action: async () => {
-              if (await cb.revertFiles(leftRev, leftName, paths)) await reload(c.path);
+              if (await cb.revertFiles(leftRev, leftName, paths)) await refreshFiles(c.path);
             },
           },
           { label: "Open in Editor", disabled: !worktree || c.status === "D", action: () => cb.openInEditor(c.path) },
@@ -186,42 +232,19 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
       files = await cb.changes(l, r);
       if (req !== request) return;
       d.setSides(fromBase ? `common ancestor ${cmp.base?.slice(0, 8) ?? "(none)"}` : left, rightName);
-      summary.textContent = `${files.length} file${files.length === 1 ? "" : "s"}`;
-      filesEl.replaceChildren(
-        ...files.map((c, i) => {
-          const slash = c.path.lastIndexOf("/");
-          const row = h(
-            "div",
-            { class: "history-row compare-file", title: c.old_path ? `${c.old_path} → ${c.path}` : c.path },
-            h("span", { class: `status status-${c.status}`, title: statusName(c.status) }, c.status),
-            h("span", { class: "rebase-subject" }, c.path.slice(slash + 1)),
-            h("span", { class: "rebase-author" }, slash > 0 ? c.path.slice(0, slash) : ""),
-          );
-          row.addEventListener("mousedown", (e) => e.button === 0 && void select(i));
-          row.addEventListener("contextmenu", (e) => {
-            void select(i);
-            fileMenu(c, e);
-          });
-          return row;
-        }),
-      );
+      sameText = fromBase ? `${rightName} has no file changes since the common ancestor.` : "The two sides have the same files.";
       selected = -1;
+      renderFiles();
       const first = path ? files.findIndex((f) => f.path === path) : -1;
       path = undefined;
       if (files.length) void select(Math.max(0, first));
-      else d.message(fromBase ? `${rightName} has no file changes since the common ancestor.` : "The two sides have the same files.");
+      else d.message(sameText);
     } catch (e) {
       if (req === request) {
         commitsEl.replaceChildren(h("div", { class: "settings-hint error" }, String(e).replace(/^Error: /, "")));
         d.message("");
       }
     }
-  };
-
-  /** Loads the files again after a revert, and shows the same file when it still differs. */
-  const reload = async (p: string) => {
-    path = p;
-    await load();
   };
 
   leftSel.addEventListener("change", () => {

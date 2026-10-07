@@ -13,6 +13,13 @@ const original = read("parser.rs");
 // Two changes in parser.rs: a line at the top and a line at the end.
 writeFileSync(`${repo}/parser.rs`, `// top\n${original}// bottom\n`);
 const mainAtHead = execFileSync("git", ["-C", repo, "show", "HEAD:main.rs"], { encoding: "utf8" });
+// A long file in HEAD, with a change near the top and one near the end in the working tree.
+const longLines = Array.from({ length: 300 }, (_, i) => `line ${i + 1}`);
+writeFileSync(`${repo}/long.txt`, longLines.join("\n") + "\n");
+execFileSync("git", ["-C", repo, "add", "long.txt"]);
+execFileSync("git", ["-C", repo, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "Long file"]);
+const longAtHead = read("long.txt");
+writeFileSync(`${repo}/long.txt`, longAtHead.replace("line 5\n", "LINE 5\n").replace("line 280\n", "LINE 280\n"));
 
 const browser = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
 const page = await (await browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 1.5 })).newPage();
@@ -58,6 +65,39 @@ await page.click(`${win} .editor.modified .view-line:has-text('// bottom')`, { b
 await (await menuItem("Revert This Change")).click();
 await within("the menu reverts the other change", async () => read("parser.rs") === original);
 await within("parser.rs leaves the list", async () => !(((await page.textContent(`${win} .compare-files`)) ?? "").includes("parser.rs")));
+
+// A revert does not load the window again: the diff keeps its scroll position, and the commits stay.
+await page.click(`${win} .compare-file:has-text('long.txt')`);
+await page.waitForSelector(`${win} .editor.modified .view-line:has-text('LINE 5')`);
+await page.$eval(`${win} .compare-commits`, (e) => e.setAttribute("data-mark", "kept"));
+// Go to the second change, near the end of the file.
+await page.click(`${win} .diff-toolbar button[title^='Next change']`);
+await page.waitForTimeout(600);
+if (!(await page.$(`${win} .editor.modified .view-line:has-text('LINE 280')`))) await page.click(`${win} .diff-toolbar button[title^='Next change']`);
+await page.waitForSelector(`${win} .editor.modified .view-line:has-text('LINE 280')`);
+await page.waitForTimeout(600);
+// Where the line before the change is on the screen.
+const scrollTop = () => page.$$eval(`${win} .editor.modified .view-line`, (els) => Math.round(els.find((e) => /line\s279$/.test(e.textContent.trim()))?.getBoundingClientRect().top ?? -1));
+const before = await scrollTop();
+const line280 = await page.$$eval(`${win} .editor.modified .view-line`, (els) => els.findIndex((e) => /LINE\s280/.test(e.textContent)));
+check("the second change shows", line280 >= 0);
+const glyphAt280 = await page.evaluateHandle((w) => {
+  const target = [...document.querySelectorAll(`${w} .editor.modified .view-line`)].find((e) => /LINE\s280/.test(e.textContent));
+  const top = target.getBoundingClientRect().top;
+  return [...document.querySelectorAll(`${w} .editor.modified .revert-glyph`)].find((g) => Math.abs(g.getBoundingClientRect().top - top) < 4);
+}, win);
+await glyphAt280.asElement().click();
+await within("the change near the end is reverted", async () => !read("long.txt").includes("LINE 280") && read("long.txt").includes("LINE 5"));
+await within("the diff shows one change", async () => ((await page.textContent(`${win} .diff-stats`)) ?? "").includes("1 change"));
+check("the diff keeps its scroll position", (await scrollTop()) === before);
+check("the commits part did not load again", (await page.getAttribute(`${win} .compare-commits`, "data-mark")) === "kept");
+// The last change of the file: the file leaves the list, and the next file shows.
+await page.click(`${win} .diff-toolbar button[title^='Previous change']`);
+await page.waitForSelector(`${win} .editor.modified .view-line:has-text('LINE 5')`);
+await page.waitForTimeout(400);
+await page.click(`${win} .revert-glyph >> nth=0`);
+await within("long.txt leaves the list", async () => !(((await page.textContent(`${win} .compare-files`)) ?? "").includes("long.txt")));
+check("a file still shows in the diff", ((await page.textContent(`${win} .diff-title`)) ?? "").trim() !== "");
 
 // A whole file: NOTES.txt is not on main, so Revert deletes it.
 await page.click(`${win} .compare-file:has-text('NOTES.txt')`, { button: "right" });

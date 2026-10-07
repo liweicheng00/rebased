@@ -307,8 +307,18 @@ export class DiffView {
       h("span", { class: "stat-del" }, `−${del}`),
       h("span", { class: "muted-inline" }, ` · ${changes.length} change${changes.length === 1 ? "" : "s"}`),
     );
-    if (changes.length && this.revealFirst) this.editor.revealLineInCenter(changes[0].modifiedStartLineNumber || 1);
-    this.revealFirst = true;
+    if (this.keepScroll) {
+      // The same file again: the new diff can move the view, so the old place comes back after it.
+      const ed = this.editor.getModifiedEditor();
+      ed.setScrollTop(this.keepScroll.top);
+      ed.setScrollLeft(this.keepScroll.left);
+      this.keepScroll = null;
+      this.revealFirst = false;
+    } else if (changes.length && this.revealFirst) {
+      // Only once for a new file: a later update of the same diff keeps the place of the user.
+      this.editor.revealLineInCenter(changes[0].modifiedStartLineNumber || 1);
+      this.revealFirst = false;
+    }
   }
 
   private blameOids: (string | null)[] = [];
@@ -568,6 +578,8 @@ export class DiffView {
     // The same file again (for example after it changed on disk): keep the scroll position.
     const same = change.path === this.path && this.notice.hidden && this.singleHost.hidden;
     this.keepView = same ? this.editor.getModifiedEditor().saveViewState() : null;
+    const ed = this.editor.getModifiedEditor();
+    this.keepScroll = same ? { top: ed.getScrollTop(), left: ed.getScrollLeft() } : null;
     this.revealFirst = !same;
     if (!same) this.userPos = null;
     this.path = change.path;
@@ -620,6 +632,8 @@ export class DiffView {
   }
 
   private keepView: monaco.editor.ICodeEditorViewState | null = null;
+  /** The scroll position of the same file, for after its new diff. */
+  private keepScroll: { top: number; left: number } | null = null;
   /** Scroll to the first change when the diff is ready; not when the same file is shown again. */
   private revealFirst = true;
 
@@ -636,7 +650,9 @@ export class DiffView {
       old.modified.dispose();
     }, 3000);
     if (this.keepView) {
-      this.editor.getModifiedEditor().restoreViewState(this.keepView);
+      const ed = this.editor.getModifiedEditor();
+      ed.restoreViewState(this.keepView);
+      if (this.keepScroll) ed.setScrollTop(this.keepScroll.top);
       this.keepView = null;
     }
   }
