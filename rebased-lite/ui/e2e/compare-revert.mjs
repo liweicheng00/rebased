@@ -44,7 +44,7 @@ await page.keyboard.press("Control+2");
 await page.dblclick(".cl-file:has(.path:text-is('parser.rs'))");
 await page.waitForSelector(`${win} .compare-file`);
 await within("each change has a revert button", async () => (await glyphs()).length === 2);
-check("side by side, the buttons are on the left side, as in IntelliJ", (await page.$$(`${win} .editor.original .revert-glyph`)).length === 2);
+check("the buttons are in the middle: in the gutter of the right side", (await page.$$(`${win} .editor.modified .revert-glyph`)).length === 2);
 check("the commits part says that the working tree is on main", ((await page.textContent(`${win} .compare-commits`)) ?? "").includes("The working tree is on main, at the same commit as main"));
 await shot("cr1-compare");
 
@@ -68,23 +68,34 @@ await within("Revert to main deletes a file that main does not have", async () =
 await page.keyboard.press("Escape");
 await page.waitForSelector(win, { state: "detached" });
 
-// The diff of the Changes tab: Revert This Change rolls back to HEAD.
+// The diff of the Changes tab: the » and the commit check box are side by side in the middle.
+const x = (sel) => page.$eval(sel, (e) => e.getBoundingClientRect().left);
 await page.click(".cl-file:has(.path:text-is('main.rs'))");
 await page.waitForSelector(".diff .editor.modified .view-line:has-text('fn helper')");
-await within("the Changes diff has the button on the left side, and the check box on the right", async () =>
-  (await page.$$(".diff .editor.original .revert-glyph")).length === 1 && (await page.$$(".diff .editor.modified .hunk-on")).length === 1);
+await within("the Changes diff has the button and the check box", async () =>
+  (await page.$$(".diff .editor.modified .revert-glyph")).length === 1 && (await page.$$(".diff .editor.modified .hunk-on")).length === 1);
+check("the button is left of the check box", (await x(".diff .editor.modified .revert-glyph")) < (await x(".diff .editor.modified .hunk-on")));
 await shot("cr3-changes-diff");
+// The check box still works.
+await page.click(".diff .editor.modified .hunk-on");
+await within("a click on the check box leaves the change out", async () => (await page.$$(".diff .editor.modified .hunk-off")).length === 1);
+check("and reverts nothing", read("main.rs") !== mainAtHead);
+// Revert This Change in the menu rolls back to HEAD.
 await page.click(".diff .editor.modified .view-line:has-text('fn helper')", { button: "right" });
 await (await menuItem("Revert This Change")).click();
 await within("the Changes diff rolls back the change", async () => read("main.rs") === mainAtHead);
 
-// One column: the button moves to the right side.
-writeFileSync(`${repo}/arith.rs`, read("arith.rs") + "// more\n");
+// One column: the button and the check box stay together; a click on the button reverts.
+const arithAtHead = read("arith.rs");
+writeFileSync(`${repo}/arith.rs`, arithAtHead + "// more\n");
 await page.click(".diff-option:has-text('Side by side') input");
 await page.click(".tb-button:has-text('Refresh')");
 await page.click(".cl-file:has(.path:text-is('arith.rs'))");
 await page.waitForSelector(".diff .editor.modified .view-line:has-text('// more')");
-await within("in one column, the menu item is the way: the check boxes keep the right gutter", async () => (await page.$$(".diff .revert-glyph")).length === 0);
+await within("in one column, the button and the check box show", async () =>
+  (await page.$$(".diff .revert-glyph")).length === 1 && (await page.$$(".diff .hunk-on")).length === 1);
+await page.click(".diff .revert-glyph");
+await within("a click on the button reverts the change", async () => read("arith.rs") === arithAtHead);
 await page.click(".diff-option:has-text('Side by side') input");
 console.log("errors:", JSON.stringify(errors));
 await browser.close();
