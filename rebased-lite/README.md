@@ -237,7 +237,23 @@ cargo build --release -p rebased-lite
 
 On macOS, `scripts/build-dmg.sh` builds `Rebased Lite.app` and a `.dmg` in
 `target/release/bundle/`. Add `--universal` for one app that runs on Apple silicon and on Intel.
-The app is not signed, so it opens on the Mac that built it. Other Macs need a signature.
+
+#### Sign and notarize
+
+A build for other Macs needs a Developer ID Application certificate in the keychain and these
+variables:
+
+```bash
+export APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)"  # security find-identity -v -p codesigning
+export APPLE_ID="you@example.com"
+export APPLE_PASSWORD="$(security find-generic-password -a "$APPLE_ID" -s rebased-notarize -w)"  # an app-specific password
+export APPLE_TEAM_ID="TEAMID"
+scripts/build-dmg.sh --universal
+```
+
+Tauri signs and notarizes the app. The script then signs and notarizes the `.dmg`, and checks both with
+`codesign`, `spctl` and `stapler`. It stops when a variable or the certificate is missing, and when a
+check fails. `--unsigned` makes a test build without the variables; it opens on the Mac that built it.
 
 An app that starts from Finder does not get the `PATH` of your shell. It uses `/usr/bin/git`. To use
 another git, for example Homebrew git, set the git program in Settings.
