@@ -245,6 +245,7 @@ input { font: inherit; }
 .dialog-buttons .danger { background: var(--deleted); border-color: var(--deleted); color: #fff; }
 .dialog-text { margin: 0; white-space: pre-wrap; line-height: 1.45; }
 .dialog-note { margin: 0; font-size: 12px; color: var(--muted); }
+.dialog-files { margin: 0; max-height: 220px; overflow: auto; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--panel); font-size: 12px; white-space: pre; }
 .danger-text { color: var(--deleted); }
 .dialog-error { color: var(--deleted); font-size: 12px; min-height: 0; }
 .dialog-error:empty { display: none; }

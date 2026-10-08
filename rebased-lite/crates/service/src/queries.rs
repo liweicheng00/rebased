@@ -19,6 +19,11 @@ impl Service {
         self.with_repo(|r| r.worktrees().map_err(err))
     }
 
+    /// What stops the removal of a worktree without --force.
+    pub fn worktree_blockers(&self, args: PathArgs) -> Result<rebased_git::worktree::WorktreeBlockers> {
+        self.with_repo(|r| r.worktree_blockers(&args.path).map_err(err))
+    }
+
     pub fn recent_branches(&self) -> Result<Vec<RecentBranch>> {
         self.with_repo(|r| r.recent_branches(10).map_err(err))
     }

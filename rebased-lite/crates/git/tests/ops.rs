@@ -173,7 +173,7 @@ fn worktrees_and_recent_branches() {
     assert_eq!(list.len(), 2);
     assert!(list[0].main && list[0].current);
     assert_eq!(list[1].branch.as_deref(), Some("side"));
-    repo.remove_worktree(wt.to_str().unwrap(), false).unwrap();
+    repo.remove_worktree(wt.to_str().unwrap(), false, false).unwrap();
     assert_eq!(repo.worktrees().unwrap().len(), 1);
 }
 

@@ -32,7 +32,7 @@ pub enum Op {
     Rewrite { base: String, plan: Vec<PlanEntry>, what: String },
     Undo { actions: Vec<UndoAction> },
     AddWorktree { path: String, branch: String, new_branch: bool, at: String },
-    RemoveWorktree { path: String, force: bool },
+    RemoveWorktree { path: String, force: bool, #[serde(default)] unlock: bool },
     PruneWorktrees,
     Commit {
         paths: Vec<String>,
@@ -252,8 +252,8 @@ impl Service {
             Op::AddWorktree { path, branch, new_branch, at } => {
                 repo.add_worktree(&path, &branch, new_branch, &at).map(|_| OpResult::ok_msg(format!("Added worktree {path}")))
             }
-            Op::RemoveWorktree { path, force } => {
-                repo.remove_worktree(&path, force).map(|_| OpResult::ok_msg(format!("Removed worktree {path}")))
+            Op::RemoveWorktree { path, force, unlock } => {
+                repo.remove_worktree(&path, force, unlock).map(|_| OpResult::ok_msg(format!("Removed worktree {path}")))
             }
             Op::PruneWorktrees => repo.prune_worktrees().map(|_| OpResult::ok_msg("Pruned stale worktrees")),
             Op::Commit { paths, unversioned, mut partial, hunks, message, sign_off, amend } => {

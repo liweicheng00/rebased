@@ -477,14 +477,9 @@ impl Repo {
     }
 
     /// True when the worktree has no local changes and no untracked files.
+    /// True when git removes the worktree without --force, as `git worktree remove` checks it.
     fn worktree_clean(&self, path: &str) -> bool {
-        crate::git_command()
-            .arg("-C")
-            .arg(path)
-            .args(["status", "--porcelain"])
-            .env("GIT_OPTIONAL_LOCKS", "0")
-            .output()
-            .is_ok_and(|o| o.status.success() && o.stdout.is_empty())
+        self.worktree_blockers(path).is_ok_and(|b| b.clean())
     }
 }
 

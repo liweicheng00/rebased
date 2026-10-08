@@ -4,7 +4,7 @@ import { api, type BranchInfo, errorHint, inTauri, type Op, type OpOutcome, pick
 import { showBranchSwitcher } from "./branch-switcher";
 import { mergeFile } from "./conflicts";
 import { showMenu } from "./context-menu";
-import { confirmDialog, deleteMergedDialog, formDialog, interactiveRebaseDialog, messageDialog, resetDialog } from "./dialogs";
+import { confirmDialog, deleteMergedDialog, formDialog, interactiveRebaseDialog, messageDialog, removeWorktreeDialog, resetDialog } from "./dialogs";
 import { copyText } from "./dom";
 import { toast } from "./notify";
 import { applyView, jumpToOid, loadRefs, openRepo } from "./repo";
@@ -228,14 +228,13 @@ export async function addWorktree(at = "HEAD", atLabel = "HEAD") {
   if (out?.result.ok && r.open) void openRepo(String(r.path).trim());
 }
 
+/** Removes a worktree, after a check of what stops git: files, submodules and a lock. */
 async function removeWorktree(w: Worktree) {
-  if (!(await confirmDialog("Remove worktree", `Remove the worktree at ${w.path}? Its folder is deleted. The branch stays.`, "Remove", true))) return;
-  const out = await runOp({ op: "removeWorktree", path: w.path, force: false }, "Removing worktree");
-  if (out && !out.result.ok && /modified or untracked|contains/.test(out.result.message)) {
-    if (await confirmDialog("Worktree has changes", "The worktree has uncommitted changes. Remove it anyway? The changes are lost.", "Remove Anyway", true)) {
-      await runOp({ op: "removeWorktree", path: w.path, force: true }, "Removing worktree");
-    }
-  }
+  const b = await api.worktreeBlockers(w.path).catch(() => null);
+  if (!(await removeWorktreeDialog(w.path, b))) return;
+  const force = !!(b && (b.files.length || b.submodules));
+  const out = await runOp({ op: "removeWorktree", path: w.path, force, unlock: b?.locked != null }, "Removing worktree");
+  if (out && !out.result.ok) toast(`The worktree stays. Git says: ${out.result.message}`, "error");
 }
 
 banner.onContinue = () => void runOp({ op: "continue" }, "Continuing");

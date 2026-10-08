@@ -20,6 +20,29 @@ pub struct Worktree {
     pub main: bool,
 }
 
+/// What stops `git worktree remove` without --force. Git checks the same: the output of
+/// `git status --porcelain --ignore-submodules=none` in the worktree, the submodules, and the lock.
+#[derive(Debug, Default, Serialize, PartialEq, Eq)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeBlockers {
+    /// The first files that git counts, as `git status --short` shows them, for example "?? .DS_Store".
+    pub files: Vec<String>,
+    /// The number of other files that git counts.
+    pub more: usize,
+    /// The worktree has a submodule. Git removes such a worktree only with --force, also a clean one.
+    pub submodules: bool,
+    /// The worktree is locked: the reason, or "" when the lock has none.
+    pub locked: Option<String>,
+}
+
+impl WorktreeBlockers {
+    pub fn clean(&self) -> bool {
+        self.files.is_empty() && !self.submodules && self.locked.is_none()
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[derive(ts_rs::TS)]
 #[ts(export)]
@@ -95,7 +118,55 @@ impl Repo {
         self.git(&args).map(|_| ())
     }
 
-    pub fn remove_worktree(&self, path: &str, force: bool) -> Result<()> {
+    /// What stops the removal of the worktree at `path` without --force.
+    pub fn worktree_blockers(&self, path: &str) -> Result<WorktreeBlockers> {
+        const SHOWN: usize = 15;
+        let mut out = WorktreeBlockers::default();
+        // The lock, from the list of worktrees: "locked" or "locked <reason>".
+        let want = std::fs::canonicalize(path).unwrap_or_else(|_| path.into());
+        let raw = self.git(&["worktree", "list", "--porcelain"])?;
+        for block in String::from_utf8_lossy(&raw).split("\n\n") {
+            let wt = block.lines().find_map(|l| l.strip_prefix("worktree ")).unwrap_or("");
+            if std::fs::canonicalize(wt).unwrap_or_else(|_| wt.into()) != want {
+                continue;
+            }
+            out.locked = block.lines().find_map(|l| (l == "locked").then(String::new).or_else(|| l.strip_prefix("locked ").map(String::from)));
+        }
+        let status = crate::git_command()
+            .arg("-C")
+            .arg(path)
+            .args(["status", "--porcelain", "-z", "--ignore-submodules=none"])
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .output()
+            .map_err(|e| GitError(format!("cannot run git: {e}")))?;
+        if !status.status.success() {
+            return Err(GitError(String::from_utf8_lossy(&status.stderr).trim().to_string()));
+        }
+        let mut entries = status.stdout.split(|&b| b == 0).filter(|e| !e.is_empty());
+        while let Some(e) = entries.next() {
+            let e = String::from_utf8_lossy(e).into_owned();
+            // A rename or a copy has its old path in the next entry.
+            if e.starts_with('R') || e.starts_with('C') {
+                entries.next();
+            }
+            if out.files.len() < SHOWN {
+                out.files.push(e);
+            } else {
+                out.more += 1;
+            }
+        }
+        // An initialized submodule: its status line does not start with "-".
+        let subs = crate::git_command().arg("-C").arg(path).args(["submodule", "status"]).env("GIT_OPTIONAL_LOCKS", "0").output();
+        out.submodules = subs.is_ok_and(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).lines().any(|l| !l.is_empty() && !l.starts_with('-')));
+        Ok(out)
+    }
+
+    /// Removes a worktree. `unlock` unlocks it first; `force` removes it with changes and submodules.
+    pub fn remove_worktree(&self, path: &str, force: bool, unlock: bool) -> Result<()> {
+        if unlock {
+            // A worktree without a lock gives an error here; the removal then tells the real problem.
+            let _ = self.git(&["worktree", "unlock", "--", path]);
+        }
         let mut args = vec!["worktree", "remove"];
         if force {
             args.push("--force");

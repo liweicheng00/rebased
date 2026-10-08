@@ -43,6 +43,7 @@ import type { Submodule } from "./bindings/Submodule";
 import type { UndoAction } from "./bindings/UndoAction";
 import type { ViewResult } from "./bindings/ViewResult";
 import type { Worktree } from "./bindings/Worktree";
+import type { WorktreeBlockers } from "./bindings/WorktreeBlockers";
 import type { Change as ChangeResult } from "./bindings/Change";
 export type {
   Action,
@@ -60,6 +61,7 @@ export type {
   LocalChanges,
   MergeSides,
   MergedBranches,
+  WorktreeBlockers,
   FinishMode,
   ReviewComment,
   ReviewDetail,
@@ -202,7 +204,7 @@ export type Op =
   | { op: "rollbackHunks"; path: string; ids: string[] }
   | { op: "revertLocalHistory"; path: string; blob: string | null }
   | { op: "addWorktree"; path: string; branch: string; newBranch: boolean; at: string }
-  | { op: "removeWorktree"; path: string; force: boolean }
+  | { op: "removeWorktree"; path: string; force: boolean; unlock?: boolean }
   | { op: "pruneWorktrees" }
   | { op: "commit"; paths: string[]; unversioned: string[]; partial?: { path: string; content: string }[]; hunks?: { path: string; ids: string[] }[]; message: string; amend: boolean; signOff?: boolean }
   | { op: "rollback"; paths: string[] }
@@ -255,6 +257,7 @@ export const api = {
   rewriteRange: (base: string) => call<RewriteRange>("rewrite_range", { oid: base }),
   runOp: (op: Op) => call<OpOutcome>("run_op", op),
   worktrees: () => call<Worktree[]>("worktrees"),
+  worktreeBlockers: (path: string) => call<WorktreeBlockers>("worktree_blockers", { path }),
   recentBranches: () => call<RecentBranch[]>("recent_branches"),
   localChanges: () => call<LocalChanges>("local_changes"),
   changeListOp: (op: ChangeListOp) => call<LocalChanges>("changelist_op", op),

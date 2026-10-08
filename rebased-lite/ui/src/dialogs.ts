@@ -1,6 +1,6 @@
 // Modal dialogs: forms, confirmations, the reset dialog, the message editor and the interactive rebase editor.
 
-import type { FinishMode, MergedBranches, PlanAction, PlanEntry, PushInfo, ReviewDetail, RewriteRange } from "./api";
+import type { FinishMode, MergedBranches, PlanAction, PlanEntry, PushInfo, ReviewDetail, RewriteRange, WorktreeBlockers } from "./api";
 import { formatDate, h, icon } from "./dom";
 
 interface DialogButton {
@@ -570,4 +570,32 @@ export async function finishReviewDialog(d: ReviewDetail): Promise<{ mode: Finis
   const r = await modal(`Merge ${s.branch}`, body, [{ label: "Merge", value: "ok", primary: true }], true);
   if (r !== "ok") return null;
   return { mode, message: message.value.trim(), deleteBranch: !s.branchIsRemote && del.checked };
+}
+
+/**
+ * Remove Worktree. `b` is what stops a plain `git worktree remove`: the files that git counts, the
+ * submodules and the lock. The dialog names each of them, and the button says what the removal does.
+ */
+export async function removeWorktreeDialog(path: string, b: WorktreeBlockers | null): Promise<boolean> {
+  const body: Node[] = [h("p", { class: "dialog-text" }, `Remove the worktree at ${path}? Its folder is deleted. The branch stays.`)];
+  if (b?.files.length) {
+    body.push(
+      h("p", { class: "dialog-text" }, "Git counts these files as changes, so it does not remove the worktree by itself. They are lost:"),
+      h("pre", { class: "dialog-files" }, [...b.files, ...(b.more ? [`… and ${b.more} more`] : [])].join("\n")),
+      h(
+        "p",
+        { class: "dialog-note" },
+        "Git counts each file that no .gitignore covers, also when an editor hides it. Editors and Finder make such files, for example .idea/, .vscode/ and .DS_Store. Add them to .gitignore to keep them out of the count.",
+      ),
+    );
+  }
+  if (b?.submodules) {
+    body.push(h("p", { class: "dialog-text" }, "The worktree has submodules. Git removes such a worktree only with force, also a clean one. Commits in a submodule that you did not push are lost."));
+  }
+  if (b?.locked != null) {
+    body.push(h("p", { class: "dialog-text" }, `The worktree is locked${b.locked ? `: ${b.locked}` : ""}. A lock keeps a worktree, for example one on a removable disk.`));
+  }
+  const onlyLock = b?.locked != null && !b.files.length && !b.submodules;
+  const label = b?.files.length || b?.submodules ? "Remove Anyway" : onlyLock ? "Unlock and Remove" : "Remove";
+  return (await modal("Remove Worktree", body, [{ label, value: "ok", danger: true }], true)) === "ok";
 }
