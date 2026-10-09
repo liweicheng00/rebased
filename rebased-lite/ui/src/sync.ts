@@ -12,6 +12,8 @@ import { showHistory, showLocalHistory } from "./history-flow";
 import { toast } from "./notify";
 import { currentBranch, runOp } from "./operations";
 import { save, settings } from "./settings";
+import { globalPatterns } from "./ignore-patterns";
+import { openSettings } from "./settings-flow";
 import { commitPanel, diff, mod, pushBtn, updateBtn } from "./shell";
 import { stashChanges } from "./stash-flow";
 import { app } from "./state";
@@ -86,6 +88,7 @@ commitPanel.onFileMenu = (files, e) => {
   if (untracked.length) {
     items.push(
       { label: "Add to Git", action: () => void runOp({ op: "addFiles", paths: untracked.map((f) => f.change.path) }, "Adding files") },
+      { label: "Ignore in All Repositories…", action: () => void openSettings("ignore", globalPatterns(untracked.map((f) => f.change.path))) },
       { label: "Delete…", action: () => void deleteUnversioned(untracked) },
     );
   }

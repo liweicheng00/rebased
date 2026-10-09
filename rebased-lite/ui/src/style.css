@@ -637,3 +637,16 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .log-row .subject { display: flex; align-items: baseline; }
 .log-row .subject .ref { flex: none; vertical-align: baseline; }
 .log-row .subject .subject-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* The Global Ignore page of the Settings dialog. */
+.ignore-path { padding-top: 5px; overflow-wrap: anywhere; }
+.ignore-path code { font-family: var(--mono, monospace); font-size: 12px; }
+.ignore-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ignore-chip { font-family: var(--mono, monospace); font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+.ignore-chip.on { opacity: 0.6; }
+.ignore-text { font-family: var(--mono, monospace); font-size: 12px; min-height: 150px; flex: 1 0 150px; resize: vertical; white-space: pre; }
+.ignore-check-path { flex: 1; font-family: var(--mono, monospace); }
+.ignore-check-result { margin-top: 4px; overflow-wrap: anywhere; }
+.settings-hint.warn { color: var(--warn, #b26a00); }
+.ignore-actions { align-items: center; }
+.ignore-check { width: 100%; }

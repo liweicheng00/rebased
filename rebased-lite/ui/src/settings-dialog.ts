@@ -1,7 +1,10 @@
-// The Settings dialog: appearance, Git, the diff, Local History and the keymap. The dialog edits a copy
-// of the settings; OK returns the copy and the caller applies it.
+// The Settings dialog: appearance, Git, the global ignore file, the diff, Local History and the keymap.
+// The dialog edits a copy of the settings; OK returns the copy and the caller applies it. The global
+// ignore file is not a setting: OK saves it when it has changes.
 
+import type { GlobalIgnore, IgnoreMatch } from "./api";
 import { h, icon } from "./dom";
+import { addIgnoreLine, COMMON_IGNORES } from "./ignore-patterns";
 import { eventKey, formatKey, type Keymap } from "./keymap";
 import { settings, type Settings, type Theme } from "./settings";
 
@@ -10,9 +13,23 @@ export interface SettingsContext {
   /** Checks a git program and returns its version. It throws when the program is not git. */
   testGit: (path: string) => Promise<string>;
   pickFile: () => Promise<string | null>;
+  /** The global ignore file: read, save, and a check of a path in the active repository. */
+  ignore: {
+    load: () => Promise<GlobalIgnore>;
+    save: (text: string, expected: string) => Promise<GlobalIgnore>;
+    /** Null when no repository is open. */
+    check: ((path: string) => Promise<IgnoreMatch | null>) | null;
+    repoName: string;
+    /** Patterns that the page adds to the text after it reads the file. The user then saves them. */
+    add?: string[];
+    /** Runs after each save, because git then counts other files. */
+    saved?: () => void;
+  };
+  /** The page that shows first. */
+  page?: Page;
 }
 
-type Page = "general" | "git" | "editor" | "commit" | "diff" | "history" | "keymap";
+export type Page = "general" | "git" | "ignore" | "editor" | "commit" | "diff" | "history" | "keymap";
 
 /** Editors and their commands for Open in Editor. A JetBrains IDE needs its command-line launcher:
  * Tools › Create Command-line Launcher, or the shell scripts of the Toolbox app. */
@@ -73,13 +90,14 @@ export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | nul
     const pages: [Page, string][] = [
       ["general", "General"],
       ["git", "Git"],
+      ["ignore", "Global Ignore"],
       ["editor", "Editor"],
       ["commit", "Commit"],
       ["diff", "Diff"],
       ["history", "Local History"],
       ["keymap", "Keymap"],
     ];
-    let page: Page = "general";
+    let page: Page = ctx.page ?? "general";
 
     const row = (label: string, control: Node, hint = "") =>
       h("label", { class: "settings-row" }, h("span", { class: "settings-label" }, label), h("div", { class: "settings-control" }, control, hint ? h("div", { class: "settings-hint" }, hint) : ""));
@@ -144,6 +162,136 @@ export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | nul
         row("Git executable", h("div", { class: "dialog-field-row" }, input, browse, test)),
         status,
         h("p", { class: "settings-hint" }, "Rebased Lite runs this program for all git commands. An empty field uses git from PATH."),
+      ];
+    };
+
+    // The global ignore page. Its elements live for the whole dialog, so a page switch keeps the text.
+    let ignoreFile: GlobalIgnore | null = null;
+    let ignoreLoading: Promise<void> | null = null;
+    const ignoreText = h("textarea", { class: "dialog-input ignore-text", spellcheck: false, placeholder: "One pattern on each line, as in .gitignore" });
+    const ignorePath = h("div", { class: "ignore-path" });
+    const ignoreStatus = h("span", { class: "settings-hint" });
+    const ignoreChips = h("div", { class: "ignore-chips" });
+    const ignoreDirty = () => ignoreFile !== null && ignoreText.value !== ignoreFile.text;
+    const showIgnoreStatus = (msg = "", kind = "") => {
+      ignoreStatus.textContent = msg || (ignoreDirty() ? "Not saved" : ignoreFile?.exists ? "Saved" : "The file does not exist yet. Save makes it.");
+      ignoreStatus.className = "settings-hint" + (kind ? " " + kind : ignoreDirty() ? " warn" : "");
+    };
+    const renderChips = () => {
+      const lines = new Set(ignoreText.value.split(/\r?\n/).map((l) => l.trim()));
+      ignoreChips.replaceChildren(
+        ...COMMON_IGNORES.map(([pattern, what]) => {
+          const has = lines.has(pattern);
+          const b = h("button", { class: "ignore-chip" + (has ? " on" : ""), title: has ? `${what}: in the file` : `${what}: add this line`, disabled: has || !ignoreFile }, has ? "✓ " : "+ ", pattern);
+          b.addEventListener("click", (e) => {
+            e.preventDefault();
+            ignoreText.value = addIgnoreLine(ignoreText.value, pattern);
+            renderChips();
+            showIgnoreStatus();
+          });
+          return b;
+        }),
+      );
+    };
+    const showIgnoreFile = (f: GlobalIgnore) => {
+      ignoreFile = f;
+      ignoreText.value = f.text;
+      ignoreText.disabled = false;
+      ignorePath.replaceChildren(h("code", {}, f.path), h("div", { class: "settings-hint" }, f.configured ? "core.excludesFile names this file." : "The default file of git. core.excludesFile is not set."));
+      renderChips();
+      showIgnoreStatus();
+    };
+    let pendingAdd = ctx.ignore.add ?? [];
+    const loadIgnore = () =>
+      (ignoreLoading = ctx.ignore
+        .load()
+        .then(showIgnoreFile)
+        .then(() => {
+          for (const p of pendingAdd) ignoreText.value = addIgnoreLine(ignoreText.value, p);
+          pendingAdd = [];
+          renderChips();
+          showIgnoreStatus();
+        })
+        .catch((err) => showIgnoreStatus(String(err).replace(/^Error: /, ""), "error")));
+    /** Saves the file when it has changes. False when the save fails. */
+    const saveIgnore = async (): Promise<boolean> => {
+      if (!ignoreFile || !ignoreDirty()) return true;
+      try {
+        showIgnoreFile(await ctx.ignore.save(ignoreText.value, ignoreFile.text));
+        ctx.ignore.saved?.();
+        return true;
+      } catch (err) {
+        showIgnoreStatus(String(err).replace(/^Error: /, ""), "error");
+        return false;
+      }
+    };
+    ignoreText.addEventListener("input", () => {
+      renderChips();
+      showIgnoreStatus();
+    });
+
+    const ignore = () => {
+      if (!ignoreLoading) {
+        ignoreText.disabled = true;
+        showIgnoreStatus("Reading…");
+        void loadIgnore();
+      }
+      const save = h("button", {}, "Save");
+      save.addEventListener("click", (e) => {
+        e.preventDefault();
+        void saveIgnore();
+      });
+      const reload = h("button", { title: "Read the file again. Changes that are not saved go." }, "Reload");
+      reload.addEventListener("click", (e) => {
+        e.preventDefault();
+        void loadIgnore();
+      });
+      const checkPath = h("input", { class: "dialog-input ignore-check-path", type: "text", placeholder: ctx.ignore.check ? "A path, for example .idea/workspace.xml" : "Open a repository to check a path", spellcheck: false, disabled: !ctx.ignore.check });
+      const checkResult = h("div", { class: "settings-hint ignore-check-result" });
+      const checkBtn = h("button", { disabled: !ctx.ignore.check }, "Check");
+      const runCheck = async () => {
+        const path = checkPath.value.trim();
+        if (!ctx.ignore.check || !path) return;
+        if (ignoreDirty()) {
+          checkResult.textContent = "Save the file first. Git checks the saved file.";
+          checkResult.className = "settings-hint ignore-check-result warn";
+          return;
+        }
+        try {
+          const m = await ctx.ignore.check(path);
+          checkResult.className = "settings-hint ignore-check-result " + (m?.ignored ? "ok" : "");
+          checkResult.textContent = !m
+            ? `Git does not ignore ${path}. No pattern matches.`
+            : m.ignored
+              ? `Git ignores ${path}: ${m.pattern} (${m.source}, line ${m.line})`
+              : `Git does not ignore ${path}: ${m.pattern} (${m.source}, line ${m.line}) keeps it.`;
+        } catch (err) {
+          checkResult.textContent = String(err).replace(/^Error: /, "");
+          checkResult.className = "settings-hint ignore-check-result error";
+        }
+      };
+      checkBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        void runCheck();
+      });
+      checkPath.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          void runCheck();
+        }
+      });
+      return [
+        h(
+          "p",
+          { class: "settings-hint" },
+          "Git ignores these patterns in all your repositories, in addition to each .gitignore. Put files of your own tools here, for example of an editor. " +
+            "Files that git tracks stay tracked.",
+        ),
+        row("File", ignorePath),
+        row("Add", ignoreChips),
+        ignoreText,
+        h("div", { class: "dialog-field-row ignore-actions" }, save, reload, ignoreStatus),
+        row(ctx.ignore.check ? `Check in ${ctx.ignore.repoName}` : "Check", h("div", { class: "ignore-check" }, h("div", { class: "dialog-field-row" }, checkPath, checkBtn), checkResult)),
       ];
     };
 
@@ -255,12 +403,17 @@ export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | nul
           return b;
         }),
       );
-      const body = { general, git, editor, commit, diff, history, keymap: keymapPage }[page]();
+      const body = { general, git, ignore, editor, commit, diff, history, keymap: keymapPage }[page]();
       content.replaceChildren(h("h3", { class: "settings-title" }, pages.find((p) => p[0] === page)![1]), ...body);
     };
 
     const ok = h("button", { class: "primary" }, "OK");
-    ok.addEventListener("click", () => {
+    ok.addEventListener("click", async () => {
+      // A failed save of the global ignore file keeps the dialog open on its page.
+      if (!(await saveIgnore())) {
+        page = "ignore";
+        return render();
+      }
       // An unfinished new key is dropped.
       for (const [id, keys] of Object.entries(draft.keymap)) draft.keymap[id] = keys.filter(Boolean);
       close(draft);

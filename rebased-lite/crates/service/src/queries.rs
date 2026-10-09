@@ -24,6 +24,11 @@ impl Service {
         self.with_repo(|r| r.worktree_blockers(&args.path).map_err(err))
     }
 
+    /// The pattern that decides about a path of the active repository.
+    pub fn check_ignore(&self, args: PathArgs) -> Result<Option<rebased_git::global_ignore::IgnoreMatch>> {
+        self.with_repo(|r| r.check_ignore(&args.path).map_err(err))
+    }
+
     pub fn recent_branches(&self) -> Result<Vec<RecentBranch>> {
         self.with_repo(|r| r.recent_branches(10).map_err(err))
     }

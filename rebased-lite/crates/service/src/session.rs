@@ -78,6 +78,14 @@ impl Service {
         Ok(path.to_string_lossy().into_owned())
     }
 
+    pub fn global_ignore(&self) -> Result<rebased_git::global_ignore::GlobalIgnore> {
+        rebased_git::global_ignore::global_ignore().map_err(err)
+    }
+
+    pub fn save_global_ignore(&self, args: crate::SaveIgnoreArgs) -> Result<rebased_git::global_ignore::GlobalIgnore> {
+        rebased_git::global_ignore::save_global_ignore(&args.text, &args.expected).map_err(err)
+    }
+
     pub fn git_version(&self, args: PathArgs) -> Result<String> {
         rebased_git::git_version(&args.path).map_err(err)
     }

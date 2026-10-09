@@ -4,6 +4,7 @@
 pub mod changelist;
 pub mod cleanup;
 pub mod history;
+pub mod global_ignore;
 pub mod hunks;
 pub mod merge;
 pub mod ops;

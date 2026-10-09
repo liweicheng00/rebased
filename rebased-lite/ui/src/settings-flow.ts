@@ -6,7 +6,7 @@ import { keymap } from "./keyboard";
 import { toast } from "./notify";
 import { fetchAll, refresh } from "./repo";
 import { save, settings } from "./settings";
-import { openSettingsDialog } from "./settings-dialog";
+import { openSettingsDialog, type Page } from "./settings-dialog";
 import { applyTheme, settingsBtn, statusActivity } from "./shell";
 import { app } from "./state";
 
@@ -46,8 +46,24 @@ export async function applyBackendSettings() {
   save();
 }
 
-export async function openSettings() {
-  const next = await openSettingsDialog({ keymap, testGit: (p) => api.gitVersion(p), pickFile: () => pickFile("Git executable") });
+/** Opens the Settings dialog, on `page` when it is given. `ignoreAdd` goes into the global ignore file
+ * when the user saves it. */
+export async function openSettings(page?: Page, ignoreAdd?: string[]) {
+  const root = app.view?.root ?? null;
+  const next = await openSettingsDialog({
+    keymap,
+    testGit: (p) => api.gitVersion(p),
+    pickFile: () => pickFile("Git executable"),
+    ignore: {
+      load: () => api.globalIgnore(),
+      save: (text, expected) => api.saveGlobalIgnore(text, expected),
+      check: root ? (path) => api.checkIgnore(path) : null,
+      repoName: root?.split(/[\\/]/).pop() ?? "",
+      add: ignoreAdd,
+      saved: () => app.view && void refresh(),
+    },
+    page,
+  });
   if (!next) return;
   const gitChanged = next.gitPath !== settings.gitPath;
   const backendChanged = gitChanged || next.editor !== settings.editor || next.historyDays !== settings.historyDays || next.historyMaxMb !== settings.historyMaxMb;

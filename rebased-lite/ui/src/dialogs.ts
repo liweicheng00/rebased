@@ -585,7 +585,7 @@ export async function removeWorktreeDialog(path: string, b: WorktreeBlockers | n
       h(
         "p",
         { class: "dialog-note" },
-        "Git counts each file that no .gitignore covers, also when an editor hides it. Editors and Finder make such files, for example .idea/, .vscode/ and .DS_Store. Add them to .gitignore to keep them out of the count.",
+        "Git counts each file that no .gitignore covers, also when an editor hides it. Editors and Finder make such files, for example .idea/, .vscode/ and .DS_Store. Add them to .gitignore, or to the global ignore file (Settings › Global Ignore), to keep them out of the count.",
       ),
     );
   }

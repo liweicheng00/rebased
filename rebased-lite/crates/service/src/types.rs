@@ -140,6 +140,13 @@ pub struct CloneArgs {
     pub name: String,
 }
 
+/// A new text for the global ignore file, and the text that the caller read before.
+#[derive(Deserialize)]
+pub struct SaveIgnoreArgs {
+    pub text: String,
+    pub expected: String,
+}
+
 /// A file of the working tree and a line in it, both 1-based.
 #[derive(Deserialize)]
 pub struct EditorArgs {

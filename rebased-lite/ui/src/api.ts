@@ -44,6 +44,8 @@ import type { UndoAction } from "./bindings/UndoAction";
 import type { ViewResult } from "./bindings/ViewResult";
 import type { Worktree } from "./bindings/Worktree";
 import type { WorktreeBlockers } from "./bindings/WorktreeBlockers";
+import type { GlobalIgnore } from "./bindings/GlobalIgnore";
+import type { IgnoreMatch } from "./bindings/IgnoreMatch";
 import type { Change as ChangeResult } from "./bindings/Change";
 export type {
   Action,
@@ -62,6 +64,8 @@ export type {
   MergeSides,
   MergedBranches,
   WorktreeBlockers,
+  GlobalIgnore,
+  IgnoreMatch,
   FinishMode,
   ReviewComment,
   ReviewDetail,
@@ -239,6 +243,11 @@ export const api = {
   close: (path: string) => call<null>("close", { path }),
   /** The version of a git program; it changes nothing. Empty means git from PATH. */
   gitVersion: (path: string) => call<string>("git_version", { path }),
+  globalIgnore: () => call<GlobalIgnore>("global_ignore"),
+  /** Writes the global ignore file. It fails when the file is no longer `expected`. */
+  saveGlobalIgnore: (text: string, expected: string) => call<GlobalIgnore>("save_global_ignore", { text, expected }),
+  /** The pattern that decides about a path of the active repository; null when no pattern matches. */
+  checkIgnore: (path: string) => call<IgnoreMatch | null>("check_ignore", { path }),
   backendSettings: () => call<BackendSettings>("backend_settings"),
   /** Applies and saves the settings of the backend; returns the version of the git program. */
   setBackendSettings: (s: BackendSettings) => call<string>("set_backend_settings", s),
