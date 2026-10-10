@@ -3,7 +3,9 @@
 
 import type { Change, FileContent, OutgoingCommit, RevSpec } from "./api";
 import { statusName } from "./changes-panel";
-import { dragResize, formatDate, h, icon, rowSplitter } from "./dom";
+import { dragResize, formatDate, h, icon, rowSplitter, twisty } from "./dom";
+import { fileIcon } from "./file-icon";
+import { buildTree, treeOrder, walkTree } from "./file-tree";
 import { showMenu } from "./context-menu";
 import { save, settings } from "./settings";
 import { sharedDiff } from "./history-view";
@@ -53,10 +55,11 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
   const commitsEl = h("div", { class: "compare-commits" });
   const filesEl = h("div", { class: "history-list compare-files", tabIndex: 0 });
   const summary = h("span", { class: "muted-inline" }, "");
+  const treeBtn = h("button", { class: "icon-button compare-tree-toggle" });
   const grip = h("div", { class: "vgrip" });
   const side = h("div", { class: "compare-side" });
   const sideGrip = rowSplitter(side, commitsEl, () => settings.compareCommitsHeight, (px) => (settings.compareCommitsHeight = px), save);
-  side.append(commitsEl, sideGrip, h("div", { class: "compare-files-title" }, "Changed files ", summary), filesEl);
+  side.append(commitsEl, sideGrip, h("div", { class: "compare-files-title" }, "Changed files ", summary, h("span", { class: "spacer" }), treeBtn), filesEl);
   const body = h("div", { class: "history-body" }, side, grip, d.el);
   const win = h(
     "div",
@@ -66,13 +69,13 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
   );
   const overlay = h("div", { class: "merge-overlay" }, win);
   document.body.append(overlay);
-  let width = 460;
-  body.style.gridTemplateColumns = `${width}px 4px minmax(0, 1fr)`;
+  const setWidth = (px: number) => {
+    settings.compareSideWidth = Math.max(260, Math.min(Math.max(260, window.innerWidth - 320), px));
+    body.style.gridTemplateColumns = `${settings.compareSideWidth}px 4px minmax(0, 1fr)`;
+  };
+  setWidth(settings.compareSideWidth);
   let start = 0;
-  dragResize(grip, "x", () => (start = width), (dx) => {
-    width = Math.max(260, Math.min(900, start + dx));
-    body.style.gridTemplateColumns = `${width}px 4px minmax(0, 1fr)`;
-  }, () => {});
+  dragResize(grip, "x", () => (start = settings.compareSideWidth), (dx) => setWidth(start + dx), save);
 
   const close = () => {
     d.setRevert(null);
@@ -121,9 +124,14 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
   const select = async (i: number) => {
     if (i < 0 || i >= files.length || !revs) return;
     selected = i;
-    for (const [j, el] of [...filesEl.children].entries()) el.classList.toggle("selected", j === i);
-    filesEl.children[i]?.scrollIntoView({ block: "nearest" });
     const c = files[i];
+    // A file in a closed folder opens its folders.
+    if (settings.compareAsTree && [...collapsed].some((dir) => c.path.startsWith(dir))) {
+      for (const dir of [...collapsed]) if (c.path.startsWith(dir)) collapsed.delete(dir);
+      renderFiles();
+    }
+    for (const el of filesEl.querySelectorAll<HTMLElement>(".compare-file")) el.classList.toggle("selected", Number(el.dataset.index) === i);
+    filesEl.querySelector(`.compare-file[data-index="${i}"]`)?.scrollIntoView({ block: "nearest" });
     const req = ++request;
     try {
       const pair = await cb.pair(revs.l, revs.r, c.path, c.old_path);
@@ -140,26 +148,72 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
   /** The text of the diff when the sides have the same files. */
   let sameText = "";
 
+  /** The folders that the user closed in the tree, by path. */
+  const collapsed = new Set<string>();
+  /** Puts the files in the order of the list or the tree. The selected file stays selected. */
+  const order = (a: Change, b: Change) => (settings.compareAsTree ? treeOrder(a.path, b.path) : a.path.localeCompare(b.path));
+  treeBtn.addEventListener("click", () => {
+    settings.compareAsTree = !settings.compareAsTree;
+    save();
+    const keep = files[selected];
+    files.sort(order);
+    if (keep) selected = files.indexOf(keep);
+    renderFiles();
+    filesEl.querySelector(".compare-file.selected")?.scrollIntoView({ block: "nearest" });
+  });
+
+  const fileRow = (c: Change, i: number, depth: number, withDir: boolean) => {
+    const slash = c.path.lastIndexOf("/");
+    const row = h(
+      "div",
+      {
+        class: "history-row compare-file" + (i === selected ? " selected" : ""),
+        "data-index": i,
+        title: c.old_path ? `${c.old_path} → ${c.path}` : c.path,
+        style: { paddingLeft: `${8 + depth * 14}px` },
+      },
+      fileIcon(c.path),
+      h("span", { class: `rebase-subject status-text-${c.status}` }, c.path.slice(slash + 1)),
+      h("span", { class: "rebase-author" }, withDir && slash > 0 ? c.path.slice(0, slash) : ""),
+      h("span", { class: `status status-end status-${c.status}`, title: statusName(c.status) }, c.status),
+    );
+    row.addEventListener("mousedown", (e) => e.button === 0 && void select(i));
+    row.addEventListener("contextmenu", (e) => {
+      void select(i);
+      fileMenu(c, e);
+    });
+    return row;
+  };
+
   const renderFiles = () => {
     summary.textContent = `${files.length} file${files.length === 1 ? "" : "s"}`;
-    filesEl.replaceChildren(
-      ...files.map((c, i) => {
-        const slash = c.path.lastIndexOf("/");
+    treeBtn.replaceChildren(icon(settings.compareAsTree ? "list" : "tree"));
+    treeBtn.title = settings.compareAsTree ? "Show as a flat list" : "Group by folder";
+    if (!settings.compareAsTree) {
+      filesEl.replaceChildren(...files.map((c, i) => fileRow(c, i, 0, true)));
+      return;
+    }
+    const out: HTMLElement[] = [];
+    walkTree(buildTree(files.map((c, index) => ({ path: c.path, index }))), collapsed, {
+      dir: (label, full, depth, open, count) => {
         const row = h(
           "div",
-          { class: "history-row compare-file" + (i === selected ? " selected" : ""), title: c.old_path ? `${c.old_path} → ${c.path}` : c.path },
-          h("span", { class: `status status-${c.status}`, title: statusName(c.status) }, c.status),
-          h("span", { class: "rebase-subject" }, c.path.slice(slash + 1)),
-          h("span", { class: "rebase-author" }, slash > 0 ? c.path.slice(0, slash) : ""),
+          { class: "history-row compare-dir", style: { paddingLeft: `${8 + depth * 14}px` }, title: full },
+          twisty(open),
+          h("span", { class: "dir-name" }, label),
+          h("span", { class: "dir-count" }, String(count)),
         );
-        row.addEventListener("mousedown", (e) => e.button === 0 && void select(i));
-        row.addEventListener("contextmenu", (e) => {
-          void select(i);
-          fileMenu(c, e);
+        row.addEventListener("mousedown", (e) => {
+          if (e.button !== 0) return;
+          if (open) collapsed.add(full);
+          else collapsed.delete(full);
+          renderFiles();
         });
-        return row;
-      }),
-    );
+        out.push(row);
+      },
+      file: (index, depth) => out.push(fileRow(files[index], index, depth, false)),
+    });
+    filesEl.replaceChildren(...out);
   };
 
   /**
@@ -171,6 +225,7 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
     const at = selected;
     try {
       files = await cb.changes(revs.l, revs.r);
+      files.sort(order);
     } catch (e) {
       return d.message(String(e));
     }
@@ -230,6 +285,7 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
         ]);
       };
       files = await cb.changes(l, r);
+      files.sort(order);
       if (req !== request) return;
       d.setSides(fromBase ? `common ancestor ${cmp.base?.slice(0, 8) ?? "(none)"}` : left, rightName);
       sameText = fromBase ? `${rightName} has no file changes since the common ancestor.` : "The two sides have the same files.";

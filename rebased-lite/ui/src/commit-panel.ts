@@ -25,6 +25,15 @@ export function fileKey(list: string, path: string, split: boolean): string {
 
 const UNVERSIONED = "Unversioned Files";
 
+/** The data of a drag: the paths of the tracked files, and the paths of the unversioned files. */
+function setDragData(e: DragEvent, files: LocalFile[]) {
+  const paths = files.filter((x) => x.list !== null).map((x) => x.change.path);
+  const unversioned = files.filter((x) => x.list === null).map((x) => x.change.path);
+  e.dataTransfer?.setData("text/x-rebased-paths", JSON.stringify(paths));
+  e.dataTransfer?.setData("text/x-rebased-unversioned", JSON.stringify(unversioned));
+  e.dataTransfer?.setData("text/plain", [...paths, ...unversioned].join("\n"));
+}
+
 /** Problems of a commit message, from the settings. Comment lines (#) do not count. */
 export function messageWarnings(message: string, template: string | null): string[] {
   const lines = message.split("\n").filter((l) => !l.startsWith("#"));
@@ -76,7 +85,8 @@ export class CommitPanel {
   onFileMenu: (files: LocalFile[], e: MouseEvent) => void = () => {};
   onListMenu: (list: ChangeListView, e: MouseEvent) => void = () => {};
   onUnversionedMenu: (e: MouseEvent) => void = () => {};
-  onMove: (paths: string[], to: string) => void = () => {};
+  /** A drop on a changelist. Git adds the `unversioned` files first. */
+  onMove: (paths: string[], to: string, unversioned: string[]) => void = () => {};
   onCommit: (files: LocalFile[], message: string, amend: boolean, list: string | null, push: boolean, signOff: boolean) => void = () => {};
   onSaveMessage: (list: string, message: string) => void = () => {};
   onAmendToggle: (on: boolean) => Promise<string> = async () => "";
@@ -527,7 +537,7 @@ export class CommitPanel {
     });
     const row = h(
       "div",
-      { class: "cl-dir", style: { paddingLeft: `${10 + depth * 14}px` }, title: id.slice(id.indexOf("\0") + 1), draggable: files.some((f) => f.list !== null) },
+      { class: "cl-dir", style: { paddingLeft: `${10 + depth * 14}px` }, title: id.slice(id.indexOf("\0") + 1), draggable: true },
       twisty(open),
       box,
       h("span", { class: "dir-name" }, label),
@@ -549,9 +559,7 @@ export class CommitPanel {
     });
     row.addEventListener("dragstart", (e) => {
       selectAll();
-      const paths = files.filter((x) => x.list !== null).map((x) => x.change.path);
-      e.dataTransfer?.setData("text/x-rebased-paths", JSON.stringify(paths));
-      e.dataTransfer?.setData("text/plain", paths.join("\n"));
+      setDragData(e, files);
     });
     return row;
   }
@@ -603,7 +611,8 @@ export class CommitPanel {
         e.preventDefault();
         row.classList.remove("drop");
         const paths = JSON.parse(e.dataTransfer?.getData("text/x-rebased-paths") || "[]") as string[];
-        if (paths.length) this.onMove(paths, list.id);
+        const unversioned = JSON.parse(e.dataTransfer?.getData("text/x-rebased-unversioned") || "[]") as string[];
+        if (paths.length || unversioned.length) this.onMove(paths, list.id, unversioned);
       });
     }
     return row;
@@ -637,7 +646,7 @@ export class CommitPanel {
       {
         class: "cl-file change" + (this.selection.has(f.key) ? " selected" : ""),
         "data-key": f.key,
-        draggable: f.list !== null,
+        draggable: true,
         title: (c.old_path ? `${c.old_path} → ${c.path}` : c.path) + (c.status === "U" ? "\nConflict" : ""),
       },
       box,
@@ -703,9 +712,7 @@ export class CommitPanel {
         this.selection = new Set([f.key]);
         this.render();
       }
-      const paths = this.selectedFiles().filter((x) => x.list !== null).map((x) => x.change.path);
-      e.dataTransfer?.setData("text/x-rebased-paths", JSON.stringify(paths));
-      e.dataTransfer?.setData("text/plain", paths.join("\n"));
+      setDragData(e, this.selectedFiles());
     });
     return row;
   }

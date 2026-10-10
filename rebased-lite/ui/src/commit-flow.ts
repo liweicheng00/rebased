@@ -211,7 +211,14 @@ commitPanel.onOpen = (f) => void showLocalDiff(f);
 commitPanel.onRefresh = () => void loadLocalChanges();
 commitPanel.onRollback = (files) => void rollback(files);
 commitPanel.onNewChangeList = () => void newChangeList();
-commitPanel.onMove = (paths, to) => void changeListOp({ op: "move", paths, to });
+commitPanel.onMove = async (paths, to, unversioned) => {
+  // Git adds the unversioned files to the active changelist. Then they move with the other files.
+  if (unversioned.length) {
+    const out = await runOp({ op: "addFiles", paths: unversioned }, "Adding files");
+    if (!out?.result.ok) return;
+  }
+  await changeListOp({ op: "move", paths: [...paths, ...unversioned], to });
+};
 commitPanel.onSaveMessage = (id, message) => void api.changeListOp({ op: "saveMessage", id, message }).catch(() => {});
 commitPanel.onAmendToggle = () => api.headMessage().catch(() => "");
 commitPanel.onCommit = (files, message, amend, list, push, signOff) => void commitFiles(files, message, amend, list, push, signOff);

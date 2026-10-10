@@ -31,6 +31,9 @@ export interface Settings {
   zoom: number;
   /** The height of the commit lists of the Compare and Review windows, in pixels. */
   compareCommitsHeight: number;
+  /** The width of the left column of the compare window. */
+  compareSideWidth: number;
+  compareAsTree: boolean;
   reviewCommitsHeight: number;
   detailsRatio: number;
   /** The largest width of the graph column, in pixels. The subject covers the rest of the graph. 0 shows all of the graph. */
@@ -96,6 +99,8 @@ const DEFAULTS: Settings = {
   showDiff: true,
   zoom: 1,
   compareCommitsHeight: 300,
+  compareSideWidth: 460,
+  compareAsTree: true,
   reviewCommitsHeight: 180,
   detailsRatio: 0.55,
   graphWidth: 0,

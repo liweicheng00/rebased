@@ -563,7 +563,10 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .compare-none { padding: 2px 8px 6px; display: block; }
 .compare-commit { grid-template-columns: 70px minmax(0, 1fr) auto auto; }
 .compare-files { flex: 1; border-right: none; }
-.compare-file { grid-template-columns: 14px auto minmax(0, 1fr); }
+.compare-file { display: grid; grid-template-columns: auto minmax(0, auto) minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.compare-file .status-end { margin-left: 0; }
+.compare-dir { display: flex; gap: 6px; align-items: center; cursor: default; }
+.compare-tree-toggle { margin-left: auto; }
 .compare-file .rebase-author { overflow: hidden; text-overflow: ellipsis; }
 .merged-row { grid-template-columns: auto auto auto minmax(0, 1fr) auto; cursor: pointer; }
 .merged-name { white-space: nowrap; }
