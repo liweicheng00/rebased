@@ -537,7 +537,7 @@ export class CommitPanel {
     });
     const row = h(
       "div",
-      { class: "cl-dir", style: { paddingLeft: `${10 + depth * 14}px` }, title: id.slice(id.indexOf("\0") + 1), draggable: true },
+      { class: "cl-dir", style: { paddingLeft: `${24 + depth * 20}px` }, title: id.slice(id.indexOf("\0") + 1), draggable: true },
       twisty(open),
       box,
       h("span", { class: "dir-name" }, label),
@@ -659,7 +659,7 @@ export class CommitPanel {
     // A press on a file of a multiple selection keeps the selection, so that a drag moves all of the
     // files. A click without a drag then selects that file only.
     let keepForDrag = false;
-    if (depth !== undefined) row.style.paddingLeft = `${24 + depth * 14}px`;
+    if (depth !== undefined) row.style.paddingLeft = `${24 + depth * 20}px`;
     row.addEventListener("mousedown", (e) => {
       keepForDrag = false;
       if (e.button !== 0 || (e.target as HTMLElement).tagName === "INPUT") return;
