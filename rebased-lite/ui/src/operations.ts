@@ -92,8 +92,21 @@ export async function mergeIntoCurrent(rev: string, label: string) {
 export async function rebaseCurrentOnto(rev: string, label: string) {
   const cur = currentBranch();
   if (!cur) return toast("HEAD is detached. Checkout a branch first.", "error");
-  if (!(await confirmDialog("Rebase", `Rebase ${cur} onto ${label}? The commits of ${cur} get new hashes.`, "Rebase"))) return;
-  await runOp({ op: "rebase", onto: rev }, `Rebasing ${cur} onto ${label}`);
+  const r = await formDialog(
+    `Rebase ${cur} onto ${label}`,
+    [
+      { key: "from", label: "Only the commits after (git rebase --onto; empty: all commits that the target does not have)", placeholder: "for example main" },
+      { key: "updateRefs", label: "Update refs: move the other branches on these commits too (--update-refs)", type: "checkbox", value: false },
+      { key: "rebaseMerges", label: "Keep the merge commits (--rebase-merges)", type: "checkbox", value: false },
+      { key: "keepEmpty", label: "Keep empty commits (--keep-empty)", type: "checkbox", value: false },
+      { key: "autosquash", label: "Autosquash: join fixup! and squash! commits into their commits (--autosquash)", type: "checkbox", value: false },
+    ],
+    "Rebase",
+    `The commits of ${cur} get new hashes.`,
+  );
+  if (!r) return;
+  const options = { from: String(r.from ?? "").trim(), updateRefs: !!r.updateRefs, rebaseMerges: !!r.rebaseMerges, keepEmpty: !!r.keepEmpty, autosquash: !!r.autosquash };
+  await runOp({ op: "rebase", onto: rev, options }, `Rebasing ${cur} onto ${label}`);
 }
 
 export async function resetTo(oid: string) {

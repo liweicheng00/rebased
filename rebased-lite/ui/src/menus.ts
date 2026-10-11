@@ -1,9 +1,9 @@
 // The context menus of the log, the branches and the changed files.
 
-import { api, type BranchInfo, type Row } from "./api";
+import { api, type BranchInfo, type Change, type Row } from "./api";
 import { WORKTREE } from "./compare-view";
 import { menuBelow, type MenuItem, showMenu } from "./context-menu";
-import { confirmDialog } from "./dialogs";
+import { confirmDialog, formDialog } from "./dialogs";
 import { copyText } from "./dom";
 import { showHistory } from "./history-flow";
 import { openInEditor } from "./editor-flow";
@@ -16,7 +16,7 @@ import { startReview } from "./review-flow";
 import { askForRepo, cloneRepo, fetchAll, jumpToOid, openRepo, refresh, reloadView } from "./repo";
 import { collapse, compare, comparedCommits, compareWithWorktree, fileChangesAction, openFile, short, showSelection } from "./selection";
 import { settings } from "./settings";
-import { changes, diff, fetchBtn, filterBar, log, openBtn, refreshBtn, sidebar, statusActivity, toggleDiff } from "./shell";
+import { changes, commitPanel, diff, fetchBtn, filterBar, log, openBtn, refreshBtn, showLeftTab, sidebar, statusActivity, toggleDiff } from "./shell";
 import { app } from "./state";
 import { pushBranch, updateBranch } from "./sync";
 
@@ -60,10 +60,13 @@ async function rowMenu(r: Row, e: MouseEvent) {
     { label: multi ? `Cherry-Pick ${rows.length} Commits` : "Cherry-Pick", action: () => void runOp({ op: "cherryPick", oids: [...rows].reverse().map((s) => s.oid) }, "Cherry-picking") },
     { label: multi ? `Revert ${rows.length} Commits` : "Revert Commit", action: () => void runOp({ op: "revert", oids: rows.map((s) => s.oid) }, "Reverting") },
     { label: "Edit Commit Message…", disabled: multi, action: () => void rewriteSelected("reword", [r]) },
+    { label: "Fixup…", disabled: multi || !r.onHead, action: () => fixupInto(r, "fixup") },
+    { label: "Squash Into…", disabled: multi || !r.onHead, action: () => fixupInto(r, "squash") },
     { label: multi ? `Edit Author of ${rows.length} Commits…` : "Edit Author…", action: () => void rewriteSelected("author", rows) },
     { label: multi ? `Squash ${rows.length} Commits…` : "Squash Commits… (select 2 or more)", disabled: !multi, action: () => void rewriteSelected("squash", rows) },
     { label: multi ? `Drop ${rows.length} Commits…` : "Drop Commit…", action: () => void rewriteSelected("drop", rows.length ? rows : [r]) },
     { label: "Interactively Rebase from Here…", disabled: multi, action: () => void interactiveRebase(r) },
+    { label: `Push All up to Here…`, disabled: multi || !r.onHead || !cur, action: () => void pushBranch(cur ?? undefined, r.oid) },
   );
   items.push({ separator: true }, { header: "Graph" });
   items.push(
@@ -81,6 +84,29 @@ async function rowMenu(r: Row, e: MouseEvent) {
   showMenu(e.clientX, e.clientY, items);
 }
 log.onContextMenu = (r, e) => void rowMenu(r, e);
+
+/** Fixup… and Squash Into…: the commit message becomes "fixup! <subject>" or "squash! <subject>". The
+ * commit then goes into its commit with Interactively Rebase (autosquash) or Rebase with Autosquash. */
+function fixupInto(r: Row, kind: "fixup" | "squash") {
+  showLeftTab("commit");
+  commitPanel.setMessage(`${kind}! ${r.subject}`);
+  statusActivity.textContent = `Check the changes for ${short(r.oid)}, then commit. Interactively Rebase joins the ${kind}! commit into it.`;
+}
+
+/** Drop Selected Changes and Extract Selected Changes to Separate Commit, for the files of one commit. */
+async function rewriteFilesOf(files: Change[], extract: boolean) {
+  const r = app.selected[0];
+  const paths = files.flatMap((f) => (f.old_path && f.old_path !== f.path ? [f.path, f.old_path] : [f.path]));
+  const what = files.length === 1 ? files[0].path : `${files.length} files`;
+  if (extract) {
+    const msg = await formDialog(`Extract the changes of ${what}`, [{ key: "message", label: "Message of the new commit", type: "textarea", value: `Changes of ${what}` }], "Extract", `The changes leave ${short(r.oid)} and go into a new commit right after it. The later commits get new hashes.`);
+    if (!msg || !String(msg.message).trim()) return;
+    await runOp({ op: "rewriteFiles", oid: r.oid, paths, extract: String(msg.message) }, "Extracting the changes");
+  } else {
+    if (!(await confirmDialog("Drop Selected Changes", `Remove the changes of ${what} from ${short(r.oid)}? The commit and the later commits get new hashes. Undo puts them back.`, "Drop", true, files.map((f) => f.path)))) return;
+    await runOp({ op: "rewriteFiles", oid: r.oid, paths }, "Dropping the changes");
+  }
+}
 
 /** Goes to the child of a commit. With more than one child, a menu asks which one. */
 async function goToChild(oid: string) {
@@ -216,6 +242,9 @@ changes.onContextMenu = (files, e) => {
   const c = files[0];
   const commits = !!comparedCommits() && files.every((f) => !f.rightRev);
   const plural = files.length > 1 ? ` (${files.length} files)` : "";
+  // The files of one commit of the current branch, compared with its parent.
+  const one = app.selected.length === 1 ? app.selected[0] : null;
+  const oneOwnCommit = commits && !!one && one.onHead && !one.merge && typeof app.left === "object" && "parentOf" in app.left && !!currentBranch();
   showMenu(e.clientX, e.clientY, [
     {
       label: "Show Diff",
@@ -239,6 +268,9 @@ changes.onContextMenu = (files, e) => {
     { label: `Revert Selected Changes${plural}`, disabled: !commits, action: () => void fileChangesAction(files, "revert") },
     { label: `Cherry-Pick Selected Changes${plural}`, disabled: !commits, action: () => void fileChangesAction(files, "pick") },
     { label: `Get from Revision${plural}…`, disabled: !commits, action: () => void fileChangesAction(files, "get") },
+    { separator: true },
+    { label: `Drop Selected Changes${plural}…`, disabled: !oneOwnCommit, action: () => void rewriteFilesOf(files, false) },
+    { label: `Extract Selected Changes to Separate Commit${plural}…`, disabled: !oneOwnCommit, action: () => void rewriteFilesOf(files, true) },
     { separator: true },
     { label: files.length > 1 ? "Copy Paths" : "Copy Path", action: () => void copyText(files.map((f) => f.path).join("\n")) },
     { label: "Copy File Name", disabled: files.length !== 1, action: () => void copyText(c.path.split("/").pop() ?? c.path) },

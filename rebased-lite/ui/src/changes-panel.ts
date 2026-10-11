@@ -89,6 +89,12 @@ export class ChangesPanel {
   setActive(i: number) {
     this.active = i;
     if (!this.selected.has(i)) this.selected = new Set(i >= 0 ? [i] : []);
+    this.paint();
+  }
+
+  /** Marks the active row and the selected rows. */
+  private paint() {
+    const i = this.active;
     for (const el of this.list.querySelectorAll(".change")) {
       const idx = Number((el as HTMLElement).dataset.index);
       el.classList.toggle("active", idx === i);
@@ -203,9 +209,10 @@ export class ChangesPanel {
     });
     item.addEventListener("contextmenu", (e) => {
       e.preventDefault();
+      // A right click on another file selects it; the diff keeps its file.
       if (!this.selected.has(i)) {
         this.selected = new Set([i]);
-        this.setActive(this.active);
+        this.paint();
       }
       this.onContextMenu([...this.selected].sort((a, b) => a - b).map((x) => this.changes[x]), e);
     });

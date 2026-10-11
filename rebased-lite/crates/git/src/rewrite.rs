@@ -228,6 +228,88 @@ impl Repo {
         Ok(OpResult { ok: true, message: format!("{what} done"), conflicts: Vec::new(), undo })
     }
 
+    /// Takes the changes of `paths` out of the commit `oid` of the current branch, in memory. Without
+    /// `extract`, the changes go away (Drop Selected Changes). With `extract`, they go into a new commit
+    /// right after it, with that message (Extract Selected Changes to Separate Commit). The later commits
+    /// are replayed on top. A conflict stops the rewrite before any ref changes.
+    pub fn rewrite_files(&self, oid: &str, paths: &[String], extract: Option<&str>) -> Result<OpResult> {
+        if paths.is_empty() {
+            return Err(GitError("Choose the files first".into()));
+        }
+        let m = self.meta(oid)?;
+        if m.parents.len() != 1 {
+            return Err(GitError("Only a commit with one parent can lose or give away changes".into()));
+        }
+        if extract.is_some_and(|msg| msg.trim().is_empty()) {
+            return Err(GitError("The message of the new commit is empty".into()));
+        }
+        let parent = m.parents[0].clone();
+        let range = self.rewrite_range(&parent)?;
+        let Some((first, later)) = range.entries.split_first() else {
+            return Err(GitError("The commit is not on the current branch".into()));
+        };
+        if first.oid != self.resolve(oid).unwrap_or_default() {
+            return Err(GitError("The commit is not on the current branch".into()));
+        }
+        // The tree of the commit with the files as in its parent.
+        let tmp = self.git_dir().join("rebased-lite").join("index.rewrite");
+        std::fs::create_dir_all(tmp.parent().unwrap()).map_err(|e| GitError(e.to_string()))?;
+        let _ = std::fs::remove_file(&tmp);
+        let tmp_s = tmp.to_string_lossy().into_owned();
+        let env = [("GIT_INDEX_FILE", tmp_s.as_str())];
+        let run = |args: &[&str]| self.git_write(args, &env).map_err(|(_, e)| GitError(e));
+        let without = (|| {
+            run(&["read-tree", &first.oid])?;
+            for p in paths {
+                let p = crate::ops::safe(p)?;
+                let entry = self.git(&["ls-tree", &parent, "--", p]).map(|b| String::from_utf8_lossy(&b).trim().to_string()).unwrap_or_default();
+                match entry.split_once('\t').map(|(info, _)| info.split_whitespace().collect::<Vec<_>>()) {
+                    Some(f) if f.len() == 3 => run(&["update-index", "--add", "--cacheinfo", &format!("{},{},{p}", f[0], f[2])])?,
+                    _ => run(&["update-index", "--force-remove", "--", p])?,
+                };
+            }
+            run(&["write-tree"]).map(|t| t.trim().to_string())
+        })();
+        let _ = std::fs::remove_file(&tmp);
+        let without = without?;
+        if without == m.tree {
+            return Err(GitError("The commit does not change these files".into()));
+        }
+        let old_head = self.resolve("HEAD").ok_or_else(|| GitError("no HEAD".into()))?;
+        let branch = self.state()?.branch.unwrap_or_default();
+        let mut current = self.commit_tree(&without, &parent, &m, &m.message)?;
+        let mut current_tree = without;
+        if let Some(msg) = extract {
+            current = self.commit_tree(&m.tree, &current, &m, msg.trim())?;
+            current_tree = m.tree.clone();
+        }
+        for e in later {
+            let em = self.meta(&e.oid)?;
+            let tree = self.merge_tree(&em.parents[0], &current, &e.oid, &e.oid)?;
+            current = self.commit_tree(&tree, &current, &em, &em.message)?;
+            current_tree = tree;
+        }
+        let what = if extract.is_some() { "Extract the changes to a new commit" } else { "Drop the changes" };
+        let reflog = format!("rebased-lite: {what}");
+        let head_tree = self.meta(&old_head)?.tree;
+        let moved = if head_tree == current_tree {
+            self.git_write(&["update-ref", "-m", &reflog, &format!("refs/heads/{branch}"), &current, &old_head], &[])
+        } else {
+            self.git_write(&["reset", "--keep", &current], &[("GIT_REFLOG_ACTION", &reflog)])
+        };
+        if let Err((_, e)) = moved {
+            return Err(GitError(format!("The branch was not changed: {e}")));
+        }
+        let n = paths.len();
+        let files = if n == 1 { "1 file".to_string() } else { format!("{n} files") };
+        let message = match extract {
+            Some(_) => format!("Moved the changes of {files} to a new commit after {}", &first.oid[..8]),
+            None => format!("Dropped the changes of {files} from {}", &first.oid[..8]),
+        };
+        let undo = vec![UndoAction::Reset { to: old_head, expected_head: current, mode: UndoMode::Keep }];
+        Ok(OpResult { ok: true, message, conflicts: Vec::new(), undo })
+    }
+
     /// Runs a real `git rebase -i` with the plan as its todo list, for a plan that stops to edit a commit.
     /// New messages are set with `exec git commit --amend` lines. Local changes are stashed and restored.
     fn rebase_interactive(&self, base: &str, plan: &[PlanEntry], what: &str) -> Result<OpResult> {

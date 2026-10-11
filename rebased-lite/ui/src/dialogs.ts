@@ -1,5 +1,6 @@
 // Modal dialogs: forms, confirmations, the reset dialog, the message editor and the interactive rebase editor.
 
+import { autosquash } from "./autosquash";
 import type { FinishMode, MergedBranches, PlanAction, PlanEntry, PushInfo, ReviewDetail, RewriteRange, WorktreeBlockers } from "./api";
 import { formatDate, h, icon } from "./dom";
 
@@ -165,7 +166,11 @@ export async function interactiveRebaseDialog(range: RewriteRange): Promise<Plan
     action: PlanAction;
     newMessage: string;
   }
-  let lines: Line[] = range.entries.map((e) => ({ ...e, action: "pick" as PlanAction, newMessage: e.message })).reverse();
+  // Oldest first, as git rebase --autosquash orders them: fixup! and squash! commits go after their commit.
+  const oldest: Line[] = range.entries.map((e) => ({ ...e, action: "pick" as PlanAction, newMessage: e.message }));
+  const squashes = oldest.filter((l) => /^(fixup|squash|amend)! /.test(l.subject)).length;
+  if (squashes) autosquash(oldest);
+  let lines: Line[] = oldest.reverse();
   const list = h("div", { class: "rebase-list" });
   const error = h("div", { class: "dialog-error" });
   const render = () => {
@@ -211,9 +216,10 @@ export async function interactiveRebaseDialog(range: RewriteRange): Promise<Plan
     { class: "dialog-note" },
     "The top row is the newest commit. Squash and Fixup join a commit into the commit below it. Without Edit, the rebase runs in memory: a conflict stops it before anything changes. With Edit, git rebase runs and stops at that commit, so you can change it, amend, and continue.",
   );
+  const auto = squashes ? h("p", { class: "dialog-note" }, `Autosquash: ${squashes} fixup! or squash! commit(s) are after their commits. Change the rows to undo it.`) : "";
   const warn = range.published ? h("p", { class: "dialog-note danger-text" }, "Some of these commits are on a remote branch already. After the rebase you must force-push.") : "";
   for (;;) {
-    const r = await modal(`Interactively rebase ${range.entries.length} commits`, [note, warn || h("span"), list, error], [{ label: "Start Rebasing", value: "ok", primary: true }], true);
+    const r = await modal(`Interactively rebase ${range.entries.length} commits`, [note, auto || h("span"), warn || h("span"), list, error], [{ label: "Start Rebasing", value: "ok", primary: true }], true);
     if (r !== "ok") return null;
     const plan = [...lines].reverse();
     const first = plan.find((l) => l.action !== "drop");
@@ -234,7 +240,8 @@ export interface PushChoice {
 }
 
 /** The push dialog: the outgoing commits, the target, and the push options, as in IntelliJ. */
-export async function pushDialog(info: PushInfo): Promise<PushChoice | null> {
+/** The push dialog. `upTo` names the last commit of a push up to a commit; such a push sets no tracked branch. */
+export async function pushDialog(info: PushInfo, upTo?: string): Promise<PushChoice | null> {
   const remote = h("select", { class: "dialog-input push-remote" }, ...info.remotes.map((r) => h("option", { value: r, selected: r === info.remote }, r)));
   const target = h("input", { class: "dialog-input push-target", type: "text", value: info.remoteBranch, spellcheck: false });
   const badge = h("span", { class: "push-new", hidden: !info.newBranch }, "New");
@@ -281,10 +288,11 @@ export async function pushDialog(info: PushInfo): Promise<PushChoice | null> {
       { class: "push-options" },
       h("label", { class: "dialog-check" }, force, "Force push (with lease: it stops when the remote has commits you did not fetch)"),
       h("label", { class: "dialog-check" }, tags, "Push tags that point to the pushed commits"),
-      h("label", { class: "dialog-check" }, upstream, "Set the remote branch as the tracked branch"),
+      upTo ? "" : h("label", { class: "dialog-check" }, upstream, "Set the remote branch as the tracked branch"),
     ),
   ];
-  const r = await modal(`Push Commits to ${info.remote ?? "remote"}`, body, [{ label: "Push", value: "ok", primary: true }], true);
+  if (upTo) upstream.checked = false;
+  const r = await modal(upTo ? `Push Commits up to ${upTo} to ${info.remote ?? "remote"}` : `Push Commits to ${info.remote ?? "remote"}`, body, [{ label: "Push", value: "ok", primary: true }], true);
   if (r !== "ok" || !remote.value || !target.value.trim()) return null;
   return { remote: remote.value, remoteBranch: target.value.trim(), force: force.checked, setUpstream: upstream.checked, tags: tags.checked };
 }

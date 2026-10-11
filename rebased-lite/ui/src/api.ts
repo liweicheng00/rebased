@@ -100,6 +100,15 @@ export type Change = ChangeResult & { rightRev?: RevSpec };
 
 export type RevSpec = { commit: string } | { parentOf: string } | "worktree";
 
+/** The options of the Rebase dialog. `from` moves only the commits after it (git rebase --onto). */
+export interface RebaseOptions {
+  from: string;
+  updateRefs: boolean;
+  rebaseMerges: boolean;
+  keepEmpty: boolean;
+  autosquash: boolean;
+}
+
 export interface LogFilter {
   branches: string[];
   author: string;
@@ -187,7 +196,8 @@ export type Op =
   | { op: "deleteBranch"; name: string; force: boolean }
   | { op: "deleteTag"; name: string }
   | { op: "merge"; rev: string }
-  | { op: "rebase"; onto: string }
+  | { op: "rebase"; onto: string; options?: RebaseOptions }
+  | { op: "rewriteFiles"; oid: string; paths: string[]; extract?: string }
   | { op: "cherryPick"; oids: string[] }
   | { op: "revert"; oids: string[] }
   | { op: "reset"; to: string; mode: "soft" | "mixed" | "hard" | "keep" }
@@ -219,7 +229,7 @@ export type Op =
   | { op: "rollback"; paths: string[] }
   | { op: "addFiles"; paths: string[] }
   | { op: "deleteUnversioned"; paths: string[] }
-  | { op: "push"; branch: string; remote: string; remoteBranch: string; force: boolean; setUpstream: boolean; tags: boolean }
+  | { op: "push"; branch: string; remote: string; remoteBranch: string; force: boolean; setUpstream: boolean; tags: boolean; rev?: string }
   | { op: "update"; mode: "merge" | "rebase" }
   | { op: "stashPush"; message: string; paths: string[]; includeUntracked: boolean; keepIndex: boolean }
   | { op: "stashApply"; index: number; pop: boolean; restoreIndex: boolean }

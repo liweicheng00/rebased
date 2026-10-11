@@ -18,7 +18,8 @@ import { commitPanel, diff, mod, pushBtn, updateBtn } from "./shell";
 import { stashChanges } from "./stash-flow";
 import { app } from "./state";
 
-export async function pushBranch(branch?: string) {
+/** Pushes a branch; with `upTo`, only its commits up to that commit (Push All up to Here). */
+export async function pushBranch(branch?: string, upTo?: string) {
   let info;
   try {
     info = await api.pushInfo(branch);
@@ -26,14 +27,20 @@ export async function pushBranch(branch?: string) {
     return toast(String(e).replace(/^Error: /, ""), "error");
   }
   if (!info.remote) return toast("The repository has no remote.", "error");
+  if (upTo) {
+    // The outgoing commits are newest first: the push takes the commit and the older ones.
+    const at = info.outgoing.findIndex((c) => c.oid === upTo);
+    if (at < 0) return toast(`${upTo.slice(0, 8)} is not an outgoing commit of ${info.branch}: the remote has it already.`, "info");
+    info = { ...info, outgoing: info.outgoing.slice(at) };
+  }
   if (!info.outgoing.length && !info.newBranch) return toast(`Nothing to push: ${info.branch} is up to date with ${info.upstream}.`, "info");
-  const choice = await pushDialog(info);
+  const choice = await pushDialog(info, upTo?.slice(0, 8));
   if (!choice) return;
   if (choice.force && !(await confirmDialog("Force push", `Force push ${info.branch} to ${choice.remote}/${choice.remoteBranch}? Commits on the remote branch that are not in ${info.branch} are removed from it.`, "Force Push", true))) return;
   const branchName = info.branch;
   const retry =
     branchName === currentBranch() ? { label: "Update", run: () => void updateBranch().then((ok) => ok && void pushBranch(branchName)) } : undefined;
-  await runOp({ op: "push", branch: branchName, ...choice }, `Pushing ${branchName}`, retry);
+  await runOp({ op: "push", branch: branchName, ...choice, ...(upTo ? { rev: upTo } : {}) }, `Pushing ${branchName}`, retry);
 }
 
 /** Returns true when the update finished without a conflict. */

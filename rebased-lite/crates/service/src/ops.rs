@@ -22,7 +22,10 @@ pub enum Op {
     DeleteBranch { name: String, force: bool },
     DeleteTag { name: String },
     Merge { rev: String },
-    Rebase { onto: String },
+    Rebase { onto: String, #[serde(default)] options: rebased_git::ops::RebaseOptions },
+    /// Takes the changes of files out of a commit of the current branch: they go away, or into a new
+    /// commit after it when `extract` holds its message.
+    RewriteFiles { oid: String, paths: Vec<String>, #[serde(default)] extract: Option<String> },
     CherryPick { oids: Vec<String> },
     Revert { oids: Vec<String> },
     Reset { to: String, mode: ResetMode },
@@ -53,7 +56,8 @@ pub enum Op {
     Rollback { paths: Vec<String> },
     AddFiles { paths: Vec<String> },
     DeleteUnversioned { paths: Vec<String> },
-    Push { branch: String, remote: String, remote_branch: String, #[serde(default)] force: bool, #[serde(default)] set_upstream: bool, #[serde(default)] tags: bool },
+    /// `rev` pushes only up to that commit of the branch (Push All up to Here).
+    Push { branch: String, remote: String, remote_branch: String, #[serde(default)] force: bool, #[serde(default)] set_upstream: bool, #[serde(default)] tags: bool, #[serde(default)] rev: Option<String> },
     Update { mode: UpdateMode },
     StashPush { #[serde(default)] message: String, #[serde(default)] paths: Vec<String>, #[serde(default)] include_untracked: bool, #[serde(default)] keep_index: bool },
     StashApply { index: usize, #[serde(default)] pop: bool, #[serde(default)] restore_index: bool },
@@ -242,7 +246,8 @@ impl Service {
             Op::DeleteBranch { name, force } => repo.delete_branch(&name, force),
             Op::DeleteTag { name } => repo.delete_tag(&name),
             Op::Merge { rev } => repo.merge(&rev),
-            Op::Rebase { onto } => repo.rebase(&onto),
+            Op::Rebase { onto, options } => repo.rebase_with(&onto, &options),
+            Op::RewriteFiles { oid, paths, extract } => repo.rewrite_files(&oid, &paths, extract.as_deref()),
             Op::CherryPick { oids } => repo.cherry_pick(&oids),
             Op::Revert { oids } => repo.revert(&oids),
             Op::Reset { to, mode } => repo.reset(&to, mode),
@@ -273,8 +278,8 @@ impl Service {
             Op::Rollback { paths } => repo.rollback(&paths),
             Op::AddFiles { paths } => repo.add_files(&paths),
             Op::DeleteUnversioned { paths } => repo.delete_unversioned(&paths),
-            Op::Push { branch, remote, remote_branch, force, set_upstream, tags } => {
-                repo.push(&branch, &remote, &remote_branch, force, set_upstream, tags)
+            Op::Push { branch, remote, remote_branch, force, set_upstream, tags, rev } => {
+                repo.push_rev(&branch, rev.as_deref(), &remote, &remote_branch, force, set_upstream, tags)
             }
             Op::Update { mode } => repo.update(mode),
             Op::StashPush { message, paths, include_untracked, keep_index } => repo.stash_push(&message, &paths, include_untracked, keep_index),

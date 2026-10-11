@@ -305,6 +305,35 @@ impl Repo {
         }
     }
 
+    /// A rebase with the options of the Rebase dialog.
+    pub fn rebase_with(&self, onto: &str, o: &RebaseOptions) -> Result<OpResult> {
+        let mut args = vec!["rebase"];
+        if o.update_refs {
+            args.push("--update-refs");
+        }
+        if o.rebase_merges {
+            args.push("--rebase-merges");
+        }
+        if o.keep_empty {
+            args.push("--keep-empty");
+        }
+        if o.autosquash {
+            // --autosquash works only with an interactive rebase; the todo list stays as git makes it.
+            args.extend(["-i", "--autosquash"]);
+        }
+        let from = o.from.trim();
+        if !from.is_empty() {
+            args.extend(["--onto", safe(onto)?, safe(from)?]);
+        } else {
+            args.push(safe(onto)?);
+        }
+        let env: &[(&str, &str)] = if o.autosquash { &[("GIT_SEQUENCE_EDITOR", "true")] } else { &[] };
+        match self.git_write(&args, env) {
+            Ok(_) => Ok(OpResult::ok(if from.is_empty() { format!("Rebased onto {onto}") } else { format!("Rebased the commits after {from} onto {onto}") })),
+            Err((_, e)) => Ok(self.stopped("The rebase", e)),
+        }
+    }
+
     pub fn rebase(&self, onto: &str) -> Result<OpResult> {
         match self.git_write(&["rebase", safe(onto)?], &[]) {
             Ok(_) => Ok(OpResult::ok(format!("Rebased onto {onto}"))),
@@ -373,4 +402,20 @@ impl Repo {
         self.run(&args, &format!("Marked {} file(s) as resolved", paths.len()))
     }
 
+}
+
+/// The options of the Rebase dialog.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RebaseOptions {
+    /// Only the commits after this one move (`--onto <onto> <from>`). Empty moves all commits that the
+    /// target does not have.
+    pub from: String,
+    /// Moves the other branches that point into the rebased commits too.
+    pub update_refs: bool,
+    /// Keeps the merge commits of the branch.
+    pub rebase_merges: bool,
+    pub keep_empty: bool,
+    /// Puts fixup! and squash! commits after their commits and joins them.
+    pub autosquash: bool,
 }

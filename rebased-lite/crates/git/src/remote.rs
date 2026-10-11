@@ -138,8 +138,26 @@ impl Repo {
     /// Pushes a local branch. `force` uses `--force-with-lease`, so it never overwrites commits that
     /// were not fetched.
     pub fn push(&self, branch: &str, remote: &str, remote_branch: &str, force: bool, set_upstream: bool, tags: bool) -> Result<OpResult> {
+        self.push_rev(branch, None, remote, remote_branch, force, set_upstream, tags)
+    }
+
+    /// Pushes a branch, or with `rev` only its commits up to that commit (Push All up to Here). The commit
+    /// must be on the branch. A push up to a commit does not set the tracked branch.
+    #[allow(clippy::too_many_arguments)]
+    pub fn push_rev(&self, branch: &str, rev: Option<&str>, remote: &str, remote_branch: &str, force: bool, set_upstream: bool, tags: bool) -> Result<OpResult> {
         let (branch, remote, remote_branch) = (safe(branch)?, safe(remote)?, safe(remote_branch)?);
-        let refspec = format!("refs/heads/{branch}:refs/heads/{remote_branch}");
+        let source = match rev {
+            Some(r) => {
+                let oid = self.resolve(safe(r)?).ok_or_else(|| GitError(format!("unknown commit {r}")))?;
+                if self.git(&["merge-base", "--is-ancestor", &oid, &format!("refs/heads/{branch}")]).is_err() {
+                    return Err(GitError(format!("{} is not on {branch}", &oid[..8])));
+                }
+                oid
+            }
+            None => format!("refs/heads/{branch}"),
+        };
+        let set_upstream = set_upstream && rev.is_none();
+        let refspec = format!("{source}:refs/heads/{remote_branch}");
         let mut args = vec!["push"];
         if force {
             args.push("--force-with-lease");
@@ -152,7 +170,10 @@ impl Repo {
         }
         args.extend([remote, refspec.as_str()]);
         match self.git_write(&args, &[]) {
-            Ok(_) => Ok(OpResult::ok_msg(format!("Pushed {branch} to {remote}/{remote_branch}"))),
+            Ok(_) => Ok(OpResult::ok_msg(match rev {
+                Some(_) => format!("Pushed {branch} up to {} to {remote}/{remote_branch}", &source[..8]),
+                None => format!("Pushed {branch} to {remote}/{remote_branch}"),
+            })),
             Err((_, e)) if e.contains("[rejected]") || e.contains("non-fast-forward") || e.contains("fetch first") || e.contains("stale info") => {
                 Ok(OpResult {
                     ok: false,
