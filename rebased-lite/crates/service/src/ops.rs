@@ -23,6 +23,10 @@ pub enum Op {
     DeleteTag { name: String },
     Merge { rev: String },
     Rebase { onto: String, #[serde(default)] options: rebased_git::ops::RebaseOptions },
+    /// Fast-forwards local branches that are not checked out (Update Selected).
+    FastForward { branches: Vec<String> },
+    /// Checks out a branch and rebases it onto another one.
+    CheckoutRebase { branch: String, onto: String },
     /// Takes the changes of files out of a commit of the current branch: they go away, or into a new
     /// commit after it when `extract` holds its message.
     RewriteFiles { oid: String, paths: Vec<String>, #[serde(default)] extract: Option<String> },
@@ -229,6 +233,7 @@ impl Service {
                 | Op::CreateBranch { checkout: true, .. }
                 | Op::Merge { .. }
                 | Op::Rebase { .. }
+                | Op::CheckoutRebase { .. }
                 | Op::CherryPick { .. }
                 | Op::Revert { .. }
                 | Op::Reset { .. }
@@ -247,6 +252,8 @@ impl Service {
             Op::DeleteTag { name } => repo.delete_tag(&name),
             Op::Merge { rev } => repo.merge(&rev),
             Op::Rebase { onto, options } => repo.rebase_with(&onto, &options),
+            Op::FastForward { branches } => repo.fast_forward(&branches),
+            Op::CheckoutRebase { branch, onto } => repo.checkout_rebase(&branch, &onto),
             Op::RewriteFiles { oid, paths, extract } => repo.rewrite_files(&oid, &paths, extract.as_deref()),
             Op::CherryPick { oids } => repo.cherry_pick(&oids),
             Op::Revert { oids } => repo.revert(&oids),

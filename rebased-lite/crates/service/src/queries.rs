@@ -127,6 +127,17 @@ impl Service {
         self.with_repo(|r| Ok(r.git(&["config", "user.email"]).map(|b| String::from_utf8_lossy(&b).trim().to_string()).unwrap_or_default()))
     }
 
+    /// The remote branches that contain a commit, as "origin/main", for the protected-branch check.
+    pub fn remote_containing(&self, args: OidArgs) -> Result<Vec<String>> {
+        self.with_repo(|r| {
+            if args.oid.starts_with('-') {
+                return Err(format!("{} is not a commit", args.oid));
+            }
+            let out = r.git(&["for-each-ref", "--contains", &args.oid, "--format=%(refname:lstrip=2)", "refs/remotes"]).map_err(err)?;
+            Ok(String::from_utf8_lossy(&out).lines().filter(|l| !l.ends_with("/HEAD")).map(String::from).collect())
+        })
+    }
+
     /// The paths of all files in the tree of a commit, for Show Repository at Revision.
     pub fn tree_files(&self, args: OidArgs) -> Result<Vec<String>> {
         self.with_repo(|r| {

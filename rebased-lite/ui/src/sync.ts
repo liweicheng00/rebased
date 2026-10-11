@@ -13,6 +13,7 @@ import { toast } from "./notify";
 import { currentBranch, runOp } from "./operations";
 import { save, settings } from "./settings";
 import { globalPatterns } from "./ignore-patterns";
+import { isProtected } from "./protected";
 import { openSettings } from "./settings-flow";
 import { commitPanel, diff, mod, pushBtn, updateBtn } from "./shell";
 import { stashChanges } from "./stash-flow";
@@ -36,6 +37,9 @@ export async function pushBranch(branch?: string, upTo?: string) {
   if (!info.outgoing.length && !info.newBranch) return toast(`Nothing to push: ${info.branch} is up to date with ${info.upstream}.`, "info");
   const choice = await pushDialog(info, upTo?.slice(0, 8));
   if (!choice) return;
+  if (choice.force && isProtected(choice.remoteBranch)) {
+    return toast(`${choice.remote}/${choice.remoteBranch} is a protected branch: Rebased Lite does not force push to it. Settings › Git › Protected branches.`, "error");
+  }
   if (choice.force && !(await confirmDialog("Force push", `Force push ${info.branch} to ${choice.remote}/${choice.remoteBranch}? Commits on the remote branch that are not in ${info.branch} are removed from it.`, "Force Push", true))) return;
   const branchName = info.branch;
   const retry =

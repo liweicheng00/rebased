@@ -4,6 +4,10 @@ export type Theme = "system" | "light" | "dark";
 
 export interface Settings {
   intelliSort: boolean;
+  /** Show branches with a prefix in folders. */
+  groupBranchesByPrefix: boolean;
+  /** Glob patterns of protected branch names, separated by spaces. */
+  protectedBranches: string;
   /** Bold subjects for the commits of the user (user.email). */
   highlightMine: boolean;
   /** Gray text for merge commits. */
@@ -85,6 +89,8 @@ export interface Settings {
 
 const DEFAULTS: Settings = {
   intelliSort: true,
+  groupBranchesByPrefix: false,
+  protectedBranches: "main master",
   highlightMine: false,
   highlightMerges: false,
   highlightCurrent: false,

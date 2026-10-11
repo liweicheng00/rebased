@@ -21,6 +21,7 @@ export const mod = navigator.platform.includes("Mac") ? "⌘" : "Ctrl+";
 
 export const log = new LogView();
 export const sidebar = new Sidebar();
+sidebar.setGroupByPrefix(settings.groupBranchesByPrefix);
 export const filterBar = new FilterBar();
 export const changes = new ChangesPanel();
 export const details = new DetailsPanel();

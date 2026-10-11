@@ -11,6 +11,7 @@ import { keymap } from "./keyboard";
 import { toast } from "./notify";
 import { addWorktree, checkoutBranch, checkoutCommit, currentBranch, deleteBranch, deleteRefs, deleteMergedBranches, interactiveRebase, mergeIntoCurrent, newBranch, newTag, rebaseCurrentOnto, renameBranch, resetTo, rewriteSelected, runOp } from "./operations";
 import { compareBranches, fetchRemote, manageRemotes, openOnRemote, remoteRefItems, toggleFavorite } from "./remotes";
+import { allowRewrite } from "./protected";
 import { openRepoBrowser } from "./repo-browser";
 import { startReview } from "./review-flow";
 import { askForRepo, cloneRepo, fetchAll, jumpToOid, openRepo, refresh, reloadView } from "./repo";
@@ -96,6 +97,7 @@ function fixupInto(r: Row, kind: "fixup" | "squash") {
 /** Drop Selected Changes and Extract Selected Changes to Separate Commit, for the files of one commit. */
 async function rewriteFilesOf(files: Change[], extract: boolean) {
   const r = app.selected[0];
+  if (!(await allowRewrite(r.oid))) return;
   const paths = files.flatMap((f) => (f.old_path && f.old_path !== f.path ? [f.path, f.old_path] : [f.path]));
   const what = files.length === 1 ? files[0].path : `${files.length} files`;
   if (extract) {
@@ -143,11 +145,20 @@ sidebar.onContextMenu = (b, e) => {
     { label: "New Worktree…", action: () => void addWorktree(b.kind === "local" ? b.name : b.oid, b.name) },
     { separator: true },
     { label: "Push…", disabled: b.kind !== "local", action: () => void pushBranch(b.name) },
-    { label: "Update", disabled: !isCurrent || !b.upstream, action: () => void updateBranch() },
+    {
+      label: isCurrent ? "Update" : "Update (Fast-Forward)",
+      disabled: b.kind !== "local" || !b.upstream,
+      action: () => (isCurrent ? void updateBranch() : void runOp({ op: "fastForward", branches: [b.name] }, `Updating ${b.name}`)),
+    },
     ...remoteRefItems(b),
     { separator: true },
     { label: `Merge into ${cur ?? "current"}`, disabled: isCurrent || !cur, action: () => void mergeIntoCurrent(b.name, b.name) },
     { label: `Rebase ${cur ?? "current"} onto ${b.name}…`, disabled: isCurrent || !cur, action: () => void rebaseCurrentOnto(b.name, b.name) },
+    {
+      label: `Checkout and Rebase onto ${cur ?? "current"}`,
+      disabled: isCurrent || !cur || b.kind !== "local",
+      action: () => void runOp({ op: "checkoutRebase", branch: b.name, onto: cur! }, `Rebasing ${b.name} onto ${cur}`),
+    },
     { label: `Compare Branches: ${cur ?? "HEAD"} and ${b.name}…`, disabled: isCurrent, action: () => compareBranches(cur ?? "HEAD", b.name) },
     { label: "Compare with the Working Tree…", action: () => compareBranches(b.name, WORKTREE) },
     {
@@ -199,6 +210,8 @@ sidebar.onMultiMenu = (refs, e) => {
   const items: MenuItem[] = [{ header: `${refs.length} selected` }, { label: "Show Only These in the Log", action: () => filterBar.set({ ...filterBar.filter, branches: names }, true) }];
   if (refs.length === 2) items.push({ label: `Compare Branches: ${names[0]} and ${names[1]}…`, action: () => compareBranches(names[0], names[1]) });
   const writes: MenuItem[] = [];
+  const updatable = locals.filter((b) => b.upstream && !b.current);
+  if (updatable.length) writes.push({ label: `Update ${n(updatable.length, "1 Branch", "Branches")} (Fast-Forward)`, action: () => void runOp({ op: "fastForward", branches: updatable.map((b) => b.name) }, "Updating branches") });
   if (pushable.length) writes.push({ label: `Push ${n(pushable.length, "1 Branch", "Branches")} to Their Tracked Branches…`, action: () => void pushTracked(pushable) });
   if (deletable.length) writes.push({ label: `Delete ${n(deletable.length, "1 Branch or Tag", "Branches and Tags")}…`, action: () => void deleteRefs(deletable) });
   if (remotes.length) writes.push({ label: `Delete ${n(remotes.length, "1 Remote Branch", "Remote Branches")} from Their Remotes…`, action: () => void deleteRemoteBranches(remotes) });

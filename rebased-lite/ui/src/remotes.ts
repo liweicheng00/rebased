@@ -227,6 +227,15 @@ viewBtn.addEventListener("click", () => {
     { label: "Merge Commits", checked: settings.highlightMerges, action: mark("highlightMerges") },
     { label: "Current Branch", checked: settings.highlightCurrent, action: mark("highlightCurrent") },
     { separator: true },
+    {
+      label: "Group Branches by Prefix",
+      checked: settings.groupBranchesByPrefix,
+      action: () => {
+        settings.groupBranchesByPrefix = !settings.groupBranchesByPrefix;
+        save();
+        sidebar.setGroupByPrefix(settings.groupBranchesByPrefix);
+      },
+    },
     { label: "Branches Panel", checked: settings.showSidebar, shortcut: keymap.shortcut("branches"), action: toggleSidebar },
     { label: "Diff Panel", checked: settings.showDiff, shortcut: keymap.shortcut("diffPanel"), action: () => toggleDiff() },
     { separator: true },

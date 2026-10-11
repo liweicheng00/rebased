@@ -680,3 +680,8 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .changes-parent-bar { display: flex; gap: 6px; align-items: center; padding: 3px 8px; border-bottom: 1px solid var(--border); font-size: 12px; }
 .changes-parent-bar[hidden] { display: none; }
 .changes-parent { flex: 1; min-width: 0; height: 22px; padding: 0 4px; font-size: 12px; }
+
+/* A folder of branch prefixes (View > Group Branches by Prefix). */
+.branch-folder { display: flex; gap: 6px; align-items: center; padding: 1px 6px 1px 8px; white-space: nowrap; cursor: default; color: var(--muted); }
+.branch-folder:hover { background: var(--hover); }
+.branch-folder .branch-name { color: var(--fg); }

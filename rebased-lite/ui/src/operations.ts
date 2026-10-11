@@ -1,5 +1,6 @@
 // Write operations: runOp, Undo, and the branch, tag, merge, rebase, reset and rewrite flows.
 
+import { allowRewrite } from "./protected";
 import { api, type BranchInfo, errorHint, inTauri, type Op, type OpOutcome, pickFolder, type PlanEntry, type Row, type Submodule, type Worktree } from "./api";
 import { showBranchSwitcher } from "./branch-switcher";
 import { mergeFile } from "./conflicts";
@@ -126,6 +127,7 @@ export async function rewriteSelected(kind: "squash" | "drop" | "reword" | "auth
   } catch (e) {
     return toast(String(e).replace(/^Error: /, ""), "error");
   }
+  if (!(await allowRewrite(oldest.oid))) return;
   const sel = new Set(rows.map((r) => r.oid));
   if (range.entries.filter((e) => sel.has(e.oid)).length !== sel.size) {
     return toast("Select commits of the current branch only.", "error");
@@ -185,6 +187,7 @@ export async function interactiveRebase(from: Row) {
     return toast(String(e).replace(/^Error: /, ""), "error");
   }
   if (!range.entries.length) return toast("There are no commits to rebase.", "info");
+  if (!(await allowRewrite(from.oid))) return;
   const plan = await interactiveRebaseDialog(range);
   if (!plan) return;
   await runOp({ op: "rewrite", base: range.base, plan, what: "Interactive rebase" }, "Rebasing");

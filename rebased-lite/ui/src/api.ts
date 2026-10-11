@@ -197,6 +197,8 @@ export type Op =
   | { op: "deleteTag"; name: string }
   | { op: "merge"; rev: string }
   | { op: "rebase"; onto: string; options?: RebaseOptions }
+  | { op: "fastForward"; branches: string[] }
+  | { op: "checkoutRebase"; branch: string; onto: string }
   | { op: "rewriteFiles"; oid: string; paths: string[]; extract?: string }
   | { op: "cherryPick"; oids: string[] }
   | { op: "revert"; oids: string[] }
@@ -290,6 +292,8 @@ export const api = {
   userEmail: () => call<string>("user_email"),
   /** The commits whose parent is `oid`. */
   children: (oid: string) => call<string[]>("children", { oid }),
+  /** The remote branches that contain a commit, as "origin/main". */
+  remoteContaining: (oid: string) => call<string[]>("remote_containing", { oid }),
   /** The paths of all files of a commit. */
   treeFiles: (oid: string) => call<string[]>("tree_files", { oid }),
   fileAt: (oid: string, path: string) => call<FileContent>("file_at", { oid, path }),

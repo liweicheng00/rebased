@@ -162,6 +162,11 @@ export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | nul
         row("Git executable", h("div", { class: "dialog-field-row" }, input, browse, test)),
         status,
         h("p", { class: "settings-hint" }, "Rebased Lite runs this program for all git commands. An empty field uses git from PATH."),
+        row(
+          "Protected branches",
+          text(() => draft.protectedBranches, (v) => (draft.protectedBranches = v), "for example main master release/*"),
+          "Names of remote branches, separated by spaces; * matches any characters. Rebased Lite does not force push to these branches, and it does not rewrite commits that are on them (squash, drop, reword, interactive rebase, drop or extract changes).",
+        ),
       ];
     };
 

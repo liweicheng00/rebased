@@ -17,6 +17,8 @@ export class Sidebar {
   /** Favorite branches and tags, by full ref name. */
   private favorites = new Set<string>();
   private onlyFavorites = false;
+  /** Branches with a prefix ("feature/a") show in a folder of the prefix, as IntelliJ's Group by Directory. */
+  private groupByPrefix = false;
   private favBtn: HTMLButtonElement;
   onToggleFavorite: (b: BranchInfo) => void = () => {};
   onNavigate: (b: BranchInfo) => void = () => {};
@@ -54,6 +56,11 @@ export class Sidebar {
       this.render();
     });
     this.el = h("aside", { class: "sidebar" }, h("div", { class: "pane-title" }, "Branches"), h("div", { class: "sidebar-search-row" }, this.search, this.favBtn), this.list);
+  }
+
+  setGroupByPrefix(on: boolean) {
+    this.groupByPrefix = on;
+    this.render();
   }
 
   setRefs(refs: BranchInfo[]) {
@@ -209,7 +216,9 @@ export class Sidebar {
       }
       frag.append(header);
       if (!open) continue;
-      for (const b of items) frag.append(this.item(b, title.startsWith("Remote") ? b.name.slice(b.name.indexOf("/") + 1) : b.name));
+      const label = (b: BranchInfo) => (title.startsWith("Remote") ? b.name.slice(b.name.indexOf("/") + 1) : b.name);
+      if (this.groupByPrefix && !q && (title === "Local" || title.startsWith("Remote: "))) this.renderFolders(frag, title, items, label);
+      else for (const b of items) frag.append(this.item(b, label(b)));
     }
     this.renderWorktrees(frag);
     this.renderSubmodules(frag);
@@ -311,6 +320,54 @@ export class Sidebar {
       });
       frag.append(el);
     }
+  }
+
+  /** The branches of a group in folders of their prefixes. A folder opens and closes with a click. */
+  private renderFolders(frag: DocumentFragment, group: string, items: BranchInfo[], label: (b: BranchInfo) => string) {
+    interface Folder {
+      dirs: Map<string, Folder>;
+      branches: BranchInfo[];
+      count: number;
+    }
+    const root: Folder = { dirs: new Map(), branches: [], count: 0 };
+    for (const b of items) {
+      const parts = label(b).split("/");
+      let f = root;
+      f.count++;
+      for (const p of parts.slice(0, -1)) {
+        if (!f.dirs.has(p)) f.dirs.set(p, { dirs: new Map(), branches: [], count: 0 });
+        f = f.dirs.get(p)!;
+        f.count++;
+      }
+      f.branches.push(b);
+    }
+    const walk = (f: Folder, path: string, depth: number) => {
+      for (const [name, sub] of [...f.dirs].sort(([a], [b]) => a.localeCompare(b))) {
+        const key = `${group}\0${path}${name}/`;
+        const open = !this.collapsed.has(key);
+        const row = h(
+          "div",
+          { class: "branch-folder", style: { paddingLeft: `${8 + depth * 14}px` }, title: `${path}${name}/` },
+          twisty(open),
+          icon("folder"),
+          h("span", { class: "branch-name" }, name),
+          h("span", { class: "group-count" }, String(sub.count)),
+        );
+        row.addEventListener("click", () => {
+          if (open) this.collapsed.add(key);
+          else this.collapsed.delete(key);
+          this.render();
+        });
+        frag.append(row);
+        if (open) walk(sub, `${path}${name}/`, depth + 1);
+      }
+      for (const b of f.branches) {
+        const el = this.item(b, label(b).split("/").pop()!);
+        el.style.paddingLeft = `${22 + depth * 14}px`;
+        frag.append(el);
+      }
+    };
+    walk(root, "", 0);
   }
 
   private item(b: BranchInfo, label: string): HTMLElement {

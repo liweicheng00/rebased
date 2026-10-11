@@ -2,6 +2,7 @@
 //! credential helper or an SSH agent.
 
 use crate::ops::{safe, OpResult};
+use crate::undo::UndoAction;
 use crate::{GitError, Repo, Result};
 use serde::{Deserialize, Serialize};
 
@@ -183,6 +184,69 @@ impl Repo {
                 })
             }
             Err((_, e)) => Err(GitError(e)),
+        }
+    }
+
+    /// Fast-forwards local branches that are not checked out to their tracked branches, as IntelliJ's
+    /// Update Selected: `git fetch <remote> <branch>:<local>`. A branch whose tracked branch has other
+    /// commits stays and is named in the message. Undo moves the branches back.
+    pub fn fast_forward(&self, branches: &[String]) -> Result<OpResult> {
+        let config = |key: String| self.git(&["config", "--get", &key]).ok().map(|b| String::from_utf8_lossy(&b).trim().to_string()).filter(|s| !s.is_empty());
+        let mut undo = Vec::new();
+        let (mut done, mut kept) = (Vec::new(), Vec::new());
+        for b in branches {
+            let b = safe(b)?;
+            let full = format!("refs/heads/{b}");
+            let (Some(remote), Some(merge)) = (config(format!("branch.{b}.remote")), config(format!("branch.{b}.merge"))) else {
+                kept.push(format!("{b} (no tracked branch)"));
+                continue;
+            };
+            let before = self.resolve(&full).unwrap_or_default();
+            match self.git_write(&["fetch", "--no-tags", safe(&remote)?, &format!("{}:{full}", safe(&merge)?)], &[]) {
+                Ok(_) => {
+                    let after = self.resolve(&full).unwrap_or_default();
+                    if after != before {
+                        undo.push(UndoAction::MoveRef { name: full, to: before, expected: after });
+                        done.push(b.to_string());
+                    }
+                }
+                Err((_, e)) if e.contains("non-fast-forward") || e.contains("[rejected]") => kept.push(format!("{b} (it has commits that its tracked branch does not have)")),
+                Err((_, e)) if e.contains("checked out") || e.contains("refusing to fetch") => kept.push(format!("{b} (it is checked out in a worktree)")),
+                Err((_, e)) => kept.push(format!("{b} ({})", e.lines().last().unwrap_or("").trim())),
+            }
+        }
+        let mut message = match done.len() {
+            0 => "No branch moved".to_string(),
+            1 => format!("Updated {}", done[0]),
+            n => format!("Updated {n} branches"),
+        };
+        if !kept.is_empty() {
+            message.push_str(&format!(". Not updated: {}", kept.join(", ")));
+        }
+        Ok(OpResult { ok: kept.is_empty(), message, conflicts: Vec::new(), undo })
+    }
+
+    /// Checkout and Rebase onto Current: checks out `branch` and rebases it onto `onto` (`git rebase onto
+    /// branch`). Undo checks out the old branch again and moves `branch` back.
+    pub fn checkout_rebase(&self, branch: &str, onto: &str) -> Result<OpResult> {
+        let (branch, onto) = (safe(branch)?, safe(onto)?);
+        let full = format!("refs/heads/{branch}");
+        let before = self.resolve(&full).ok_or_else(|| GitError(format!("{branch} is not a local branch")))?;
+        let back = self.state()?.branch;
+        let pre_head = self.resolve("HEAD").unwrap_or_default();
+        // Local changes go into a stash and come back after the rebase.
+        match self.git_write(&["rebase", "--autostash", onto, branch], &[]) {
+            Ok(_) => {
+                let after = self.resolve(&full).unwrap_or_default();
+                let target = back.unwrap_or(pre_head);
+                let detach = self.git(&["rev-parse", "-q", "--verify", &format!("refs/heads/{target}")]).is_err();
+                let undo = vec![
+                    UndoAction::Checkout { target, detach, expected_head: after.clone() },
+                    UndoAction::MoveRef { name: full, to: before, expected: after },
+                ];
+                Ok(OpResult { ok: true, message: format!("Checked out {branch} and rebased it onto {onto}"), conflicts: Vec::new(), undo })
+            }
+            Err((_, e)) => Ok(self.stopped("The rebase", e)),
         }
     }
 

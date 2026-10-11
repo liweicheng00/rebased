@@ -34,6 +34,8 @@ pub enum UndoAction {
     RenameBranch { from: String, to: String },
     /// Puts a dropped stash back.
     StashStore { oid: String, message: String },
+    /// Moves a ref back, when it is still where the operation put it.
+    MoveRef { name: String, to: String, expected: String },
     /// Gives a config key its values again. No values removes the key.
     SetConfig { key: String, values: Vec<String> },
 }
@@ -92,6 +94,7 @@ impl Repo {
                 }
                 UndoAction::CreateRef { name, oid } => self.git_write(&["update-ref", "-m", "rebased-lite: undo", safe(name)?, safe(oid)?, ZERO], &[]),
                 UndoAction::DeleteRef { name, expected } => self.git_write(&["update-ref", "-d", safe(name)?, safe(expected)?], &[]),
+                UndoAction::MoveRef { name, to, expected } => self.git_write(&["update-ref", "-m", "rebased-lite: undo", safe(name)?, safe(to)?, safe(expected)?], &[]),
                 UndoAction::RenameBranch { from, to } => self.git_write(&["branch", "-m", safe(from)?, safe(to)?], &[]),
                 UndoAction::StashStore { oid, message: m } => self.git_write(&["stash", "store", "-m", m, safe(oid)?], &[]),
                 UndoAction::SetConfig { key, values } => {
