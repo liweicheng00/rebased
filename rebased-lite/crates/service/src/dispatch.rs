@@ -58,6 +58,8 @@ impl Service {
                 self.askpass_answer(parse(body)?);
                 Ok("null".to_string())
             }
+            "user_email" => serde_json::to_string(&self.user_email()?),
+            "children" => serde_json::to_string(&self.children(parse(body)?)?),
             "head_message" => serde_json::to_string(&self.head_message()?),
             "submodules" => serde_json::to_string(&self.submodules()?),
             "remotes" => serde_json::to_string(&self.remotes()?),

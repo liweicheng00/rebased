@@ -126,7 +126,13 @@ input { font: inherit; }
 /* filter bar */
 .filter-bar { display: flex; gap: 6px; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--border); background: var(--panel); flex-wrap: wrap; }
 .filter-bar input { padding: 2px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--fg); height: 24px; }
-.filter-text { flex: 1 1 180px; min-width: 120px; }
+.filter-text-box { flex: 1 1 180px; min-width: 120px; position: relative; display: flex; }
+.filter-text-box .filter-text { flex: 1; min-width: 0; padding-right: 56px; }
+.filter-opt { position: absolute; top: 3px; height: 18px; min-width: 22px; padding: 0 4px; border: 1px solid transparent; border-radius: 3px; background: transparent; color: var(--muted); font: 11px/16px var(--mono, ui-monospace, monospace); cursor: pointer; }
+.filter-opt:nth-of-type(1) { right: 28px; }
+.filter-opt:nth-of-type(2) { right: 4px; }
+.filter-opt:hover { background: var(--hover); }
+.filter-opt.on { border-color: var(--accent); color: var(--accent); background: var(--bg); }
 .filter-author { width: 150px; }
 .filter-path { width: 150px; }
 .filter-button { padding: 1px 8px; height: 24px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); cursor: pointer; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
@@ -656,3 +662,8 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 
 .branch.selected { background: var(--select); }
 .branch.selected:hover { background: var(--select); }
+
+/* The highlighters of the log (View > Highlight). */
+.log-row.hl-mine .subject-text { font-weight: 600; }
+.log-row.hl-merge .subject-text, .log-row.hl-merge .author, .log-row.hl-merge .date { color: var(--muted); }
+.log-row.hl-other:not(.selected) .subject, .log-row.hl-other:not(.selected) .author, .log-row.hl-other:not(.selected) .date, .log-row.hl-other:not(.selected) .hash { opacity: 0.45; }

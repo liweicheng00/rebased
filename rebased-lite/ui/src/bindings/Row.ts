@@ -2,4 +2,16 @@
 import type { El } from "./El";
 import type { RefLabel } from "./RefLabel";
 
-export type Row = { row: number, oid: string, refs: Array<RefLabel>, subject: string, author: string, authorEmail: string, authorTime: number, isHead: boolean, elements: Array<El>, };
+export type Row = { row: number, oid: string, refs: Array<RefLabel>, subject: string, author: string, authorEmail: string, authorTime: number, 
+/**
+ * The time of the commit, for the Commit Timestamp option of the Date column.
+ */
+commitTime: number, 
+/**
+ * A merge commit: more than one parent.
+ */
+merge: boolean, 
+/**
+ * HEAD reaches the commit: it is on the current branch.
+ */
+onHead: boolean, isHead: boolean, elements: Array<El>, };

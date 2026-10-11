@@ -4,6 +4,14 @@ export type Theme = "system" | "light" | "dark";
 
 export interface Settings {
   intelliSort: boolean;
+  /** Bold subjects for the commits of the user (user.email). */
+  highlightMine: boolean;
+  /** Gray text for merge commits. */
+  highlightMerges: boolean;
+  /** Dim the commits that are not on the current branch. */
+  highlightCurrent: boolean;
+  /** The Date column shows the commit time, not the author time. */
+  commitTimestamp: boolean;
   showLongEdges: boolean;
   collapseLinear: boolean;
   theme: Theme;
@@ -77,6 +85,10 @@ export interface Settings {
 
 const DEFAULTS: Settings = {
   intelliSort: true,
+  highlightMine: false,
+  highlightMerges: false,
+  highlightCurrent: false,
+  commitTimestamp: false,
   showLongEdges: false,
   collapseLinear: false,
   theme: "system",

@@ -17,6 +17,8 @@ pub(crate) struct Session {
     pub(crate) view: View,
     pub(crate) details: HashMap<usize, CommitDetails>,
     pub(crate) head_node: Option<usize>,
+    /// For each node: true when HEAD reaches it, for the highlight of the current branch.
+    pub(crate) on_head: Vec<bool>,
     /// None when the watcher could not start; the front end then refreshes on focus only.
     pub(crate) watcher: Option<watch::RepoWatcher>,
     pub(crate) history: Arc<history::LocalHistory>,
@@ -141,6 +143,7 @@ impl Service {
         let full = build_full(&topo);
         let view = build_view(&repo, &topo, &full, &settings)?;
         let head_node = repo.resolve("HEAD").and_then(|o| topo.node_of(&o));
+        let on_head = reachable(&topo, head_node);
         let old = self.session.lock().unwrap().map.get(&repo.root).cloned();
         let (kept, history) = match old {
             Some(o) if keep => {
@@ -159,7 +162,7 @@ impl Service {
                     Arc::new(move |c| sink.emit(events::Event::Watch { root: root.clone(), repo: c.repo, files: c.files }));
                 watch::RepoWatcher::start(&repo.root, &repo.git_dir(), &repo.common_dir(), Some(history.clone()), Some(on_change)).ok()
             });
-        let mut s = Session { repo, topo, full, settings, view, details: HashMap::new(), head_node, watcher, history };
+        let mut s = Session { repo, topo, full, settings, view, details: HashMap::new(), head_node, on_head, watcher, history };
         let result = Self::result(&mut s, t);
         let root = s.repo.root.clone();
         let mut sessions = self.session.lock().unwrap();
@@ -237,4 +240,17 @@ impl Service {
         self.with_repo(|r| r.fetch().map(|_| ()).map_err(err))?;
         self.refresh()
     }
+}
+
+/// The nodes that `start` reaches through the parents, as a flag for each node.
+fn reachable(topo: &Topology, start: Option<usize>) -> Vec<bool> {
+    let mut seen = vec![false; topo.oids.len()];
+    let mut stack: Vec<usize> = start.into_iter().collect();
+    while let Some(n) = stack.pop() {
+        if std::mem::replace(&mut seen[n], true) {
+            continue;
+        }
+        stack.extend(topo.parents[n].iter().filter_map(|p| topo.index_of(p)).filter(|&p| !seen[p]));
+    }
+    seen
 }

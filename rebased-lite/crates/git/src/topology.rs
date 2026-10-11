@@ -32,6 +32,11 @@ impl Topology {
         hex(&self.oids[node])
     }
 
+    /// The node of a raw object id.
+    pub fn index_of(&self, oid: &[u8; 20]) -> Option<usize> {
+        self.index.get(oid).copied()
+    }
+
     pub fn node_of(&self, oid_hex: &str) -> Option<usize> {
         self.index.get(&unhex(oid_hex)?).copied()
     }

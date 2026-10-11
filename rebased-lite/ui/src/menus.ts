@@ -8,6 +8,7 @@ import { copyText } from "./dom";
 import { showHistory } from "./history-flow";
 import { openInEditor } from "./editor-flow";
 import { keymap } from "./keyboard";
+import { toast } from "./notify";
 import { addWorktree, checkoutBranch, checkoutCommit, currentBranch, deleteBranch, deleteRefs, deleteMergedBranches, interactiveRebase, mergeIntoCurrent, newBranch, newTag, rebaseCurrentOnto, renameBranch, resetTo, rewriteSelected, runOp } from "./operations";
 import { compareBranches, fetchRemote, manageRemotes, openOnRemote, remoteRefItems, toggleFavorite } from "./remotes";
 import { startReview } from "./review-flow";
@@ -58,6 +59,7 @@ async function rowMenu(r: Row, e: MouseEvent) {
     { label: "Collapse All Linear Branches", action: () => void collapse("all") },
     { label: "Expand All Linear Branches", disabled: !app.view?.collapsed, action: () => void collapse("none") },
     { label: "Go to Parent", action: () => void api.commit(r.oid).then((c) => (c.parents[0] ? jumpToOid(c.parents[0], true) : false)) },
+    { label: "Go to Child", action: () => void goToChild(r.oid) },
   );
   items.push({ separator: true }, { header: "Filter" });
   items.push({ label: `Show Commits by ${r.author}`, action: () => filterBar.set({ ...filterBar.filter, author: r.author }, true) });
@@ -67,6 +69,19 @@ async function rowMenu(r: Row, e: MouseEvent) {
   showMenu(e.clientX, e.clientY, items);
 }
 log.onContextMenu = (r, e) => void rowMenu(r, e);
+
+/** Goes to the child of a commit. With more than one child, a menu asks which one. */
+async function goToChild(oid: string) {
+  const kids = await api.children(oid).catch(() => [] as string[]);
+  if (!kids.length) return toast("This commit has no child in the log.", "info");
+  if (kids.length === 1) return void jumpToOid(kids[0], true);
+  const infos = await Promise.all(kids.map((k) => api.commit(k).catch(() => null)));
+  const at = document.querySelector(".log-row.selected")?.getBoundingClientRect();
+  showMenu(at ? at.left + 200 : 200, at ? at.bottom : 200, [
+    { header: `${kids.length} children` },
+    ...kids.map((k, i) => ({ label: `${k.slice(0, 8)}  ${infos[i]?.subject ?? ""}`, action: () => void jumpToOid(k, true) })),
+  ]);
+}
 
 sidebar.onLocalMenu = (e) => showMenu(e.clientX, e.clientY, [{ label: "Delete Merged Branches…", action: () => void deleteMergedBranches() }]);
 sidebar.onNavigate = (b) => void jumpToOid(b.oid, true);

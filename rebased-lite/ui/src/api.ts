@@ -106,6 +106,10 @@ export interface LogFilter {
   text: string;
   path: string;
   since: string;
+  /** The text is a regular expression. */
+  regex?: boolean;
+  matchCase?: boolean;
+  noMerges?: boolean;
 }
 
 export const inTauri = "__TAURI_INTERNALS__" in window;
@@ -272,6 +276,10 @@ export const api = {
   localChanges: () => call<LocalChanges>("local_changes"),
   changeListOp: (op: ChangeListOp) => call<LocalChanges>("changelist_op", op),
   headMessage: () => call<string>("head_message"),
+  /** user.email of the active repository; empty when it is not set. */
+  userEmail: () => call<string>("user_email"),
+  /** The commits whose parent is `oid`. */
+  children: (oid: string) => call<string[]>("children", { oid }),
   askpassAnswer: (id: number, answer: string | null, remember: boolean) => call<null>("askpass_answer", { id, answer, remember }),
   watchState: () => call<{ repo: number; files: number } | null>("watch_state"),
   stashes: () => call<Stash[]>("stashes"),

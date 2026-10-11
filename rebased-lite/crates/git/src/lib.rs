@@ -349,12 +349,19 @@ pub struct LogFilter {
     pub path: String,
     /// Passed to `git log --since`, for example "2.weeks".
     pub since: String,
+    /// The text is a regular expression (git's extended syntax), not a fixed string.
+    pub regex: bool,
+    /// The text and the user match with the same case only.
+    pub match_case: bool,
+    /// Merge commits do not show.
+    pub no_merges: bool,
 }
 
 impl LogFilter {
     /// A filter that git must evaluate (the branch filter alone is computed from the graph).
     pub fn needs_git(&self) -> bool {
         self.branches.iter().any(|b| b.starts_with('^'))
+            || self.no_merges
             || !(self.author.trim().is_empty() && self.text.trim().is_empty() && self.path.trim().is_empty() && self.since.trim().is_empty())
     }
 
@@ -426,7 +433,13 @@ impl Repo {
 
     /// Commits that match the git-side parts of `filter`, over `revs` (all refs when empty).
     pub fn matching_commits(&self, filter: &LogFilter, revs: &[String]) -> Result<std::collections::HashSet<[u8; 20]>> {
-        let mut args: Vec<String> = vec!["log".into(), "--format=%H".into(), "--regexp-ignore-case".into()];
+        let mut args: Vec<String> = vec!["log".into(), "--format=%H".into()];
+        if !filter.match_case {
+            args.push("--regexp-ignore-case".into());
+        }
+        if filter.no_merges {
+            args.push("--no-merges".into());
+        }
         if revs.is_empty() {
             args.extend(["--branches", "--remotes", "--tags"].map(String::from));
             if self.git(&["rev-parse", "-q", "--verify", "HEAD"]).is_ok() {
@@ -439,7 +452,7 @@ impl Repo {
             args.push(format!("--author={}", filter.author.trim()));
         }
         if !filter.text.trim().is_empty() {
-            args.push("--fixed-strings".into());
+            args.push(if filter.regex { "--extended-regexp" } else { "--fixed-strings" }.into());
             args.push(format!("--grep={}", filter.text.trim()));
         }
         if !filter.since.trim().is_empty() {

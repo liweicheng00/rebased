@@ -135,6 +135,9 @@ impl Service {
                         author: d.map(|d| d.author.clone()).unwrap_or_default(),
                         author_email: d.map(|d| d.author_email.clone()).unwrap_or_default(),
                         author_time: d.map(|d| d.author_time).unwrap_or(0),
+                        commit_time: s.topo.timestamps[node],
+                        merge: s.topo.parents[node].len() > 1,
+                        on_head: s.on_head.get(node).copied().unwrap_or(false),
                         is_head: Some(node) == head,
                         elements: s.view.printer.print_elements(row).iter().map(|e| el(&s.view.graph, e)).collect(),
                     }

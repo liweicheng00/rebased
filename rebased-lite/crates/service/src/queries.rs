@@ -121,6 +121,21 @@ impl Service {
         self.with_repo(|r| r.submodules().map_err(err))
     }
 
+    /// The e-mail address of the user in this repository, for the My Commits highlight. Empty when
+    /// user.email is not set.
+    pub fn user_email(&self) -> Result<String> {
+        self.with_repo(|r| Ok(r.git(&["config", "user.email"]).map(|b| String::from_utf8_lossy(&b).trim().to_string()).unwrap_or_default()))
+    }
+
+    /// The commits whose parent is `oid`, newest first, for Go to Child.
+    pub fn children(&self, args: OidArgs) -> Result<Vec<String>> {
+        self.with(|s| {
+            let Some(node) = s.topo.node_of(&args.oid) else { return Ok(Vec::new()) };
+            let oid = s.topo.oids[node];
+            Ok((0..s.topo.oids.len()).filter(|&n| s.topo.parents[n].contains(&oid)).map(|n| s.topo.oid_hex(n)).collect())
+        })
+    }
+
     pub fn head_message(&self) -> Result<String> {
         self.with_repo(|r| r.head_message().map_err(err))
     }

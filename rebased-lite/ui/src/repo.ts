@@ -228,6 +228,7 @@ export async function loadRefs() {
     sidebar.setWorktrees(app.worktrees);
     sidebar.setSubmodules(subs);
     await loadFavorites();
+    log.myEmail = (await api.userEmail().catch(() => "")).toLowerCase();
     banner.update(app.repoState);
     filterBar.branchNames = app.refs.filter((b) => b.kind !== "tag").map((b) => b.name);
     updateStatus();

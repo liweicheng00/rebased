@@ -205,6 +205,11 @@ viewBtn.addEventListener("click", () => {
     save();
     log.buildHeader();
   };
+  const mark = (key: "highlightMine" | "highlightMerges" | "highlightCurrent" | "commitTimestamp") => () => {
+    settings[key] = !settings[key];
+    save();
+    log.redraw();
+  };
   menuBelow(viewBtn, [
     { header: "Graph" },
     { label: "IntelliSort", checked: settings.intelliSort, action: flip("intelliSort", true) },
@@ -215,6 +220,12 @@ viewBtn.addEventListener("click", () => {
     { label: "Author", checked: settings.showAuthor, action: col("showAuthor") },
     { label: "Date", checked: settings.showDate, action: col("showDate") },
     { label: "Hash", checked: settings.showHash, action: col("showHash") },
+    { label: "Commit Timestamp", checked: settings.commitTimestamp, action: mark("commitTimestamp") },
+    { separator: true },
+    { header: "Highlight" },
+    { label: "My Commits", checked: settings.highlightMine, action: mark("highlightMine") },
+    { label: "Merge Commits", checked: settings.highlightMerges, action: mark("highlightMerges") },
+    { label: "Current Branch", checked: settings.highlightCurrent, action: mark("highlightCurrent") },
     { separator: true },
     { label: "Branches Panel", checked: settings.showSidebar, shortcut: keymap.shortcut("branches"), action: toggleSidebar },
     { label: "Diff Panel", checked: settings.showDiff, shortcut: keymap.shortcut("diffPanel"), action: () => toggleDiff() },

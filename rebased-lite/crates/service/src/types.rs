@@ -79,6 +79,12 @@ pub struct Row {
     pub author: String,
     pub author_email: String,
     pub author_time: i64,
+    /// The time of the commit, for the Commit Timestamp option of the Date column.
+    pub commit_time: i64,
+    /// A merge commit: more than one parent.
+    pub merge: bool,
+    /// HEAD reaches the commit: it is on the current branch.
+    pub on_head: bool,
     pub is_head: bool,
     pub elements: Vec<El>,
 }

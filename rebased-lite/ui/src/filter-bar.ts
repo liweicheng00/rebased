@@ -28,6 +28,8 @@ export class FilterBar {
   private branchClear: HTMLElement;
   private clear: HTMLButtonElement;
   private info: HTMLElement;
+  private regexBtn: HTMLButtonElement;
+  private caseBtn: HTMLButtonElement;
   private authors: HTMLDataListElement;
   private value: LogFilter = emptyFilter();
   private timer = 0;
@@ -48,6 +50,11 @@ export class FilterBar {
     this.branchBtn = h("button", { class: "filter-button" }, this.branchLabel, this.branchClear);
     this.clear = h("button", { class: "filter-clear", title: "Clear all filters", hidden: true }, icon("close"), "Clear");
     this.info = h("span", { class: "filter-info" });
+    // The options of the text: a regular expression and the same case. They stay after Clear.
+    this.regexBtn = h("button", { class: "filter-opt", title: "Regex: the text is a regular expression" }, ".*");
+    this.caseBtn = h("button", { class: "filter-opt", title: "Match Case: the text and the user match with the same case only" }, "Aa");
+    this.regexBtn.addEventListener("click", () => this.update({ regex: !this.value.regex }));
+    this.caseBtn.addEventListener("click", () => this.update({ matchCase: !this.value.matchCase }));
     for (const input of [this.text, this.author, this.path]) {
       input.addEventListener("input", () => this.debounce());
     }
@@ -68,10 +75,11 @@ export class FilterBar {
     this.branchBtn.addEventListener("click", () => this.branchMenu());
     this.branchClear.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.update({ branches: [] });
+      this.update({ branches: [], noMerges: false });
     });
-    this.clear.addEventListener("click", () => this.set(emptyFilter(), true));
-    this.el = h("div", { class: "filter-bar" }, this.text, this.branchBtn, this.author, this.authors, this.path, this.since, this.clear, this.info);
+    this.clear.addEventListener("click", () => this.set({ ...emptyFilter(), regex: this.value.regex, matchCase: this.value.matchCase }, true));
+    const textBox = h("span", { class: "filter-text-box" }, this.text, this.regexBtn, this.caseBtn);
+    this.el = h("div", { class: "filter-bar" }, textBox, this.branchBtn, this.author, this.authors, this.path, this.since, this.clear, this.info);
   }
 
   private debounce() {
@@ -84,6 +92,7 @@ export class FilterBar {
   private branchMenu() {
     const items = [
       { label: "All branches", checked: this.value.branches.length === 0, action: () => this.update({ branches: [] }) },
+      { label: "No Merges", checked: !!this.value.noMerges, action: () => this.update({ noMerges: !this.value.noMerges }) },
       { separator: true as const },
       ...this.branchNames.slice(0, 60).map((name) => ({
         label: name,
@@ -135,10 +144,13 @@ export class FilterBar {
         : exclude.length
           ? `${include.join(", ") || "All"} not in ${exclude.join(", ")}`
           : `Branch: ${f.branches.length === 1 ? f.branches[0] : `${f.branches.length} selected`}`;
-    this.branchBtn.classList.toggle("active", f.branches.length > 0);
+    if (f.noMerges) this.branchLabel.textContent += ", no merges";
+    this.branchBtn.classList.toggle("active", f.branches.length > 0 || !!f.noMerges);
+    this.regexBtn.classList.toggle("on", !!f.regex);
+    this.caseBtn.classList.toggle("on", !!f.matchCase);
     this.branchBtn.title = f.branches.join(", ");
-    this.branchClear.hidden = f.branches.length === 0;
-    this.clear.hidden = !(f.branches.length || f.author || f.text || f.path || f.since);
+    this.branchClear.hidden = f.branches.length === 0 && !f.noMerges;
+    this.clear.hidden = !(f.branches.length || f.author || f.text || f.path || f.since || f.noMerges);
     if (notify) this.onChange(f);
   }
 

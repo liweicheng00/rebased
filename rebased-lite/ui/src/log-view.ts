@@ -12,6 +12,8 @@ const MAX_GRAPH_LANES = 40;
 const MIN_GRAPH_WIDTH = 44;
 
 export class LogView {
+  /** user.email of the repository, in lower case, for the My Commits highlight. */
+  myEmail = "";
   readonly el: HTMLElement;
   private header: HTMLElement;
   private scroller: HTMLElement;
@@ -111,6 +113,12 @@ export class LogView {
     this.el.style.setProperty("--date-w", `${settings.dateWidth}px`);
     this.header.querySelector<HTMLElement>(".author")?.style.setProperty("flex-basis", `${settings.authorWidth}px`);
     this.header.querySelector<HTMLElement>(".date")?.style.setProperty("flex-basis", `${settings.dateWidth}px`);
+  }
+
+  /** Draws the visible rows again, after a change of the highlight or the date options. */
+  redraw() {
+    this.paintKey = "";
+    this.render();
   }
 
   setCollapsed(c: boolean) {
@@ -256,11 +264,20 @@ export class LogView {
     subject.append(h("span", { class: "subject-text" }, r.subject));
     const div = h(
       "div",
-      { class: "log-row" + (selected ? " selected" : "") + (r.isHead ? " head" : ""), "data-row": r.row },
+      {
+        class:
+          "log-row" +
+          (selected ? " selected" : "") +
+          (r.isHead ? " head" : "") +
+          (settings.highlightMine && this.myEmail && r.authorEmail.toLowerCase() === this.myEmail ? " hl-mine" : "") +
+          (settings.highlightMerges && r.merge ? " hl-merge" : "") +
+          (settings.highlightCurrent && !r.onHead ? " hl-other" : ""),
+        "data-row": r.row,
+      },
       h("span", { class: "graph-cell", style: { width: `${colWidth}px` } }, canvas),
       subject,
       settings.showAuthor ? h("span", { class: "author", title: `${r.author} <${r.authorEmail}>` }, r.author) : "",
-      settings.showDate ? h("span", { class: "date" }, formatDate(r.authorTime)) : "",
+      settings.showDate ? h("span", { class: "date", title: settings.commitTimestamp ? "The commit time" : "The author time" }, formatDate(settings.commitTimestamp ? r.commitTime : r.authorTime)) : "",
       settings.showHash ? h("span", { class: "hash" }, r.oid.slice(0, 8)) : "",
     );
     div.style.top = `${r.row * ROW_HEIGHT}px`;
