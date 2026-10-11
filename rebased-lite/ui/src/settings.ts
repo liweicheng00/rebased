@@ -4,6 +4,8 @@ export type Theme = "system" | "light" | "dark";
 
 export interface Settings {
   intelliSort: boolean;
+  /** The fast-forward choice of Update with Merge: "", "ffOnly" or "noFf". */
+  updateFf: "" | "ffOnly" | "noFf";
   /** Show branches with a prefix in folders. */
   groupBranchesByPrefix: boolean;
   /** Glob patterns of protected branch names, separated by spaces. */
@@ -89,6 +91,7 @@ export interface Settings {
 
 const DEFAULTS: Settings = {
   intelliSort: true,
+  updateFf: "",
   groupBranchesByPrefix: false,
   protectedBranches: "main master",
   highlightMine: false,

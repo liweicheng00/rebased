@@ -298,6 +298,42 @@ impl Repo {
 
     // ---- operations that use the working tree ----
 
+    /// A merge with the options of the Merge dialog.
+    pub fn merge_with(&self, rev: &str, o: &MergeOptions) -> Result<OpResult> {
+        let mut args = vec!["merge"];
+        if o.ff_only {
+            args.push("--ff-only");
+        } else if o.no_ff {
+            args.push("--no-ff");
+        }
+        if o.squash {
+            args.push("--squash");
+        }
+        if o.no_commit {
+            args.push("--no-commit");
+        }
+        if o.allow_unrelated {
+            args.push("--allow-unrelated-histories");
+        }
+        let message = o.message.trim();
+        if !message.is_empty() && !o.squash {
+            args.extend(["-m", message]);
+        } else {
+            args.push("--no-edit");
+        }
+        args.push(safe(rev)?);
+        match self.git_write(&args, &[]) {
+            Ok(out) if out.contains("Already up to date") => Ok(OpResult::ok("Already up to date".to_string())),
+            Ok(_) if o.squash => Ok(OpResult::ok(format!("The changes of {rev} are local changes now. Commit them to finish the squash merge"))),
+            Ok(_) if o.no_commit => Ok(OpResult::ok(format!("Merged {rev} without a commit. Commit to finish the merge, or abort it"))),
+            Ok(_) => Ok(OpResult::ok(format!("Merged {rev}"))),
+            Err((_, e)) if o.ff_only && (e.contains("Not possible to fast-forward") || e.contains("fatal: Not possible")) => {
+                Ok(OpResult { ok: false, message: format!("{rev} cannot fast-forward the current branch: the branch has commits that {rev} does not have"), conflicts: Vec::new(), undo: Vec::new() })
+            }
+            Err((_, e)) => Ok(self.stopped("The merge", e)),
+        }
+    }
+
     pub fn merge(&self, rev: &str) -> Result<OpResult> {
         match self.git_write(&["merge", "--no-edit", safe(rev)?], &[]) {
             Ok(out) => Ok(OpResult::ok(if out.contains("Already up to date") { "Already up to date".to_string() } else { format!("Merged {rev}") })),
@@ -418,4 +454,22 @@ pub struct RebaseOptions {
     pub keep_empty: bool,
     /// Puts fixup! and squash! commits after their commits and joins them.
     pub autosquash: bool,
+}
+
+/// The options of the Merge dialog.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MergeOptions {
+    /// Always make a merge commit (`--no-ff`).
+    pub no_ff: bool,
+    /// Only a fast-forward; else nothing changes (`--ff-only`).
+    pub ff_only: bool,
+    /// The changes become local changes, without a merge (`--squash`).
+    pub squash: bool,
+    /// The merge stops before its commit (`--no-commit`).
+    pub no_commit: bool,
+    /// Merges a branch without a common ancestor (`--allow-unrelated-histories`).
+    pub allow_unrelated: bool,
+    /// The message of the merge commit; empty takes the message of git.
+    pub message: String,
 }

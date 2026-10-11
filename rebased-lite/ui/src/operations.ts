@@ -87,7 +87,31 @@ export async function newTag(at: string, atLabel: string) {
 export async function mergeIntoCurrent(rev: string, label: string) {
   const cur = currentBranch();
   if (!cur) return toast("HEAD is detached. Checkout a branch first.", "error");
-  await runOp({ op: "merge", rev }, `Merging ${label} into ${cur}`);
+  const r = await formDialog(
+    `Merge ${label} into ${cur}`,
+    [
+      {
+        key: "kind",
+        label: "How",
+        type: "select",
+        value: "",
+        options: [
+          ["", "Fast-forward when possible, else a merge commit"],
+          ["noFf", "Always a merge commit (--no-ff)"],
+          ["ffOnly", "Only a fast-forward (--ff-only)"],
+          ["squash", "Squash: the changes become local changes (--squash)"],
+        ],
+      },
+      { key: "message", label: "Message of the merge commit (empty: the message of git)", placeholder: `Merge ${label}` },
+      { key: "noCommit", label: "Stop before the merge commit, so you can check it first (--no-commit)", type: "checkbox", value: false },
+      { key: "allowUnrelated", label: "Allow a branch without a common commit (--allow-unrelated-histories)", type: "checkbox", value: false },
+    ],
+    "Merge",
+  );
+  if (!r) return;
+  const kind = String(r.kind ?? "");
+  const options = { noFf: kind === "noFf", ffOnly: kind === "ffOnly", squash: kind === "squash", noCommit: !!r.noCommit, allowUnrelated: !!r.allowUnrelated, message: String(r.message ?? "") };
+  await runOp({ op: "merge", rev, options }, `Merging ${label} into ${cur}`);
 }
 
 export async function rebaseCurrentOnto(rev: string, label: string) {

@@ -59,11 +59,13 @@ export async function updateBranch(): Promise<boolean> {
     toast(`${branch} has no tracked branch. Push it with a tracked branch first.`, "error");
     return false;
   }
-  const mode = await updateDialog(branch, upstream, settings.updateMode);
-  if (!mode) return false;
+  const choice = await updateDialog(branch, upstream, settings.updateMode, settings.updateFf);
+  if (!choice) return false;
+  const { mode, ff } = choice;
   settings.updateMode = mode;
+  if (mode === "merge") settings.updateFf = ff;
   save();
-  const out = await runOp({ op: "update", mode }, `Updating ${branch}`);
+  const out = await runOp({ op: "update", mode, options: { ffOnly: ff === "ffOnly", noFf: ff === "noFf" } }, `Updating ${branch}`);
   return !!out?.result.ok;
 }
 

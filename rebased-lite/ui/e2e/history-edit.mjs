@@ -66,7 +66,7 @@ await menu("Drop Selected Changes");
 await page.click(".dialog-buttons button:has-text('Drop')");
 await within("Mixed work keeps only x", async () => filesOf("HEAD~2") === "x.txt");
 check("y.txt is gone from the working tree too", !git("ls-files", "y.txt"));
-await page.click(".toast button:has-text('Undo') >> nth=-1");
+await page.click(".toast:has-text('Dropped the changes') button:has-text('Undo')");
 await within("Undo puts the change of y back", async () => filesOf("HEAD~2") === "x.txt,y.txt");
 
 // Fixup…: the message gets "fixup! Mixed work". The commit then joins Mixed work with autosquash.
@@ -78,12 +78,13 @@ await page.waitForTimeout(2000);
 writeFileSync(`${repo}/x.txt`, "x fixed\n");
 git("commit", "-q", "-am", "fixup! Mixed work");
 await within("the fixup commit shows in the log", async () => (await page.$$eval(".log-row .subject-text", (els) => els.map((e) => e.textContent))).includes("fixup! Mixed work"));
-await page.click(".log-row:has(.subject-text:text-is('Update README upstream'))", { button: "right" });
+// The rebase starts at Mixed work: the commits below it are on origin/main, a protected branch.
+await page.click(row("Mixed work"), { button: "right" });
 await menu("Interactively Rebase from Here");
 await page.waitForSelector(".rebase-row");
 check("the dialog says that it autosquashed", ((await page.textContent(".dialog")) ?? "").includes("Autosquash: 1"));
 const order = await page.$$eval(".rebase-row", (els) => els.map((e) => `${e.querySelector("select").value} ${e.querySelector(".rebase-subject").textContent}`));
-check("the fixup is right above Mixed work", JSON.stringify(order) === JSON.stringify(["pick Top work", "pick Add z", "fixup fixup! Mixed work", "pick Mixed work", "pick Update README upstream"]));
+check("the fixup is right above Mixed work", JSON.stringify(order) === JSON.stringify(["pick Top work", "pick Add z", "fixup fixup! Mixed work", "pick Mixed work"]));
 await shot("he1-autosquash");
 await page.click(".dialog-buttons button:has-text('Start Rebasing')");
 await within("the fixup joined Mixed work", async () => git("log", "--format=%s", "-3") === "Top work\nAdd z\nMixed work");

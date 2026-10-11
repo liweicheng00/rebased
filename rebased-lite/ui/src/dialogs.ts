@@ -298,7 +298,13 @@ export async function pushDialog(info: PushInfo, upTo?: string): Promise<PushCho
 }
 
 /** Asks how Update merges the incoming commits. */
-export async function updateDialog(branch: string, upstream: string | null, mode: "merge" | "rebase"): Promise<"merge" | "rebase" | null> {
+export interface UpdateChoice {
+  mode: "merge" | "rebase";
+  /** For a merge: "" fast-forwards when possible, "ffOnly" only fast-forwards, "noFf" always merges. */
+  ff: "" | "ffOnly" | "noFf";
+}
+
+export async function updateDialog(branch: string, upstream: string | null, mode: "merge" | "rebase", ff: UpdateChoice["ff"] = ""): Promise<UpdateChoice | null> {
   let chosen = mode;
   const modes: ["merge" | "rebase", string, string][] = [
     ["merge", "Merge", "Merge the incoming commits into the local branch."],
@@ -309,13 +315,22 @@ export async function updateDialog(branch: string, upstream: string | null, mode
     { class: "dialog-radios" },
     ...modes.map(([v, label, text]) => {
       const input = h("input", { type: "radio", name: "update-mode", value: v, checked: v === chosen });
-      input.addEventListener("change", () => (chosen = v));
+      input.addEventListener("change", () => {
+        chosen = v;
+        ffSel.disabled = v !== "merge";
+      });
       return h("label", { class: "dialog-radio" }, input, h("b", {}, label), h("span", {}, text));
     }),
   );
+  const ffSel = h(
+    "select",
+    { class: "dialog-input update-ff", disabled: chosen !== "merge" },
+    ...([["", "Fast-forward when possible"], ["ffOnly", "Only a fast-forward (--ff-only)"], ["noFf", "Always a merge commit (--no-ff)"]] as const).map(([v, l]) => h("option", { value: v, selected: v === ff }, l)),
+  );
+  const ffRow = h("label", { class: "dialog-field" }, h("span", {}, "Merge"), ffSel);
   const note = h("p", { class: "dialog-note" }, `Git fetches ${upstream ?? "the tracked branch"} first. Local changes are stashed and restored.`);
-  const r = await modal(`Update ${branch}`, [list, note], [{ label: "Update", value: "ok", primary: true }]);
-  return r === "ok" ? chosen : null;
+  const r = await modal(`Update ${branch}`, [list, ffRow, note], [{ label: "Update", value: "ok", primary: true }]);
+  return r === "ok" ? { mode: chosen, ff: chosen === "merge" ? (ffSel.value as UpdateChoice["ff"]) : "" } : null;
 }
 
 export type ConflictAction = { action: "ours" | "theirs" | "merge"; paths: string[] };

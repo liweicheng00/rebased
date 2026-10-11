@@ -73,6 +73,7 @@ console.log("checkout topic:", await branchBtn());
 await clearToasts();
 await page.click(".branch:has-text('origin/main'), .branch:has(.branch-name:text-is('main'))  >> nth=-1", { button: "right" });
 await page.click(".menu-item:has-text('Merge into topic/readme')");
+await page.click(".dialog-buttons button:has-text('Merge')");
 await page.waitForTimeout(2000);
 console.log("merge:", await toastText());
 console.log("banner:", (await page.textContent(".op-banner")).replace(/\s+/g, " "));

@@ -253,12 +253,24 @@ impl Repo {
     /// Updates the current branch from its tracked branch: fetch, then merge or rebase. Local changes are
     /// stashed and restored around the update, as IntelliJ does.
     pub fn update(&self, mode: UpdateMode) -> Result<OpResult> {
+        self.update_with(mode, &UpdateOptions::default())
+    }
+
+    /// Update with the options of the Update dialog. The fast-forward options apply to a merge only.
+    pub fn update_with(&self, mode: UpdateMode, o: &UpdateOptions) -> Result<OpResult> {
         let branch = self.current_branch()?;
         let (remote, remote_branch) =
             self.upstream_of(&branch).ok_or_else(|| GitError(format!("{branch} has no tracked branch. Push it with a tracked branch first")))?;
         let before = self.resolve("HEAD");
         let mut args = vec!["pull", "--autostash", "--no-edit"];
         args.push(if mode == UpdateMode::Rebase { "--rebase" } else { "--no-rebase" });
+        if mode == UpdateMode::Merge {
+            if o.ff_only {
+                args.push("--ff-only");
+            } else if o.no_ff {
+                args.push("--no-ff");
+            }
+        }
         args.extend([safe(&remote)?, safe(&remote_branch)?]);
         let what = if mode == UpdateMode::Rebase { "Rebase" } else { "Merge" };
         match self.git_write(&args, &[("GIT_REFLOG_ACTION", "rebased-lite: update")]) {
@@ -275,6 +287,12 @@ impl Repo {
                 };
                 Ok(OpResult { ok: true, message, conflicts: Vec::new(), undo: Vec::new() })
             }
+            Err((_, e)) if o.ff_only && e.contains("Not possible to fast-forward") => Ok(OpResult {
+                ok: false,
+                message: format!("{branch} cannot fast-forward to {remote}/{remote_branch}: it has commits of its own. Update with Merge or Rebase"),
+                conflicts: Vec::new(),
+                undo: Vec::new(),
+            }),
             Err((_, e)) => Ok(self.stopped(what, e)),
         }
     }
@@ -403,4 +421,14 @@ pub struct RefComparison {
     /// Commits in the left ref that the right ref does not have, newest first.
     pub only_left: Vec<OutgoingCommit>,
     pub only_right: Vec<OutgoingCommit>,
+}
+
+/// The options of the Update dialog for a merge.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct UpdateOptions {
+    /// Only a fast-forward (`git pull --ff-only`).
+    pub ff_only: bool,
+    /// Always a merge commit (`git pull --no-ff`).
+    pub no_ff: bool,
 }

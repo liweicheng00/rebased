@@ -31,7 +31,7 @@ export class ChangesPanel {
   onParent: (index: number) => void = () => {};
 
   constructor() {
-    this.parentSel = h("select", { class: "dialog-input changes-parent", title: "A merge commit has more than one parent. Choose the parent to compare with." });
+    this.parentSel = h("select", { class: "changes-parent", title: "A merge commit has more than one parent. Choose the parent to compare with." });
     this.parentBar = h("div", { class: "changes-parent-bar", hidden: true }, h("span", { class: "muted-inline" }, "Merge commit, changes"), this.parentSel);
     this.parentSel.addEventListener("change", () => this.onParent(Number(this.parentSel.value)));
     this.title = h("span", { class: "changes-title" }, "Changes");

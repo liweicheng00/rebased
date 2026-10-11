@@ -188,6 +188,27 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 - **Errors**: the backend gives each failure a kind (authentication, rejected push, conflict, locked
   repository, network, not found). A failure that you must fix outside the app, such as a password,
   the network or a `.lock` file of another git program, gets a notification that says what to do.
+- **Log options**: the text filter has Regex (`.*`) and Match Case (`Aa`). The Branch menu has No
+  Merges. View > Highlight marks My Commits (user.email) in bold, Merge Commits in gray, and dims the
+  commits that are not on the Current Branch. View > Commit Timestamp shows the commit time. The menu
+  of a commit has Go to Child.
+- **Show Repository at Revision**: the menu of a commit opens all files of the commit as a tree of
+  folders, with a search field and a read-only view of each file.
+- **Merge commits**: the Changes panel of a merge commit chooses the parent to compare with.
+- **History edits**: Fixup… and Squash Into… put "fixup! <subject>" or "squash! <subject>" into the
+  commit message. Interactively Rebase then puts such commits after their commits (autosquash). Push
+  All up to Here pushes only the commits up to a commit. In the Changes panel of a commit of the
+  current branch, Drop Selected Changes removes the changes of files from the commit, and Extract
+  Selected Changes to Separate Commit moves them into a new commit after it. Both run in memory.
+- **Rebase, Merge and Update options**: the Rebase dialog has --onto, --update-refs, --rebase-merges,
+  --keep-empty and --autosquash. The Merge dialog has --no-ff, --ff-only, --squash, --no-commit,
+  --allow-unrelated-histories and a message. Update with Merge can take only a fast-forward or always
+  make a merge commit.
+- **Branch tools**: Update (Fast-Forward) moves a branch that is not checked out to its tracked
+  branch, also for a multiple selection. Checkout and Rebase onto the current branch is one step.
+  View > Group Branches by Prefix shows feature/a in a folder "feature". Settings > Git > Protected
+  branches (default "main master") stops a force push to such a branch, and a rewrite of commits
+  that are on one.
 - **Other**: context menus, Refresh, Fetch, column choice and resize, resizable panels,
   light, dark or system theme, and a status bar.
 

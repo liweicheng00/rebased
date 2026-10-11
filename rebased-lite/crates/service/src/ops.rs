@@ -21,7 +21,7 @@ pub enum Op {
     RenameBranch { from: String, to: String },
     DeleteBranch { name: String, force: bool },
     DeleteTag { name: String },
-    Merge { rev: String },
+    Merge { rev: String, #[serde(default)] options: rebased_git::ops::MergeOptions },
     Rebase { onto: String, #[serde(default)] options: rebased_git::ops::RebaseOptions },
     /// Fast-forwards local branches that are not checked out (Update Selected).
     FastForward { branches: Vec<String> },
@@ -62,7 +62,7 @@ pub enum Op {
     DeleteUnversioned { paths: Vec<String> },
     /// `rev` pushes only up to that commit of the branch (Push All up to Here).
     Push { branch: String, remote: String, remote_branch: String, #[serde(default)] force: bool, #[serde(default)] set_upstream: bool, #[serde(default)] tags: bool, #[serde(default)] rev: Option<String> },
-    Update { mode: UpdateMode },
+    Update { mode: UpdateMode, #[serde(default)] options: rebased_git::remote::UpdateOptions },
     StashPush { #[serde(default)] message: String, #[serde(default)] paths: Vec<String>, #[serde(default)] include_untracked: bool, #[serde(default)] keep_index: bool },
     StashApply { index: usize, #[serde(default)] pop: bool, #[serde(default)] restore_index: bool },
     StashDrop { index: usize },
@@ -250,7 +250,7 @@ impl Service {
             Op::RenameBranch { from, to } => repo.rename_branch(&from, &to),
             Op::DeleteBranch { name, force } => repo.delete_branch(&name, force),
             Op::DeleteTag { name } => repo.delete_tag(&name),
-            Op::Merge { rev } => repo.merge(&rev),
+            Op::Merge { rev, options } => repo.merge_with(&rev, &options),
             Op::Rebase { onto, options } => repo.rebase_with(&onto, &options),
             Op::FastForward { branches } => repo.fast_forward(&branches),
             Op::CheckoutRebase { branch, onto } => repo.checkout_rebase(&branch, &onto),
@@ -288,7 +288,7 @@ impl Service {
             Op::Push { branch, remote, remote_branch, force, set_upstream, tags, rev } => {
                 repo.push_rev(&branch, rev.as_deref(), &remote, &remote_branch, force, set_upstream, tags)
             }
-            Op::Update { mode } => repo.update(mode),
+            Op::Update { mode, options } => repo.update_with(mode, &options),
             Op::StashPush { message, paths, include_untracked, keep_index } => repo.stash_push(&message, &paths, include_untracked, keep_index),
             Op::StashApply { index, pop, restore_index } => repo.stash_apply(index, pop, restore_index),
             Op::StashDrop { index } => repo.stash_drop(index),
