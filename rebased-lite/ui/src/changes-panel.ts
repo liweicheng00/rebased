@@ -25,8 +25,15 @@ export class ChangesPanel {
   onContextMenu: (changes: Change[], e: MouseEvent) => void = () => {};
   private selected = new Set<number>();
   onSwap: () => void = () => {};
+  /** The parent of a merge commit for the comparison. */
+  private parentSel: HTMLSelectElement;
+  private parentBar: HTMLElement;
+  onParent: (index: number) => void = () => {};
 
   constructor() {
+    this.parentSel = h("select", { class: "dialog-input changes-parent", title: "A merge commit has more than one parent. Choose the parent to compare with." });
+    this.parentBar = h("div", { class: "changes-parent-bar", hidden: true }, h("span", { class: "muted-inline" }, "Merge commit, changes"), this.parentSel);
+    this.parentSel.addEventListener("change", () => this.onParent(Number(this.parentSel.value)));
     this.title = h("span", { class: "changes-title" }, "Changes");
     this.count = h("span", { class: "changes-count" });
     this.treeBtn = h("button", { class: "icon-button", title: "Show as tree or flat list" });
@@ -47,9 +54,16 @@ export class ChangesPanel {
       "section",
       { class: "changes-panel" },
       h("div", { class: "pane-title" }, this.title, this.count, h("span", { class: "spacer" }), this.treeBtn, swap),
+      this.parentBar,
       this.list,
     );
     this.setMessage("Select a commit to see its changes.");
+  }
+
+  /** Shows the parents of a merge commit to choose from; an empty list hides the choice. */
+  setParents(labels: string[], chosen: number) {
+    this.parentBar.hidden = labels.length < 2;
+    this.parentSel.replaceChildren(...labels.map((l, i) => h("option", { value: String(i), selected: i === chosen }, l)));
   }
 
   setTitle(text: string) {

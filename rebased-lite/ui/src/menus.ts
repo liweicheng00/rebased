@@ -11,6 +11,7 @@ import { keymap } from "./keyboard";
 import { toast } from "./notify";
 import { addWorktree, checkoutBranch, checkoutCommit, currentBranch, deleteBranch, deleteRefs, deleteMergedBranches, interactiveRebase, mergeIntoCurrent, newBranch, newTag, rebaseCurrentOnto, renameBranch, resetTo, rewriteSelected, runOp } from "./operations";
 import { compareBranches, fetchRemote, manageRemotes, openOnRemote, remoteRefItems, toggleFavorite } from "./remotes";
+import { openRepoBrowser } from "./repo-browser";
 import { startReview } from "./review-flow";
 import { askForRepo, cloneRepo, fetchAll, jumpToOid, openRepo, refresh, reloadView } from "./repo";
 import { collapse, compare, comparedCommits, compareWithWorktree, fileChangesAction, openFile, short, showSelection } from "./selection";
@@ -31,6 +32,17 @@ async function rowMenu(r: Row, e: MouseEvent) {
     { separator: true },
     { label: "Compare with Parent", action: () => log.select([r.row]) },
     { label: "Compare with Working Tree", action: () => compareWithWorktree(r) },
+    {
+      label: "Show Repository at Revision",
+      disabled: multi,
+      action: () =>
+        void openRepoBrowser(r.oid, short(r.oid), {
+          files: (oid) => api.treeFiles(oid),
+          content: (oid, path) => api.fileAt(oid, path),
+          showHistory: (path) => showHistory(path),
+          copyText: (t) => void copyText(t),
+        }),
+    },
   ];
   if (rows.length === 2) items.push({ label: "Compare Selected Commits", action: () => showSelection(rows) });
   items.push({ separator: true }, { header: "Branch" });

@@ -59,6 +59,8 @@ impl Service {
                 Ok("null".to_string())
             }
             "user_email" => serde_json::to_string(&self.user_email()?),
+            "tree_files" => serde_json::to_string(&self.tree_files(parse(body)?)?),
+            "file_at" => serde_json::to_string(&self.file_at(parse(body)?)?),
             "children" => serde_json::to_string(&self.children(parse(body)?)?),
             "head_message" => serde_json::to_string(&self.head_message()?),
             "submodules" => serde_json::to_string(&self.submodules()?),

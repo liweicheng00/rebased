@@ -280,6 +280,9 @@ export const api = {
   userEmail: () => call<string>("user_email"),
   /** The commits whose parent is `oid`. */
   children: (oid: string) => call<string[]>("children", { oid }),
+  /** The paths of all files of a commit. */
+  treeFiles: (oid: string) => call<string[]>("tree_files", { oid }),
+  fileAt: (oid: string, path: string) => call<FileContent>("file_at", { oid, path }),
   askpassAnswer: (id: number, answer: string | null, remember: boolean) => call<null>("askpass_answer", { id, answer, remember }),
   watchState: () => call<{ repo: number; files: number } | null>("watch_state"),
   stashes: () => call<Stash[]>("stashes"),

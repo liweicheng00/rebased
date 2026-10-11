@@ -667,3 +667,16 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .log-row.hl-mine .subject-text { font-weight: 600; }
 .log-row.hl-merge .subject-text, .log-row.hl-merge .author, .log-row.hl-merge .date { color: var(--muted); }
 .log-row.hl-other:not(.selected) .subject, .log-row.hl-other:not(.selected) .author, .log-row.hl-other:not(.selected) .date, .log-row.hl-other:not(.selected) .hash { opacity: 0.45; }
+
+/* Show Repository at Revision. */
+.repo-browser-search { margin: 6px 8px; width: auto; }
+.repo-browser-files { flex: 1 1 0; min-height: 0; overflow: auto; }
+.repo-browser-row { display: flex; gap: 6px; align-items: center; }
+.repo-browser-row .rebase-author { overflow: hidden; text-overflow: ellipsis; }
+.repo-browser-viewer { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.repo-browser-file { display: flex; gap: 6px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.repo-browser-note { padding: 6px 10px; }
+.repo-browser-editor { flex: 1; min-height: 0; }
+.changes-parent-bar { display: flex; gap: 6px; align-items: center; padding: 3px 8px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.changes-parent-bar[hidden] { display: none; }
+.changes-parent { flex: 1; min-width: 0; height: 22px; padding: 0 4px; font-size: 12px; }

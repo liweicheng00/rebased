@@ -213,6 +213,13 @@ pub struct OidArgs {
     pub oid: String,
 }
 
+/// A file at a commit, for Show Repository at Revision.
+#[derive(Deserialize)]
+pub struct FileAtArgs {
+    pub oid: String,
+    pub path: String,
+}
+
 #[derive(Deserialize)]
 pub struct FindArgs {
     pub query: String,

@@ -77,13 +77,28 @@ export function showSelection(rows: Row[]) {
   if (rows.length === 0) return clearCompare();
   if (rows.length === 1) {
     const r = rows[0];
+    changes.setParents([], 0);
+    if (r.merge) return void compareMerge(r, 0);
     return void compare({ parentOf: r.oid }, { commit: r.oid }, `Changes in ${short(r.oid)}`, "parent", short(r.oid));
   }
+  changes.setParents([], 0);
   // Rows are sorted top to bottom: the last row is the oldest, as in IntelliJ.
   const newer = rows[0];
   const older = rows[rows.length - 1];
   const title = rows.length === 2 ? `${short(older.oid)} → ${short(newer.oid)}` : `${short(older.oid)} → ${short(newer.oid)} (oldest and newest of ${rows.length})`;
   void compare({ commit: older.oid }, { commit: newer.oid }, title, short(older.oid), short(newer.oid));
+}
+
+/** The changes of a merge commit to one of its parents. The panel offers the other parents. */
+async function compareMerge(r: Row, index: number) {
+  const info = await api.commit(r.oid).catch(() => null);
+  if (!info || app.selected.length !== 1 || app.selected[0].oid !== r.oid) return;
+  const parents = info.parents;
+  const i = Math.min(index, parents.length - 1);
+  const names = await Promise.all(parents.map((p) => api.commit(p).then((c) => c.refs.map((x) => x.name)[0] ?? "").catch(() => "")));
+  changes.setParents(parents.map((p, k) => `to parent ${k + 1}: ${short(p)}${names[k] ? ` (${names[k]})` : ""}`), i);
+  changes.onParent = (k) => void compareMerge(r, k);
+  void compare({ commit: parents[i] }, { commit: r.oid }, `Changes in ${short(r.oid)}`, `parent ${i + 1}`, short(r.oid));
 }
 
 export function compareWithWorktree(r: Row) {

@@ -127,6 +127,22 @@ impl Service {
         self.with_repo(|r| Ok(r.git(&["config", "user.email"]).map(|b| String::from_utf8_lossy(&b).trim().to_string()).unwrap_or_default()))
     }
 
+    /// The paths of all files in the tree of a commit, for Show Repository at Revision.
+    pub fn tree_files(&self, args: OidArgs) -> Result<Vec<String>> {
+        self.with_repo(|r| {
+            if args.oid.starts_with('-') {
+                return Err(format!("{} is not a commit", args.oid));
+            }
+            let out = r.git(&["ls-tree", "-r", "-z", "--name-only", "--full-tree", &args.oid]).map_err(err)?;
+            Ok(out.split(|&b| b == 0).filter(|p| !p.is_empty()).map(|p| String::from_utf8_lossy(p).into_owned()).collect())
+        })
+    }
+
+    /// One file of a commit.
+    pub fn file_at(&self, args: crate::FileAtArgs) -> Result<rebased_git::FileContent> {
+        self.with_repo(|r| r.file_content(&Rev::Commit(args.oid.clone()), &args.path).map_err(err))
+    }
+
     /// The commits whose parent is `oid`, newest first, for Go to Child.
     pub fn children(&self, args: OidArgs) -> Result<Vec<String>> {
         self.with(|s| {
