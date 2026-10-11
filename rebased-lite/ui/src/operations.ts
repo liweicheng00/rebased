@@ -191,6 +191,26 @@ export async function deleteBranch(b: BranchInfo) {
   }
 }
 
+/** Deletes several local branches and tags in one operation. A branch that is not merged asks again.
+ * Undo then creates all of them again. */
+export async function deleteRefs(refs: BranchInfo[]) {
+  const branches = refs.filter((b) => b.kind === "local" && !b.current).map((b) => b.name);
+  const tags = refs.filter((b) => b.kind === "tag").map((b) => b.name);
+  const names = [...branches.map((n) => `branch ${n}`), ...tags.map((n) => `tag ${n}`)];
+  if (!names.length) return;
+  if (!(await confirmDialog(`Delete ${names.length} branches and tags`, "Delete these branches and tags? Undo creates them again.", "Delete", true, names))) return;
+  const out = await runOp({ op: "deleteRefs", branches, tags, force: false }, "Deleting branches and tags");
+  const m = out && !out.result.ok ? /^Not merged, so kept: (.*)$/m.exec(out.result.message) : null;
+  if (!m || !out) return;
+  const open = m[1].split(", ");
+  const first = out.result.undo;
+  const what = open.length === 1 ? `${open[0]} has commits` : `${open.join(", ")} have commits`;
+  if (!(await confirmDialog("Branches are not merged", `${what} that are not merged. Delete anyway? The commits can be lost.`, "Delete Anyway", true))) return;
+  const again = await runOp({ op: "deleteRefs", branches: open, tags: [], force: true }, "Deleting branches");
+  // One Undo creates the refs of both steps again.
+  if (again?.result.ok && app.lastUndo) app.lastUndo = { actions: [...first, ...app.lastUndo.actions], message: `Deleted ${branches.length + tags.length} branches and tags` };
+}
+
 /** Delete Merged Branches. "into" starts with the branches merged into a branch (the current branch by
  * default); "tracked" starts with tracked-branch patterns, where `**` means all of them. */
 export async function deleteMergedBranches(start: { mode: "into" | "tracked"; value?: string } = { mode: "into" }) {

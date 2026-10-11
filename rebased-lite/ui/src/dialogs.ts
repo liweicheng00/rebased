@@ -57,8 +57,10 @@ function modal(title: string, body: Node[], buttons: DialogButton[], wide = fals
   });
 }
 
-export async function confirmDialog(title: string, message: string, okLabel: string, danger = false): Promise<boolean> {
-  const r = await modal(title, [h("p", { class: "dialog-text" }, message)], [{ label: okLabel, value: "ok", primary: !danger, danger }]);
+/** A question with one button. `list` shows below the message, one item on each line. */
+export async function confirmDialog(title: string, message: string, okLabel: string, danger = false, list: string[] = []): Promise<boolean> {
+  const body = [h("p", { class: "dialog-text" }, message), ...(list.length ? [h("pre", { class: "dialog-files" }, list.join("\n"))] : [])];
+  const r = await modal(title, body, [{ label: okLabel, value: "ok", primary: !danger, danger }]);
   return r === "ok";
 }
 

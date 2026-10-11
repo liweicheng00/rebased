@@ -1,13 +1,14 @@
 // The context menus of the log, the branches and the changed files.
 
-import { api, type Row } from "./api";
+import { api, type BranchInfo, type Row } from "./api";
 import { WORKTREE } from "./compare-view";
 import { menuBelow, type MenuItem, showMenu } from "./context-menu";
+import { confirmDialog } from "./dialogs";
 import { copyText } from "./dom";
 import { showHistory } from "./history-flow";
 import { openInEditor } from "./editor-flow";
 import { keymap } from "./keyboard";
-import { addWorktree, checkoutBranch, checkoutCommit, currentBranch, deleteBranch, deleteMergedBranches, interactiveRebase, mergeIntoCurrent, newBranch, newTag, rebaseCurrentOnto, renameBranch, resetTo, rewriteSelected, runOp } from "./operations";
+import { addWorktree, checkoutBranch, checkoutCommit, currentBranch, deleteBranch, deleteRefs, deleteMergedBranches, interactiveRebase, mergeIntoCurrent, newBranch, newTag, rebaseCurrentOnto, renameBranch, resetTo, rewriteSelected, runOp } from "./operations";
 import { compareBranches, fetchRemote, manageRemotes, openOnRemote, remoteRefItems, toggleFavorite } from "./remotes";
 import { startReview } from "./review-flow";
 import { askForRepo, cloneRepo, fetchAll, jumpToOid, openRepo, refresh, reloadView } from "./repo";
@@ -132,6 +133,58 @@ sidebar.onContextMenu = (b, e) => {
     { label: "Copy Revision Number", action: () => void copyText(b.oid) },
   ]);
 };
+/** The menu of two or more branches and tags in the branches panel. */
+sidebar.onMultiMenu = (refs, e) => {
+  const names = refs.map((b) => b.name);
+  const locals = refs.filter((b) => b.kind === "local");
+  const remotes = refs.filter((b) => b.kind === "remote");
+  const deletable = refs.filter((b) => (b.kind === "local" && !b.current) || b.kind === "tag");
+  const pushable = locals.filter((b) => b.upstream);
+  const allFavorite = refs.every((b) => sidebar.isFavorite(b));
+  const n = (k: number, one: string, many: string) => (k === 1 ? one : `${k} ${many}`);
+  // Only the actions that apply to the selection show.
+  const items: MenuItem[] = [{ header: `${refs.length} selected` }, { label: "Show Only These in the Log", action: () => filterBar.set({ ...filterBar.filter, branches: names }, true) }];
+  if (refs.length === 2) items.push({ label: `Compare Branches: ${names[0]} and ${names[1]}…`, action: () => compareBranches(names[0], names[1]) });
+  const writes: MenuItem[] = [];
+  if (pushable.length) writes.push({ label: `Push ${n(pushable.length, "1 Branch", "Branches")} to Their Tracked Branches…`, action: () => void pushTracked(pushable) });
+  if (deletable.length) writes.push({ label: `Delete ${n(deletable.length, "1 Branch or Tag", "Branches and Tags")}…`, action: () => void deleteRefs(deletable) });
+  if (remotes.length) writes.push({ label: `Delete ${n(remotes.length, "1 Remote Branch", "Remote Branches")} from Their Remotes…`, action: () => void deleteRemoteBranches(remotes) });
+  if (writes.length) items.push({ separator: true }, ...writes);
+  items.push(
+    { separator: true },
+    {
+      label: allFavorite ? "Remove from Favorites" : "Add to Favorites",
+      action: () => {
+        for (const b of refs) if (sidebar.isFavorite(b) === allFavorite) toggleFavorite(b);
+      },
+    },
+    { label: "Copy Names", action: () => void copyText(names.join("\n")) },
+  );
+  showMenu(e.clientX, e.clientY, items);
+};
+
+/** Pushes each branch to its tracked branch, after one question. */
+async function pushTracked(branches: BranchInfo[]) {
+  const list = branches.map((b) => `${b.name} → ${b.upstream}`);
+  if (!(await confirmDialog(`Push ${branches.length} branches`, "Push each branch to its tracked branch?", "Push", false, list))) return;
+  for (const b of branches) {
+    const up = b.upstream!;
+    const slash = up.indexOf("/");
+    const out = await runOp({ op: "push", branch: b.name, remote: up.slice(0, slash), remoteBranch: up.slice(slash + 1), force: false, setUpstream: false, tags: false }, `Pushing ${b.name}`);
+    if (!out?.result.ok) return;
+  }
+}
+
+/** Deletes remote branches on their remotes, after one question. */
+async function deleteRemoteBranches(refs: BranchInfo[]) {
+  if (!(await confirmDialog(`Delete ${refs.length} remote branches`, "Delete these branches on their remotes? Other people lose them too when they fetch.", "Delete", true, refs.map((b) => b.name)))) return;
+  for (const b of refs) {
+    const slash = b.name.indexOf("/");
+    const out = await runOp({ op: "deleteRemoteRef", remote: b.name.slice(0, slash), name: `refs/heads/${b.name.slice(slash + 1)}` }, `Deleting ${b.name}`);
+    if (!out?.result.ok) return;
+  }
+}
+
 changes.onContextMenu = (files, e) => {
   const c = files[0];
   const commits = !!comparedCommits() && files.every((f) => !f.rightRev);

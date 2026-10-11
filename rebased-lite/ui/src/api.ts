@@ -203,6 +203,7 @@ export type Op =
   | { op: "setUpstream"; branch: string; upstream: string | null }
   | { op: "deleteMerged"; upstreams: string[]; keep: string[]; expected: string[] }
   | { op: "deleteMergedInto"; target: string; names: string[] }
+  | { op: "deleteRefs"; branches: string[]; tags: string[]; force: boolean }
   | { op: "pushAllTags"; remote: string }
   | { op: "finishReview"; branch: string; mode: FinishMode; message: string; deleteBranch: boolean }
   | { op: "rollbackHunks"; path: string; ids: string[] }

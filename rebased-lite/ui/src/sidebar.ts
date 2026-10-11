@@ -22,6 +22,11 @@ export class Sidebar {
   onNavigate: (b: BranchInfo) => void = () => {};
   onToggleFilter: (b: BranchInfo) => void = () => {};
   onContextMenu: (b: BranchInfo, e: MouseEvent) => void = () => {};
+  /** The context menu of a multiple selection: two or more branches and tags. */
+  onMultiMenu: (refs: BranchInfo[], e: MouseEvent) => void = () => {};
+  /** The selected branches and tags, by full ref name. Ctrl+click and Shift+click select more than one. */
+  private selection = new Set<string>();
+  private anchor: string | null = null;
   onCheckout: (b: BranchInfo) => void = () => {};
   onOpenWorktree: (w: Worktree) => void = () => {};
   onWorktreeMenu: (w: Worktree, e: MouseEvent) => void = () => {};
@@ -53,6 +58,8 @@ export class Sidebar {
 
   setRefs(refs: BranchInfo[]) {
     this.refs = refs;
+    const known = new Set(refs.map((b) => b.full));
+    this.selection = new Set([...this.selection].filter((f) => known.has(f)));
     this.render();
   }
 
@@ -93,6 +100,45 @@ export class Sidebar {
   setFilter(names: string[]) {
     this.filterSet = new Set(names);
     this.render();
+  }
+
+  /** The selected branches and tags, in the order of the list. */
+  get selected(): BranchInfo[] {
+    return this.refs.filter((b) => this.selection.has(b.full));
+  }
+
+  clearSelection() {
+    this.selection.clear();
+    this.paintSelection();
+  }
+
+  private paintSelection() {
+    for (const el of this.list.querySelectorAll<HTMLElement>(".branch[data-ref]")) el.classList.toggle("selected", this.selection.has(el.dataset.ref!));
+  }
+
+  /** Selects with the modifier keys of a click: Ctrl or Cmd adds or removes one, Shift adds a range. */
+  private clickSelect(b: BranchInfo, e: MouseEvent): boolean {
+    if (e.shiftKey && this.anchor) {
+      const order = [...new Set([...this.list.querySelectorAll<HTMLElement>(".branch[data-ref]")].map((el) => el.dataset.ref!))];
+      const [i, j] = [order.indexOf(this.anchor), order.indexOf(b.full)];
+      if (i >= 0 && j >= 0) {
+        if (!(e.ctrlKey || e.metaKey)) this.selection.clear();
+        for (const f of order.slice(Math.min(i, j), Math.max(i, j) + 1)) this.selection.add(f);
+        this.paintSelection();
+        return true;
+      }
+    }
+    if (e.ctrlKey || e.metaKey) {
+      if (this.selection.has(b.full)) this.selection.delete(b.full);
+      else this.selection.add(b.full);
+      this.anchor = b.full;
+      this.paintSelection();
+      return true;
+    }
+    this.selection = new Set([b.full]);
+    this.anchor = b.full;
+    this.paintSelection();
+    return false;
   }
 
   private render() {
@@ -290,18 +336,33 @@ export class Sidebar {
     });
     const el = h(
       "div",
-      { class: `branch branch-${b.kind}` + (b.current ? " current" : "") + (filtered ? " filtered" : "") + (fav ? " favorite" : ""), title: `${b.name}\n${b.subject}` },
+      {
+        class: `branch branch-${b.kind}` + (b.current ? " current" : "") + (filtered ? " filtered" : "") + (fav ? " favorite" : "") + (this.selection.has(b.full) ? " selected" : ""),
+        "data-ref": b.full,
+        title: `${b.name}\n${b.subject}\nCtrl+click or Shift+click: select more than one`,
+      },
       h("span", { class: "branch-icon", title: b.current ? "The current branch" : "" }, icon(b.kind === "tag" ? "tag" : b.current ? "current" : "branch")),
       h("span", { class: "branch-name" }, label),
       badges,
       favBtn,
       filterBtn,
     );
-    el.addEventListener("click", () => this.onNavigate(b));
-    el.addEventListener("dblclick", () => (b.kind === "tag" ? this.onToggleFilter(b) : this.onCheckout(b)));
+    // A press with Shift does not select the text of the list.
+    el.addEventListener("mousedown", (e) => e.shiftKey && e.preventDefault());
+    el.addEventListener("click", (e) => {
+      if (!this.clickSelect(b, e)) this.onNavigate(b);
+    });
+    el.addEventListener("dblclick", (e) => !(e.ctrlKey || e.metaKey || e.shiftKey) && (b.kind === "tag" ? this.onToggleFilter(b) : this.onCheckout(b)));
     el.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      this.onContextMenu(b, e);
+      if (!this.selection.has(b.full)) {
+        this.selection = new Set([b.full]);
+        this.anchor = b.full;
+        this.paintSelection();
+      }
+      const refs = this.selected;
+      if (refs.length > 1) this.onMultiMenu(refs, e);
+      else this.onContextMenu(b, e);
     });
     return el;
   }

@@ -653,3 +653,6 @@ textarea.dialog-input { font-family: var(--mono, ui-monospace, monospace); font-
 .settings-hint.warn { color: var(--warn, #b26a00); }
 .ignore-actions { align-items: center; }
 .ignore-check { width: 100%; }
+
+.branch.selected { background: var(--select); }
+.branch.selected:hover { background: var(--select); }

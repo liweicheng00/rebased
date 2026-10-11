@@ -413,6 +413,62 @@ impl Repo {
         Ok(OpResult { ok: true, message, conflicts: Vec::new(), undo })
     }
 
+    /// Deletes several local branches and tags in one operation, for a multiple selection. Without
+    /// `force`, git keeps a branch that is not merged; the message then names it after "Not merged, so kept:".
+    /// Undo creates all deleted refs again, and the settings of the deleted branches too.
+    pub fn delete_refs(&self, branches: &[String], tags: &[String], force: bool) -> Result<OpResult> {
+        if branches.is_empty() && tags.is_empty() {
+            return Ok(OpResult::ok_msg("Nothing to delete"));
+        }
+        let refs: Vec<String> = branches.iter().map(|b| format!("refs/heads/{b}")).chain(tags.iter().map(|t| format!("refs/tags/{t}"))).collect();
+        let oid_of = |full: &str| self.git(&["rev-parse", "-q", "--verify", full]).ok().map(text).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        let before: Vec<(String, String)> = refs.iter().filter_map(|r| oid_of(r).map(|o| (r.clone(), o))).collect();
+        let before_config = self.config_local();
+        let mut errors = Vec::new();
+        if !branches.is_empty() {
+            let mut args = vec!["branch", if force { "-D" } else { "-d" }, "--"];
+            for b in branches {
+                args.push(safe(b)?);
+            }
+            if let Err((_, e)) = self.git_write(&args, &[]) {
+                errors.push(e);
+            }
+        }
+        if !tags.is_empty() {
+            let mut args = vec!["tag", "-d", "--"];
+            for t in tags {
+                args.push(safe(t)?);
+            }
+            if let Err((_, e)) = self.git_write(&args, &[]) {
+                errors.push(e);
+            }
+        }
+        let deleted: Vec<&(String, String)> = before.iter().filter(|(r, _)| oid_of(r).is_none()).collect();
+        let mut undo: Vec<UndoAction> = deleted.iter().map(|(r, o)| UndoAction::CreateRef { name: r.clone(), oid: o.clone() }).collect();
+        let after_config = self.config_local();
+        for (k, v) in &before_config {
+            if after_config.get(k) != Some(v) {
+                undo.push(UndoAction::SetConfig { key: k.clone(), values: v.clone() });
+            }
+        }
+        let n = deleted.len();
+        let wanted = refs.len();
+        let what = |n: usize| if n == 1 { "1 branch or tag".to_string() } else { format!("{n} branches and tags") };
+        if errors.is_empty() {
+            return Ok(OpResult { ok: true, message: format!("Deleted {}", what(n)), conflicts: Vec::new(), undo });
+        }
+        let unmerged: Vec<&String> = branches.iter().filter(|b| oid_of(&format!("refs/heads/{b}")).is_some() && errors.iter().any(|e| e.contains(&format!("'{b}' is not fully merged")))).collect();
+        let mut message = if unmerged.is_empty() {
+            errors.join("\n")
+        } else {
+            format!("Not merged, so kept: {}", unmerged.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "))
+        };
+        if n > 0 {
+            message.push_str(&format!("\nDeleted {n} of {wanted}. Undo creates them again"));
+        }
+        Ok(OpResult { ok: false, message, conflicts: Vec::new(), undo })
+    }
+
     /// The local branches whose commits are all on `target`, as `git branch --merged <target>`. The target
     /// and the branch of this worktree are not in the list. A branch of another worktree is in the list
     /// with its worktree; the dialog does not choose it at first.
