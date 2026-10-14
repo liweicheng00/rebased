@@ -85,7 +85,13 @@ export async function openReview(branch: string, cb: ReviewCallbacks, path?: str
   const overlay = h("div", { class: "merge-overlay" }, win);
   document.body.append(overlay);
   // Back and Forward close the window before they open another place.
-  const unregister = registerWindow(() => close());
+  const unregister = registerWindow(() => close(), "review", (key) => {
+    const [, b, p] = key.split("\0");
+    const at = rows.findIndex((x) => x.path === p);
+    if (b !== current || scope !== "all" || at < 0) return false;
+    void select(at);
+    return true;
+  });
   let width = 420;
   body.style.gridTemplateColumns = `${width}px 4px minmax(0, 1fr)`;
   let start = 0;
@@ -316,7 +322,13 @@ export async function openReview(branch: string, cb: ReviewCallbacks, path?: str
     filesEl.querySelector(`.review-file[data-index="${i}"]`)?.scrollIntoView({ block: "nearest" });
     const f = rows[i];
     const b = current;
-    if (scope === "all") visit({ key: `review\0${b}\0${f.path}`, label: `Review of ${b}: ${f.path}`, open: () => openReview(b, cb, f.path) });
+    if (scope === "all")
+      visit({
+        key: `review\0${b}\0${f.path}`,
+        label: `Review of ${b}: ${f.path}`,
+        open: () => openReview(b, cb, f.path),
+        window: "review",
+      });
     const req = ++request;
     try {
       const pair = await cb.pair(rv.l, rv.r, f.path, f.oldPath);

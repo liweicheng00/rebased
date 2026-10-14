@@ -2,7 +2,7 @@
 // diff below the log, in the local changes, and in the Compare, History, Review and Show Repository
 // windows. The mouse buttons Back and Forward, and the keys of the keymap, move in this list.
 
-import { closeWindows } from "./windows";
+import { closeWindows, showInWindow } from "./windows";
 
 export interface Place {
   /** The same key is the same place: a second visit replaces the entry and adds no new one. */
@@ -11,6 +11,9 @@ export interface Place {
   label: string;
   /** Opens the place again. It can open a window and choose a file in it. */
   open: () => void | Promise<unknown>;
+  /** The kind of window that holds the place; none for the main window. An open window of this kind
+   * shows the place without a new window, when it can. */
+  window?: string;
 }
 
 const MAX = 100;
@@ -60,6 +63,8 @@ async function move(step: number): Promise<string | null> {
   const p = places[at];
   moving = true;
   try {
+    // The window of the place is still open: only its file changes, and nothing else draws again.
+    if (p.window && showInWindow(p.window, p.key)) return p.label;
     closeWindows();
     await p.open();
     // A window chooses its file after it loads; those visits belong to this move too.

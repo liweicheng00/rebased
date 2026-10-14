@@ -213,8 +213,9 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 - **Back and Forward**: the Back and Forward buttons of the mouse, `Cmd+[` and `Cmd+]` on macOS, and
   `Ctrl/Cmd+Alt+Left` and `Ctrl/Cmd+Alt+Right` go to the file before and after. The list holds the
   files that you looked at: in the diff of the log, in the local changes, and in the Compare,
-  History, Review and Show Repository windows. When the place is in another window, the current
-  window closes and that window opens again at the same file.
+  History, Review and Show Repository windows. A place in the open window only changes the file;
+  the window does not draw again. When the place is in another window, the current window closes
+  and that window opens again at the same file.
 - **Other**: context menus, Refresh, Fetch, column choice and resize, resizable panels,
   light, dark or system theme, and a status bar.
 

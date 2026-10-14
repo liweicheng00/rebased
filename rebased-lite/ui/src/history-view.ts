@@ -55,7 +55,13 @@ export async function openHistory(path: string, cb: HistoryCallbacks, oid?: stri
   const overlay = h("div", { class: "merge-overlay" }, win);
   document.body.append(overlay);
   // Back and Forward close the window before they open another place.
-  const unregister = registerWindow(() => close());
+  const unregister = registerWindow(() => close(), "history", (key) => {
+    const [, p, oid] = key.split("\0");
+    const at = entries.findIndex((x) => x.oid === oid);
+    if (p !== path || at < 0) return false;
+    void select(at);
+    return true;
+  });
   let width = 520;
   body.style.gridTemplateColumns = `${width}px 4px minmax(0, 1fr)`;
   let start = 0;
@@ -94,7 +100,12 @@ export async function openHistory(path: string, cb: HistoryCallbacks, oid?: stri
     for (const [j, el] of [...list.children].entries()) el.classList.toggle("selected", j === i);
     list.children[i]?.scrollIntoView({ block: "nearest" });
     const e = entries[i];
-    visit({ key: `history\0${path}\0${e.oid}`, label: `History of ${path}: ${e.oid.slice(0, 8)}`, open: () => openHistory(path, cb, e.oid) });
+    visit({
+      key: `history\0${path}\0${e.oid}`,
+      label: `History of ${path}: ${e.oid.slice(0, 8)}`,
+      open: () => openHistory(path, cb, e.oid),
+      window: "history",
+    });
     const req = ++request;
     const left: RevSpec = e.parents.length ? { commit: e.parents[0] } : { parentOf: e.oid };
     const right: RevSpec = { commit: e.oid };

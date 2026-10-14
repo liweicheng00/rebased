@@ -72,7 +72,14 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
   const overlay = h("div", { class: "merge-overlay" }, win);
   document.body.append(overlay);
   // Back and Forward close the window before they open another place.
-  const unregister = registerWindow(() => close());
+  // Back and Forward: a place of the same two sides shows here, without a new window.
+  const unregister = registerWindow(() => close(), "compare", (key) => {
+    const [, l, r, p] = key.split("\0");
+    const at = files.findIndex((f) => f.path === p);
+    if (l !== left || r !== right || at < 0) return false;
+    void select(at);
+    return true;
+  });
   const setWidth = (px: number) => {
     settings.compareSideWidth = Math.max(260, Math.min(Math.max(260, window.innerWidth - 320), px));
     body.style.gridTemplateColumns = `${settings.compareSideWidth}px 4px minmax(0, 1fr)`;
@@ -131,7 +138,12 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
     selected = i;
     const c = files[i];
     const [l, r, p] = [left, right, c.path];
-    visit({ key: `compare\0${l}\0${r}\0${p}`, label: `Compare ${l} and ${r === WORKTREE ? "the working tree" : r}: ${p}`, open: () => openCompare(l, r, cb, p) });
+    visit({
+      key: `compare\0${l}\0${r}\0${p}`,
+      label: `Compare ${l} and ${r === WORKTREE ? "the working tree" : r}: ${p}`,
+      open: () => openCompare(l, r, cb, p),
+      window: "compare",
+    });
     // A file in a closed folder opens its folders.
     if (settings.compareAsTree && [...collapsed].some((dir) => c.path.startsWith(dir))) {
       for (const dir of [...collapsed]) if (c.path.startsWith(dir)) collapsed.delete(dir);

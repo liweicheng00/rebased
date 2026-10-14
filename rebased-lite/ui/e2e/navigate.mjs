@@ -52,9 +52,12 @@ await page.click(".compare-file >> nth=-1");
 const second = await compareFile();
 check("the compare window has two files", first !== "" && second !== "" && first !== second);
 
-// Back in the window, then out of it, into the log.
+// Back in the window, then out of it, into the log. In the same window, only the file changes: the
+// window is the same element, with its list and its scroll position.
+await page.$eval(".history-window[aria-label='Compare Branches']", (w) => (w.dataset.mark = "kept"));
 await mouse(3);
 await within("Back shows the first file of the compare window", async () => (await compareOpen()) && (await compareFile()) === first);
+check("the window stays the same, without a new render", (await page.$(".history-window[data-mark='kept']")) !== null);
 await mouse(3);
 await within("Back closes the window and shows main.rs of the initial commit", async () => !(await compareOpen()) && (await selectedRow()) === "Initial commit" && (await diffTitle()).includes("main.rs"));
 await page.keyboard.press("Control+Alt+ArrowLeft");
@@ -69,8 +72,10 @@ await mouse(4);
 await within("Forward shows main.rs of the initial commit", async () => (await selectedRow()) === "Initial commit" && (await diffTitle()).includes("main.rs"));
 await page.keyboard.press("Control+Alt+ArrowRight");
 await within("Forward opens the compare window again", async () => (await compareOpen()) && (await compareFile()) === first);
+await page.$eval(".history-window[aria-label='Compare Branches']", (w) => (w.dataset.mark = "again"));
 await mouse(4);
 await within("Forward shows the second file of the window", async () => (await compareFile()) === second);
+check("Forward in the window keeps the window too", (await page.$(".history-window[data-mark='again']")) !== null);
 await shot("nv2-forward");
 console.log("errors:", JSON.stringify(errors));
 await browser.close();

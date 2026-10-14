@@ -49,7 +49,17 @@ export async function openRepoBrowser(oid: string, label: string, cb: RepoBrowse
   const overlay = h("div", { class: "merge-overlay" }, win);
   document.body.append(overlay);
   // Back and Forward close the window before they open another place.
-  const unregister = registerWindow(() => close());
+  const unregister = registerWindow(() => close(), "tree", (key) => {
+    const [, o, p] = key.split("\0");
+    if (o !== oid || !paths.includes(p)) return false;
+    // The folders of the file open, and the search ends, so the row shows.
+    for (let at = p.indexOf("/"); at > 0; at = p.indexOf("/", at + 1)) open.add(p.slice(0, at + 1));
+    search.value = "";
+    render();
+    void show(p);
+    list.querySelector(`.repo-browser-row[data-path="${CSS.escape(p)}"]`)?.scrollIntoView({ block: "nearest" });
+    return true;
+  });
   let width = 380;
   body.style.gridTemplateColumns = `${width}px 4px minmax(0, 1fr)`;
   let start = 0;
@@ -76,7 +86,12 @@ export async function openRepoBrowser(oid: string, label: string, cb: RepoBrowse
 
   const show = async (path: string) => {
     selected = path;
-    visit({ key: `tree\0${oid}\0${path}`, label: `${label}: ${path}`, open: () => openRepoBrowser(oid, label, cb, path) });
+    visit({
+      key: `tree\0${oid}\0${path}`,
+      label: `${label}: ${path}`,
+      open: () => openRepoBrowser(oid, label, cb, path),
+      window: "tree",
+    });
     historyBtn.disabled = copyBtn.disabled = false;
     for (const el of list.querySelectorAll<HTMLElement>(".repo-browser-row")) el.classList.toggle("selected", el.dataset.path === path);
     title.replaceChildren(fileIcon(path), h("code", {}, path));
