@@ -1,5 +1,6 @@
 // The Changes tab: local changes, changelists, commit, rollback and partial changelists.
 
+import { visit } from "./nav";
 import { api, type ChangeListView } from "./api";
 import { type LocalFile } from "./commit-panel";
 import { menuBelow, type MenuItem, showMenu } from "./context-menu";
@@ -8,7 +9,7 @@ import { toast } from "./notify";
 import { currentBranch, runOp } from "./operations";
 import { jumpToOid, loadLocalChanges } from "./repo";
 import { save, settings } from "./settings";
-import { commitPanel, diff } from "./shell";
+import { commitPanel, diff, showLeftTab } from "./shell";
 import { app } from "./state";
 import { WORKTREE } from "./compare-view";
 import { compareBranches } from "./remotes";
@@ -16,6 +17,15 @@ import { pushBranch } from "./sync";
 
 let localRequest = 0;
 export async function showLocalDiff(f: LocalFile) {
+  const path = f.change.path;
+  visit({
+    key: `local\0${path}`,
+    label: `Local change: ${path}`,
+    open: () => {
+      showLeftTab("commit");
+      commitPanel.revealFile(path, f.list);
+    },
+  });
   const req = ++localRequest;
   app.request++;
   app.diffSource = "local";

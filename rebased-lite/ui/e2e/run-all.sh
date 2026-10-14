@@ -65,6 +65,7 @@ fresh dp && run diff-panel "$work/dp"
 fresh gw && run graph-width "$work/gw"
 fresh rv && run review "$work/rv"
 fresh rvf && run review-folders "$work/rvf"
+fresh nv && run navigate "$work/nv"
 fresh or && run open-remote "$work/or"
 fresh tg && run tags "$work/tg"
 if [ -n "$large" ]; then

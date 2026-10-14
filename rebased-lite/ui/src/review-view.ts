@@ -1,6 +1,8 @@
 // The review window: the changes of a branch from the commit where it started, as in a pull request. The
 // user marks files as viewed, adds notes to lines, and merges the branch from here.
 
+import { visit } from "./nav";
+import { registerWindow } from "./windows";
 import type { Change, FileContent, ReviewComment, ReviewDetail, ReviewEdit, ReviewSummary, RevSpec } from "./api";
 import { statusName } from "./changes-panel";
 import { dragResize, formatDate, h, icon, rowSplitter, twisty } from "./dom";
@@ -31,7 +33,9 @@ interface Row {
 
 let closeOpen: (() => void) | null = null;
 
-export async function openReview(branch: string, cb: ReviewCallbacks) {
+/** Opens the review of a branch. `path` chooses the file to show first. */
+export async function openReview(branch: string, cb: ReviewCallbacks, path?: string) {
+  let firstPath = path;
   closeOpen?.();
   const d = sharedDiff();
   let current = branch;
@@ -80,6 +84,8 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
   );
   const overlay = h("div", { class: "merge-overlay" }, win);
   document.body.append(overlay);
+  // Back and Forward close the window before they open another place.
+  const unregister = registerWindow(() => close());
   let width = 420;
   body.style.gridTemplateColumns = `${width}px 4px minmax(0, 1fr)`;
   let start = 0;
@@ -89,6 +95,7 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
   }, () => {});
 
   const close = () => {
+    unregister();
     overlay.remove();
     document.removeEventListener("keydown", onKey, true);
     closeOpen = null;
@@ -308,6 +315,8 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
     for (const el of filesEl.querySelectorAll<HTMLElement>(".review-file")) el.classList.toggle("selected", Number(el.dataset.index) === i);
     filesEl.querySelector(`.review-file[data-index="${i}"]`)?.scrollIntoView({ block: "nearest" });
     const f = rows[i];
+    const b = current;
+    if (scope === "all") visit({ key: `review\0${b}\0${f.path}`, label: `Review of ${b}: ${f.path}`, open: () => openReview(b, cb, f.path) });
     const req = ++request;
     try {
       const pair = await cb.pair(rv.l, rv.r, f.path, f.oldPath);
@@ -341,9 +350,12 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
     }
     if (settings.reviewAsTree) rows.sort((a, b) => treeOrder(a.path, b.path));
     const i = keep ? rows.findIndex((r) => r.path === keep) : -1;
+    const first = firstPath ? rows.findIndex((r) => r.path === firstPath) : -1;
+    firstPath = undefined;
     selected = -1;
     renderFiles();
-    if (i >= 0) {
+    if (first >= 0) await select(first);
+    else if (i >= 0) {
       selected = i;
       renderFiles();
       renderNotes();

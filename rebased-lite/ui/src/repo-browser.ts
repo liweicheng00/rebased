@@ -1,6 +1,8 @@
 // Show Repository at Revision, as in IntelliJ: all files of a commit as a tree of folders, and the content
 // of the selected file. The window only reads; it changes no file.
 
+import { visit } from "./nav";
+import { registerWindow } from "./windows";
 import type { FileContent } from "./api";
 import { editorFont, languageFor } from "./diff-view";
 import { dragResize, h, twisty } from "./dom";
@@ -15,8 +17,8 @@ export interface RepoBrowserCallbacks {
   copyText: (text: string) => void;
 }
 
-/** Opens the window for a commit. `label` names the commit in the title. */
-export async function openRepoBrowser(oid: string, label: string, cb: RepoBrowserCallbacks) {
+/** Opens the window for a commit. `label` names the commit in the title; `path` shows that file first. */
+export async function openRepoBrowser(oid: string, label: string, cb: RepoBrowserCallbacks, path?: string) {
   let paths: string[] = [];
   let selected = "";
   let request = 0;
@@ -46,6 +48,8 @@ export async function openRepoBrowser(oid: string, label: string, cb: RepoBrowse
   );
   const overlay = h("div", { class: "merge-overlay" }, win);
   document.body.append(overlay);
+  // Back and Forward close the window before they open another place.
+  const unregister = registerWindow(() => close());
   let width = 380;
   body.style.gridTemplateColumns = `${width}px 4px minmax(0, 1fr)`;
   let start = 0;
@@ -55,6 +59,7 @@ export async function openRepoBrowser(oid: string, label: string, cb: RepoBrowse
   }, () => {});
 
   const close = () => {
+    unregister();
     editor.getModel()?.dispose();
     editor.dispose();
     overlay.remove();
@@ -71,6 +76,7 @@ export async function openRepoBrowser(oid: string, label: string, cb: RepoBrowse
 
   const show = async (path: string) => {
     selected = path;
+    visit({ key: `tree\0${oid}\0${path}`, label: `${label}: ${path}`, open: () => openRepoBrowser(oid, label, cb, path) });
     historyBtn.disabled = copyBtn.disabled = false;
     for (const el of list.querySelectorAll<HTMLElement>(".repo-browser-row")) el.classList.toggle("selected", el.dataset.path === path);
     title.replaceChildren(fileIcon(path), h("code", {}, path));
@@ -156,7 +162,12 @@ export async function openRepoBrowser(oid: string, label: string, cb: RepoBrowse
 
   try {
     paths = (await cb.files(oid)).sort(treeOrder);
+    if (path && paths.includes(path)) {
+      // The folders of the first file open.
+      for (let at = path.indexOf("/"); at > 0; at = path.indexOf("/", at + 1)) open.add(path.slice(0, at + 1));
+    }
     render();
+    if (path && paths.includes(path)) void show(path);
   } catch (err) {
     count.textContent = String(err).replace(/^Error: /, "");
   }

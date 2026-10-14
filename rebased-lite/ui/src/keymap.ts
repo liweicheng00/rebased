@@ -30,6 +30,8 @@ export function eventKey(e: KeyboardEvent): string | null {
   // By their place too, so Shift does not change them: Shift+= gives "+", which joins the parts.
   else if (e.code === "Equal" || e.code === "NumpadAdd") key = "=";
   else if (e.code === "Minus" || e.code === "NumpadSubtract") key = "-";
+  else if (e.code === "BracketLeft") key = "[";
+  else if (e.code === "BracketRight") key = "]";
   else key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
   const parts: string[] = [];
   if (isMac ? e.metaKey : e.ctrlKey) parts.push("Mod");

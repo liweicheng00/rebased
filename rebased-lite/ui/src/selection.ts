@@ -6,6 +6,7 @@ import { runOp } from "./operations";
 import { jumpToOid } from "./repo";
 import { save, settings } from "./settings";
 import { changes, commitPanel, details, diff, log, stashPanel, task, updateStatus } from "./shell";
+import { visit } from "./nav";
 import { app } from "./state";
 
 /** Which panel the diff shows a file of: the changes of the selected commits, or the local changes. */
@@ -37,7 +38,9 @@ export async function compare(l: RevSpec, r: RevSpec, title: string, leftLabel: 
     if (req !== app.request) return;
     app.changeList = res.changes;
     changes.setChanges(app.changeList);
-    if (app.changeList.length) void openFile(changes.firstInOrder());
+    const want = app.pendingPath ? app.changeList.findIndex((c) => c.path === app.pendingPath) : -1;
+    app.pendingPath = null;
+    if (app.changeList.length) void openFile(want >= 0 ? want : changes.firstInOrder());
     else diff.message("There are no changes.");
   } catch (e) {
     if (req === app.request) {
@@ -53,6 +56,8 @@ export async function openFile(i: number) {
   app.active = i;
   changes.setActive(i);
   const c = app.changeList[i];
+  const one = app.selected.length === 1 ? app.selected[0].oid : null;
+  if (one && typeof app.rightRev === "object") visit({ key: `log\0${one}\0${c.path}`, label: `${short(one)}: ${c.path}`, open: () => showCommitFile(one, c.path) });
   try {
     const r = c.rightRev ?? app.rightRev;
     const pair = await api.filePair(app.left, r, c.path, c.old_path);
@@ -66,6 +71,16 @@ export async function openFile(i: number) {
   } catch (e) {
     if (req === app.request) diff.message(String(e));
   }
+}
+
+/** Back and Forward: selects a commit in the log and opens one of its files. */
+async function showCommitFile(oid: string, path: string) {
+  if (app.selected.length === 1 && app.selected[0].oid === oid && app.diffSource === "log") {
+    const i = app.changeList.findIndex((c) => c.path === path);
+    if (i >= 0) return void openFile(i);
+  }
+  app.pendingPath = path;
+  if (!(await jumpToOid(oid, true))) app.pendingPath = null;
 }
 
 export function showSelection(rows: Row[]) {

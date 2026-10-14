@@ -1,6 +1,8 @@
 // The history of one file, as IntelliJ's Show History: the commits that changed the file, and the
 // change of the file in the selected commit.
 
+import { visit } from "./nav";
+import { registerWindow } from "./windows";
 import type { Blame, FileContent, HistoryEntry, RevSpec } from "./api";
 import { DiffView } from "./diff-view";
 import { dragResize, formatDate, h } from "./dom";
@@ -20,7 +22,8 @@ export function sharedDiff(): DiffView {
   return diff;
 }
 
-export async function openHistory(path: string, cb: HistoryCallbacks) {
+/** Opens the history of a file. `oid` chooses the commit to show first; without it, the newest. */
+export async function openHistory(path: string, cb: HistoryCallbacks, oid?: string) {
   const d = sharedDiff();
   const list = h("div", { class: "history-list", tabIndex: 0 });
   const count = h("span", { class: "muted-inline" }, "Loading…");
@@ -28,6 +31,7 @@ export async function openHistory(path: string, cb: HistoryCallbacks) {
   let selected = -1;
   let request = 0;
   const close = () => {
+    unregister();
     overlay.remove();
     document.removeEventListener("keydown", onKey, true);
   };
@@ -50,6 +54,8 @@ export async function openHistory(path: string, cb: HistoryCallbacks) {
   );
   const overlay = h("div", { class: "merge-overlay" }, win);
   document.body.append(overlay);
+  // Back and Forward close the window before they open another place.
+  const unregister = registerWindow(() => close());
   let width = 520;
   body.style.gridTemplateColumns = `${width}px 4px minmax(0, 1fr)`;
   let start = 0;
@@ -88,6 +94,7 @@ export async function openHistory(path: string, cb: HistoryCallbacks) {
     for (const [j, el] of [...list.children].entries()) el.classList.toggle("selected", j === i);
     list.children[i]?.scrollIntoView({ block: "nearest" });
     const e = entries[i];
+    visit({ key: `history\0${path}\0${e.oid}`, label: `History of ${path}: ${e.oid.slice(0, 8)}`, open: () => openHistory(path, cb, e.oid) });
     const req = ++request;
     const left: RevSpec = e.parents.length ? { commit: e.parents[0] } : { parentOf: e.oid };
     const right: RevSpec = { commit: e.oid };
@@ -128,6 +135,6 @@ export async function openHistory(path: string, cb: HistoryCallbacks) {
     }),
   );
   if (!entries.length) d.message("The file has no commits.");
-  else void select(0);
+  else void select(Math.max(0, oid ? entries.findIndex((e) => e.oid === oid) : 0));
   list.focus();
 }

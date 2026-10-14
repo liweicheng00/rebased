@@ -1,5 +1,6 @@
 // The keymap actions and the key handler.
 
+import { back, forward } from "./nav";
 import { copyText } from "./dom";
 import { openInEditorHere } from "./editor-flow";
 import { showLocalHistory } from "./history-flow";
@@ -75,6 +76,8 @@ for (const a of [
     },
     when: (t: HTMLElement) => !typing(t) && !!t.closest(".log") && app.selected.length > 0,
   },
+  { id: "navigateBack", label: "Back (the file before)", defaults: isMac ? ["Mod+[", "Mod+Alt+ArrowLeft"] : ["Mod+Alt+ArrowLeft"], run: () => void navigate(-1) },
+  { id: "navigateForward", label: "Forward (the next file)", defaults: isMac ? ["Mod+]", "Mod+Alt+ArrowRight"] : ["Mod+Alt+ArrowRight"], run: () => void navigate(1) },
   { id: "zoomIn", label: "Zoom In", defaults: ["Mod+=", "Mod+Shift+="], run: () => zoomBy(1) },
   { id: "zoomOut", label: "Zoom Out", defaults: ["Mod+-"], run: () => zoomBy(-1) },
   { id: "zoomReset", label: "Actual Size", defaults: ["Mod+0"], run: () => resetZoom() },
@@ -91,7 +94,24 @@ window.addEventListener("keydown", (e) => {
   // An open dialog handles its own keys. A window, such as Compare or Review, takes Open in Editor only.
   if (openAtKey.dialog || document.querySelector(".overlay")) return;
   // The zoom keys work in every window, as in a browser.
-  if (keymap.handle(e, (a) => a.id.startsWith("zoom"))) return;
+  if (keymap.handle(e, (a) => a.id.startsWith("zoom") || a.id.startsWith("navigate"))) return;
   if (openAtKey.window || document.querySelector(".merge-overlay")) return void keymap.handle(e, (a) => a.id === "openInEditor");
   keymap.handle(e);
 });
+
+/** Back and Forward, from a key or a mouse button. The status bar names the place. */
+async function navigate(step: -1 | 1) {
+  const label = await (step < 0 ? back() : forward());
+  if (label) statusActivity.textContent = `${step < 0 ? "Back" : "Forward"}: ${label}`;
+}
+
+// The Back and Forward buttons of a mouse (buttons 3 and 4). A dialog keeps them; the browser does not
+// leave the page.
+for (const type of ["mousedown", "mouseup", "auxclick"] as const) {
+  window.addEventListener(type, (e) => {
+    if (e.button !== 3 && e.button !== 4) return;
+    e.preventDefault();
+    if (type !== "mouseup" || document.querySelector(".overlay")) return;
+    void navigate(e.button === 3 ? -1 : 1);
+  });
+}

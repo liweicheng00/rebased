@@ -1,6 +1,8 @@
 // Compare Branches, as IntelliJ's "Compare with Current": the commits that each side has and the other
 // has not, the changed files, and the diff of the selected file.
 
+import { visit } from "./nav";
+import { registerWindow } from "./windows";
 import type { Change, FileContent, OutgoingCommit, RevSpec } from "./api";
 import { statusName } from "./changes-panel";
 import { dragResize, formatDate, h, icon, rowSplitter, twisty } from "./dom";
@@ -69,6 +71,8 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
   );
   const overlay = h("div", { class: "merge-overlay" }, win);
   document.body.append(overlay);
+  // Back and Forward close the window before they open another place.
+  const unregister = registerWindow(() => close());
   const setWidth = (px: number) => {
     settings.compareSideWidth = Math.max(260, Math.min(Math.max(260, window.innerWidth - 320), px));
     body.style.gridTemplateColumns = `${settings.compareSideWidth}px 4px minmax(0, 1fr)`;
@@ -78,6 +82,7 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
   dragResize(grip, "x", () => (start = settings.compareSideWidth), (dx) => setWidth(start + dx), save);
 
   const close = () => {
+    unregister();
     d.setRevert(null);
     overlay.remove();
     document.removeEventListener("keydown", onKey, true);
@@ -125,6 +130,8 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
     if (i < 0 || i >= files.length || !revs) return;
     selected = i;
     const c = files[i];
+    const [l, r, p] = [left, right, c.path];
+    visit({ key: `compare\0${l}\0${r}\0${p}`, label: `Compare ${l} and ${r === WORKTREE ? "the working tree" : r}: ${p}`, open: () => openCompare(l, r, cb, p) });
     // A file in a closed folder opens its folders.
     if (settings.compareAsTree && [...collapsed].some((dir) => c.path.startsWith(dir))) {
       for (const dir of [...collapsed]) if (c.path.startsWith(dir)) collapsed.delete(dir);

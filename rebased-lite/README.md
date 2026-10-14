@@ -210,6 +210,11 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
   View > Group Branches by Prefix shows feature/a in a folder "feature". Settings > Git > Protected
   branches (default "main master") stops a force push to such a branch, and a rewrite of commits
   that are on one.
+- **Back and Forward**: the Back and Forward buttons of the mouse, `Cmd+[` and `Cmd+]` on macOS, and
+  `Ctrl/Cmd+Alt+Left` and `Ctrl/Cmd+Alt+Right` go to the file before and after. The list holds the
+  files that you looked at: in the diff of the log, in the local changes, and in the Compare,
+  History, Review and Show Repository windows. When the place is in another window, the current
+  window closes and that window opens again at the same file.
 - **Other**: context menus, Refresh, Fetch, column choice and resize, resizable panels,
   light, dark or system theme, and a status bar.
 

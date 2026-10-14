@@ -19,4 +19,6 @@ export const app = {
   request: 0,
   watchQuietUntil: 0,
   watchSeen: null as { repo: number; files: number } | null,
+  /** The file that the next comparison opens first, for Back and Forward. */
+  pendingPath: null as string | null,
 };
