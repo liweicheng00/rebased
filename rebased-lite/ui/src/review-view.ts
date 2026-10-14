@@ -214,11 +214,18 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
     const tree = buildTree(rows.map((r, index) => ({ path: r.path, index })));
     const out: HTMLElement[] = [];
     walkTree(tree, collapsed, {
-      dir: (label, full, depth, open, count, viewed) => {
+      dir: (label, full, depth, open, count, viewed, files) => {
+        // The box of a folder marks all of its files as viewed, or as not viewed.
+        const box = h("input", { type: "checkbox", class: "review-viewed", checked: count > 0 && viewed === count, title: "Viewed: all files in this folder" });
+        box.indeterminate = viewed > 0 && viewed < count;
+        box.addEventListener("mousedown", (e) => e.stopPropagation());
+        box.addEventListener("click", (e) => e.stopPropagation());
+        box.addEventListener("change", () => void setViewedMany(files.map((i) => rows[i]), box.checked));
         const row = h(
           "div",
           { class: "history-row review-dir" + (count && viewed === count ? " viewed" : ""), style: { paddingLeft: `${8 + depth * 14}px` }, title: full },
           twisty(open),
+          scope === "all" ? box : "",
           h("span", { class: "dir-name" }, label),
           h("span", { class: "dir-count" }, scope === "all" ? `${viewed}/${count}` : String(count)),
         );
@@ -287,8 +294,10 @@ export async function openReview(branch: string, cb: ReviewCallbacks) {
     }
   });
 
-  const setViewed = async (f: Row, viewed: boolean) => {
-    await cb.edit({ action: "viewed", branch: current, paths: [f.path], viewed });
+  const setViewed = (f: Row, viewed: boolean) => setViewedMany([f], viewed);
+  const setViewedMany = async (files: Row[], viewed: boolean) => {
+    if (!files.length) return;
+    await cb.edit({ action: "viewed", branch: current, paths: files.map((f) => f.path), viewed });
     await reload();
   };
 

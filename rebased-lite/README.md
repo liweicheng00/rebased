@@ -112,7 +112,8 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 - **Review Branch (a local pull request)**: "Review Branch…" in the context menu of a local branch,
   or New Review in the Reviews tab (Mod+4), starts a review of a branch against a base. The review
   shows the changes from the merge base, as a pull request does, and each commit alone. Mark each
-  file as viewed (the check box or Space). A new version of the file clears the mark. Add a note on
+  file as viewed (the check box or Space). The box of a folder marks all of its files; it is half
+  checked when only some are viewed. A new version of the file clears the mark. Add a note on
   the line of the cursor. A note on a file that changed later shows as outdated. The window shows
   before the merge which files conflict. The Reviews tab lists all reviews with their progress, and
   the window header switches between them. "Merge…" merges with a merge commit, Squash, or Rebase

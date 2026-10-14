@@ -64,6 +64,7 @@ fresh dm && run delete-merged "$work/dm"
 fresh dp && run diff-panel "$work/dp"
 fresh gw && run graph-width "$work/gw"
 fresh rv && run review "$work/rv"
+fresh rvf && run review-folders "$work/rvf"
 fresh or && run open-remote "$work/or"
 fresh tg && run tags "$work/tg"
 if [ -n "$large" ]; then
