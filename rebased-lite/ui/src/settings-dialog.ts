@@ -135,7 +135,7 @@ export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | nul
 
     const git = () => {
       const status = h("span", { class: "settings-hint" }, "");
-      const input = text(() => draft.gitPath, (v) => (draft.gitPath = v), "git (from PATH)");
+      const input = text(() => draft.gitPath, (v) => (draft.gitPath = v), "Automatic: the first git that works");
       const test = h("button", {}, "Test");
       test.addEventListener("click", async (e) => {
         e.preventDefault();
@@ -161,7 +161,7 @@ export function openSettingsDialog(ctx: SettingsContext): Promise<Settings | nul
       return [
         row("Git executable", h("div", { class: "dialog-field-row" }, input, browse, test)),
         status,
-        h("p", { class: "settings-hint" }, "Rebased Lite runs this program for all git commands. An empty field uses git from PATH."),
+        h("p", { class: "settings-hint" }, "Rebased Lite runs this program for all git commands. An empty field takes the first git that works: git from PATH, then Homebrew, the Command Line Tools and Xcode. On macOS this skips the git of /usr/bin while the Xcode license is not accepted. Test shows the program that it takes."),
         row(
           "Protected branches",
           text(() => draft.protectedBranches, (v) => (draft.protectedBranches = v), "for example main master release/*"),

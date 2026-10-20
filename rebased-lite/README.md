@@ -178,7 +178,8 @@ The design spec is in [`docs/rebased-lite/design-spec.md`](../docs/rebased-lite/
 - **Worktrees**: list, add (on a new or an existing branch), open, remove and prune.
 - **Settings** (⚙, or `Ctrl+Alt+S`; `Cmd+,` on macOS): theme, the default Update mode, auto
   refresh, auto fetch every N minutes, the git executable (with a Test button that shows its
-  version), the diff font size and family, the diff options, the Local History limits, and the
+  version; an empty field takes the first git that works, so the git stub of macOS that waits for the
+  Xcode license is skipped for Homebrew or the Command Line Tools), the diff font size and family, the diff options, the Local History limits, and the
   keymap. In the keymap, click a key and press the new one; an action can have several keys. A key
   that two actions use is marked red. The git program and the Local History limits are in
   `settings.json` in the configuration directory (`~/.config/rebased-lite` on Linux,

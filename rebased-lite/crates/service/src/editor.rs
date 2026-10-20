@@ -95,7 +95,7 @@ pub fn working_tree_file(root: &Path, path: &str) -> Result<PathBuf> {
 }
 
 /// The PATH of the login shell of the user, read once.
-fn login_path() -> &'static Option<String> {
+pub(crate) fn login_path() -> &'static Option<String> {
     static PATH: OnceLock<Option<String>> = OnceLock::new();
     PATH.get_or_init(|| {
         if cfg!(windows) {

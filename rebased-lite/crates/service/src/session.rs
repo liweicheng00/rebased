@@ -44,8 +44,8 @@ impl Service {
     pub fn with_askpass(helper: &Path) -> Service {
         let config_dir = config::config_dir();
         let settings = config::load(&config_dir);
-        // A git program that does not work any more falls back to git from PATH.
-        let _ = rebased_git::set_git_program(&settings.git_path);
+        // An empty setting, or a git program that does not work any more, takes the first git that works.
+        let _ = use_git(&settings.git_path);
         let events = Arc::new(events::Events::default());
         let sink = events.clone();
         let on_prompts: askpass::OnPrompts = Arc::new(move |prompts| sink.emit(events::Event::Askpass { prompts }));
@@ -88,7 +88,16 @@ impl Service {
         rebased_git::global_ignore::save_global_ignore(&args.text, &args.expected).map_err(err)
     }
 
+    /// The version of a git program, for the Test button. An empty path tests the automatic choice and
+    /// names the program that it chose.
     pub fn git_version(&self, args: PathArgs) -> Result<String> {
+        if args.path.trim().is_empty() {
+            let candidates = rebased_git::git_candidates(crate::editor::login_path().as_deref());
+            let saved = rebased_git::git_program();
+            let choice = rebased_git::choose_git_program(&candidates).map_err(err);
+            let _ = rebased_git::set_git_program(&saved);
+            return choice.map(|c| describe(&c));
+        }
         rebased_git::git_version(&args.path).map_err(err)
     }
 
@@ -99,7 +108,7 @@ impl Service {
     /// Applies and saves the settings. A git program that is not git is refused and nothing changes.
     /// Returns the version of the git program.
     pub fn set_backend_settings(&self, mut s: config::BackendSettings) -> Result<String> {
-        let version = rebased_git::set_git_program(&s.git_path).map_err(err)?;
+        let version = if s.git_path.trim().is_empty() { use_git("")? } else { rebased_git::set_git_program(&s.git_path).map_err(err)? };
         let sessions: Vec<_> = self.session.lock().unwrap().map.values().cloned().collect();
         for session in sessions {
             session.lock().unwrap().history.set_limits(s.history);
@@ -253,4 +262,29 @@ fn reachable(topo: &Topology, start: Option<usize>) -> Vec<bool> {
         stack.extend(topo.parents[n].iter().filter_map(|p| topo.index_of(p)).filter(|&p| !seen[p]));
     }
     seen
+}
+
+/// Uses the git program of the settings. An empty setting, or a program that does not work, takes the
+/// first git that works: from PATH, from the PATH of the login shell, Homebrew, the Command Line Tools or
+/// Xcode. Returns the version, with the program when it is not git from PATH.
+pub(crate) fn use_git(configured: &str) -> Result<String> {
+    if !configured.trim().is_empty() {
+        if let Ok(v) = rebased_git::set_git_program(configured) {
+            return Ok(v);
+        }
+    }
+    let candidates = rebased_git::git_candidates(crate::editor::login_path().as_deref());
+    rebased_git::choose_git_program(&candidates).map(|c| describe(&c)).map_err(err)
+}
+
+/// "2.45.1", or "2.39.5 (/Library/Developer/CommandLineTools/usr/bin/git)" for a program that is not git
+/// from PATH, with the reason when git from PATH did not work.
+fn describe(c: &rebased_git::GitChoice) -> String {
+    if c.program == "git" {
+        return c.version.clone();
+    }
+    match &c.skipped {
+        Some(why) => format!("{} ({}). git from PATH did not work: {}", c.version, c.program, why.lines().next().unwrap_or("")),
+        None => format!("{} ({})", c.version, c.program),
+    }
 }

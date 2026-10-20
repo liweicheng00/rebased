@@ -67,6 +67,11 @@ pub fn git_version(program: &str) -> Result<String> {
     let candidate = if program.trim().is_empty() { "git" } else { program.trim() };
     let out = Command::new(candidate).arg("--version").output().map_err(|e| GitError(format!("cannot run {candidate}: {e}")))?;
     let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if !out.status.success() && !text.starts_with("git version ") {
+        // For example the stub of macOS while the Xcode license is not accepted.
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(GitError(format!("{candidate} does not work: {}", if err.is_empty() { text } else { err })));
+    }
     Ok(text.strip_prefix("git version ").ok_or_else(|| GitError(format!("{candidate} is not git: {text}")))?.to_string())
 }
 
@@ -115,6 +120,71 @@ pub fn git_at_least(min: (u32, u32)) -> bool {
     let Ok(v) = git_version(&program) else { return false };
     let mut parts = v.split(|c: char| !c.is_ascii_digit()).map(|s| s.parse::<u32>().unwrap_or(0));
     (parts.next().unwrap_or(0), parts.next().unwrap_or(0)) >= min
+}
+
+/// The git programs to try when the setting is empty, in order: `git` from PATH, the `git` of each folder
+/// of `search_path` (the PATH of the login shell), Homebrew, the Command Line Tools and Xcode. On macOS,
+/// `/usr/bin/git` is a stub of Apple that stops while the Xcode license is not accepted; the Command
+/// Line Tools and Homebrew have a real git that does not need it.
+pub fn git_candidates(search_path: Option<&str>) -> Vec<String> {
+    let mut out = vec!["git".to_string()];
+    let exe = if cfg!(windows) { "git.exe" } else { "git" };
+    if let Some(p) = search_path {
+        out.extend(std::env::split_paths(p).map(|d| d.join(exe).to_string_lossy().into_owned()));
+    }
+    if cfg!(target_os = "macos") {
+        for p in ["/opt/homebrew/bin/git", "/usr/local/bin/git", "/Library/Developer/CommandLineTools/usr/bin/git", "/Applications/Xcode.app/Contents/Developer/usr/bin/git"] {
+            out.push(p.to_string());
+        }
+    } else if cfg!(windows) {
+        for p in [r"C:\Program Files\Git\cmd\git.exe", r"C:\Program Files (x86)\Git\cmd\git.exe"] {
+            out.push(p.to_string());
+        }
+    } else {
+        out.extend(["/usr/bin/git", "/usr/local/bin/git"].map(String::from));
+    }
+    let mut seen = std::collections::HashSet::new();
+    out.retain(|p| seen.insert(p.clone()));
+    out
+}
+
+/// The git program that the app uses, after a choice.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GitChoice {
+    /// The program; "git" is git from PATH.
+    pub program: String,
+    pub version: String,
+    /// Why git from PATH did not work, when another program was chosen. For example the message of
+    /// the Xcode license.
+    pub skipped: Option<String>,
+}
+
+/// Chooses the first git program of `candidates` that answers `--version`, and uses it. The error of the
+/// first candidate comes back when none works.
+pub fn choose_git_program(candidates: &[String]) -> Result<GitChoice> {
+    let mut first_error: Option<GitError> = None;
+    for c in candidates {
+        if c != "git" && !Path::new(c).is_file() {
+            continue;
+        }
+        match git_version(c) {
+            Ok(version) => {
+                let program = if c == "git" { String::new() } else { c.clone() };
+                *GIT_PROGRAM.write().unwrap() = program.clone();
+                let skipped = first_error.map(|e| e.0);
+                return Ok(GitChoice { program: if program.is_empty() { "git".into() } else { program }, version, skipped });
+            }
+            Err(e) => {
+                first_error.get_or_insert(e);
+            }
+        }
+    }
+    Err(first_error.unwrap_or_else(|| GitError("git was not found".into())))
+}
+
+/// The git program in use; empty is git from PATH.
+pub fn git_program() -> String {
+    GIT_PROGRAM.read().unwrap().clone()
 }
 
 /// Sets the git program. Empty means `git` from PATH. Returns its version. A program that is not git is
