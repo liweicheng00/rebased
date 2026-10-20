@@ -1,6 +1,7 @@
 // Branches panel: local branches, remote branches grouped by remote, and tags.
 
 import type { BranchInfo, RecentBranch, Submodule, Worktree } from "./api";
+import { pathLabels } from "./path-labels";
 import { compareTags } from "./version-sort";
 import { h, icon, twisty } from "./dom";
 
@@ -248,8 +249,10 @@ export class Sidebar {
     });
     frag.append(header);
     if (!open) return;
-    for (const w of this.worktrees) {
-      const name = w.path.split(/[\\/]/).pop() ?? w.path;
+    // Worktrees with the same folder name show the folders above them too.
+    const labels = pathLabels(this.worktrees.map((w) => w.path));
+    for (const [index, w] of this.worktrees.entries()) {
+      const name = labels[index] ?? w.path;
       const detail = w.branch ?? (w.detached ? `detached ${w.head?.slice(0, 8) ?? ""}` : w.bare ? "bare" : "");
       const el = h(
         "div",

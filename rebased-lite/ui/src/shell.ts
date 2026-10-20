@@ -1,5 +1,6 @@
 // The components of the window, the layout, the theme and the status bar.
 
+import { pathLabels } from "./path-labels";
 import { ApiError, errorHint } from "./api";
 import { ChangesPanel } from "./changes-panel";
 import { CommitPanel } from "./commit-panel";
@@ -169,7 +170,10 @@ export function updateStatus() {
   const branch = app.repoState?.rebasing
     ? `rebasing ${app.repoState.rebasing}`
     : (app.view.head?.replace("refs/heads/", "") ?? (app.view.headOid ? `detached at ${app.view.headOid.slice(0, 8)}` : "no commits"));
-  repoLabel.replaceChildren(h("b", {}, app.view.root.split(/[\\/]/).pop() ?? app.view.root));
+  // The same short name as the tab: folders with the same name show the folders above them.
+  const root = app.view.root;
+  const tabs = settings.tabs.includes(root) ? settings.tabs : [...settings.tabs, root];
+  repoLabel.replaceChildren(h("b", { title: root }, pathLabels(tabs)[tabs.indexOf(root)] ?? root));
   branchBtn.hidden = false;
   branchBtn.replaceChildren(icon("branch"), branch, icon("chevron-down", "icon-caret"));
   const changed = app.repoState?.changedFiles ?? 0;
