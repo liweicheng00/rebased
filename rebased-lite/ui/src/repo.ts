@@ -30,8 +30,11 @@ const asking = new Set<string>();
 /** Reads the worktree and branch of a tab again, for example after a checkout. */
 export async function refreshTabInfo(root: string) {
   const info = await api.repoInfo(root).catch(() => null);
-  if (info) tabInfo.set(root, info);
-  renderTabs();
+  if (!info || !settings.tabs.includes(root)) return;
+  const old = tabInfo.get(root);
+  tabInfo.set(root, info);
+  // The tab bar draws again only when the tab changes: a new tab bar under the mouse loses a click.
+  if (old?.mainRoot !== info.mainRoot || old?.branch !== info.branch) renderTabs();
 }
 
 const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
