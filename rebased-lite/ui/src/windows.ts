@@ -34,3 +34,19 @@ export function showInWindow(kind: string, key: string): boolean {
 export function closeWindows() {
   for (const w of [...windows]) w.close();
 }
+
+/** What changed outside the app: files of the working tree, or refs and commits of the repository. */
+export type RepoChange = "files" | "repo";
+
+const listeners = new Set<(change: RepoChange) => void>();
+
+/** Calls `fn` when the watcher sees a change outside the app. The returned function stops it. */
+export function onRepoChange(fn: (change: RepoChange) => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+/** Tells the open windows that files or refs changed. */
+export function notifyRepoChange(change: RepoChange) {
+  for (const fn of [...listeners]) fn(change);
+}

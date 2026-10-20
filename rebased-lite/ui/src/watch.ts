@@ -1,5 +1,6 @@
 // Credential prompts, and the reload when files or refs change outside the app.
 
+import { notifyRepoChange } from "./windows";
 import { api, type AskpassPrompt, onBackendEvent } from "./api";
 import { showLocalDiff } from "./commit-flow";
 import { credentialDialog } from "./dialogs";
@@ -46,6 +47,7 @@ async function onCounters(c: { repo: number; files: number }) {
   }
   if (filesChangedWhileQuiet && c.files === before.files && c.repo === before.repo) {
     filesChangedWhileQuiet = false;
+    notifyRepoChange("files");
     await loadLocalChanges();
     const f = commitPanel.activeFile();
     if (app.diffSource === "local" && f) void showLocalDiff(f);
@@ -53,12 +55,14 @@ async function onCounters(c: { repo: number; files: number }) {
   }
   filesChangedWhileQuiet = false;
   if (c.repo !== before.repo) {
+    notifyRepoChange("repo");
     const r = await api.refresh().catch(() => null);
     if (r) {
       await applyView(r, true);
       await loadRefs();
     }
   } else if (c.files !== before.files) {
+    notifyRepoChange("files");
     app.repoState = await api.repoState().catch(() => app.repoState);
     banner.update(app.repoState);
     updateStatus();

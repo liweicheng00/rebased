@@ -2,7 +2,7 @@
 // has not, the changed files, and the diff of the selected file.
 
 import { visit } from "./nav";
-import { registerWindow } from "./windows";
+import { onRepoChange, registerWindow } from "./windows";
 import type { Change, FileContent, OutgoingCommit, RevSpec } from "./api";
 import { statusName } from "./changes-panel";
 import { dragResize, formatDate, h, icon, rowSplitter, twisty } from "./dom";
@@ -90,6 +90,7 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
 
   const close = () => {
     unregister();
+    stopWatching();
     d.setRevert(null);
     overlay.remove();
     document.removeEventListener("keydown", onKey, true);
@@ -321,6 +322,16 @@ export async function openCompare(leftRef: string, rightRef: string, cb: Compare
       }
     }
   };
+
+  // A change outside the app: a working-tree side loads its files again; a change of refs or commits
+  // loads all again. The diff keeps its file and its scroll position.
+  const stopWatching = onRepoChange((change) => {
+    const keep = files[selected]?.path;
+    if (change === "files" && right !== WORKTREE && left !== WORKTREE) return;
+    if (change === "files" && keep) return void refreshFiles(keep);
+    path = keep;
+    void load();
+  });
 
   leftSel.addEventListener("change", () => {
     left = leftSel.value;
