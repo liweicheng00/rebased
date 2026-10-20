@@ -88,6 +88,17 @@ impl Service {
         rebased_git::global_ignore::save_global_ignore(&args.text, &args.expected).map_err(err)
     }
 
+    /// The kind of a repository for its tab, without a load: a linked worktree names its main repository.
+    pub fn repo_info(&self, args: PathArgs) -> Result<crate::RepoInfo> {
+        let repo = Repo::open(Path::new(&args.path)).map_err(err)?;
+        let (git_dir, common) = (repo.git_dir(), repo.common_dir());
+        // The common directory is "<main>/.git"; a bare main repository is the directory itself.
+        let main_of = |c: &Path| if c.file_name().is_some_and(|n| n == ".git") { c.parent().unwrap_or(c).display().to_string() } else { c.display().to_string() };
+        let main_root = (git_dir != common).then(|| main_of(&common));
+        let branch = repo.git(&["symbolic-ref", "--short", "-q", "HEAD"]).ok().map(|b| String::from_utf8_lossy(&b).trim().to_string()).filter(|b| !b.is_empty());
+        Ok(crate::RepoInfo { root: repo.root.display().to_string(), main_root, branch })
+    }
+
     /// The version of a git program, for the Test button. An empty path tests the automatic choice and
     /// names the program that it chose.
     pub fn git_version(&self, args: PathArgs) -> Result<String> {

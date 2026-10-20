@@ -27,6 +27,7 @@ impl Service {
             "open" => serde_json::to_string(&self.open(parse(body)?)?),
             "set_view" => serde_json::to_string(&self.set_view(parse(body)?)?),
             "refresh" => serde_json::to_string(&self.refresh()?),
+            "repo_info" => serde_json::to_string(&self.repo_info(parse(body)?)?),
             "git_version" => serde_json::to_string(&self.git_version(parse(body)?)?),
             "clone" => serde_json::to_string(&self.clone_repo(parse(body)?)?),
             "global_ignore" => serde_json::to_string(&self.global_ignore()?),

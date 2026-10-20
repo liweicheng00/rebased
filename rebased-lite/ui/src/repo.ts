@@ -1,6 +1,6 @@
 // Opening repositories in tabs, loading the log and the refs, and moving in the log.
 
-import { api, type BranchInfo, inTauri, type LogFilter, pickFolder, type RecentBranch, setRepoRoot, type Submodule, type ViewResult, type Worktree } from "./api";
+import { api, type BranchInfo, inTauri, type LogFilter, pickFolder, type RecentBranch, type RepoInfo, setRepoRoot, type Submodule, type ViewResult, type Worktree } from "./api";
 import { h, icon } from "./dom";
 import { emptyFilter } from "./filter-bar";
 import { loadFavorites } from "./remotes";
@@ -23,17 +23,42 @@ interface TabState {
 }
 const tabStates = new Map<string, TabState>();
 
+/** The worktree and branch of each tab, read without a load of the repository. */
+const tabInfo = new Map<string, RepoInfo>();
+const asking = new Set<string>();
+
+/** Reads the worktree and branch of a tab again, for example after a checkout. */
+export async function refreshTabInfo(root: string) {
+  const info = await api.repoInfo(root).catch(() => null);
+  if (info) tabInfo.set(root, info);
+  renderTabs();
+}
+
+const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
+
 export function renderTabs() {
+  for (const root of settings.tabs) {
+    if (tabInfo.has(root) || asking.has(root)) continue;
+    asking.add(root);
+    void refreshTabInfo(root).finally(() => asking.delete(root));
+  }
   tabBar.hidden = settings.tabs.length < 2;
   tabBar.replaceChildren(
     ...settings.tabs.map((root) => {
-      const name = root.split(/[\\/]/).pop() ?? root;
+      const name = baseName(root);
+      const info = tabInfo.get(root);
+      // A linked worktree shows the worktree icon and the name of its main repository.
+      const worktree = info?.mainRoot ?? null;
+      const label = worktree
+        ? [icon("worktree", "tab-icon"), h("span", { class: "tab-name" }, name), h("span", { class: "tab-main" }, `of ${baseName(worktree)}`)]
+        : [h("span", { class: "tab-name" }, name)];
+      const title = [worktree ? `Worktree of ${worktree}` : "", info?.branch ? `Branch: ${info.branch}` : info ? "Detached HEAD" : "", root].filter(Boolean).join("\n");
       const close = h("button", { class: "tab-close", title: "Close the tab" }, icon("close"));
       close.addEventListener("click", (e) => {
         e.stopPropagation();
         void closeTab(root);
       });
-      const tab = h("div", { class: "tab" + (root === settings.activeTab ? " on" : ""), title: root, role: "tab" }, h("span", { class: "tab-name" }, name), close);
+      const tab = h("div", { class: "tab" + (root === settings.activeTab ? " on" : "") + (worktree ? " worktree" : ""), title, role: "tab" }, ...label, close);
       tab.addEventListener("mousedown", (e) => {
         if (e.button === 1) {
           e.preventDefault();
@@ -228,6 +253,8 @@ export async function loadRefs() {
     sidebar.setWorktrees(app.worktrees);
     sidebar.setSubmodules(subs);
     await loadFavorites();
+    // The tooltip of the tab names the branch; a checkout changes it.
+    if (app.view) void refreshTabInfo(app.view.root);
     log.myEmail = (await api.userEmail().catch(() => "")).toLowerCase();
     banner.update(app.repoState);
     filterBar.branchNames = app.refs.filter((b) => b.kind !== "tag").map((b) => b.name);

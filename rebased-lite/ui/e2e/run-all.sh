@@ -68,6 +68,7 @@ fresh rvf && run review-folders "$work/rvf"
 fresh nv && run navigate "$work/nv"
 fresh crf && run compare-refresh "$work/crf"
 fresh rvr && run review-refresh "$work/rvr"
+fresh wtt && run worktree-tab "$work/wtt"
 fresh or && run open-remote "$work/or"
 fresh tg && run tags "$work/tg"
 if [ -n "$large" ]; then

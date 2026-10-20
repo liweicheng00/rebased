@@ -45,6 +45,7 @@ import type { ViewResult } from "./bindings/ViewResult";
 import type { Worktree } from "./bindings/Worktree";
 import type { WorktreeBlockers } from "./bindings/WorktreeBlockers";
 import type { GlobalIgnore } from "./bindings/GlobalIgnore";
+import type { RepoInfo } from "./bindings/RepoInfo";
 import type { IgnoreMatch } from "./bindings/IgnoreMatch";
 import type { Change as ChangeResult } from "./bindings/Change";
 export type {
@@ -65,6 +66,7 @@ export type {
   MergedBranches,
   WorktreeBlockers,
   GlobalIgnore,
+  RepoInfo,
   IgnoreMatch,
   FinishMode,
   ReviewComment,
@@ -270,6 +272,8 @@ export const api = {
   close: (path: string) => call<null>("close", { path }),
   /** The version of a git program; it changes nothing. Empty means git from PATH. */
   gitVersion: (path: string) => call<string>("git_version", { path }),
+  /** A linked worktree and its main repository, and the branch, for the tab of a repository. */
+  repoInfo: (path: string) => call<RepoInfo>("repo_info", { path }),
   globalIgnore: () => call<GlobalIgnore>("global_ignore"),
   /** Writes the global ignore file. It fails when the file is no longer `expected`. */
   saveGlobalIgnore: (text: string, expected: string) => call<GlobalIgnore>("save_global_ignore", { text, expected }),

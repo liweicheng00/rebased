@@ -297,3 +297,16 @@ pub struct CommitInfo {
     pub commit: CommitFull,
     pub refs: Vec<RefLabel>,
 }
+
+/// What a tab shows about its repository: a linked worktree names its main repository.
+#[derive(Serialize)]
+#[derive(ts_rs::TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoInfo {
+    pub root: String,
+    /// The folder of the main repository when this is a linked worktree; else none.
+    pub main_root: Option<String>,
+    /// The checked-out branch; none for a detached HEAD.
+    pub branch: Option<String>,
+}

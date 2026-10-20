@@ -61,6 +61,9 @@ input { font: inherit; }
 .tabbar { display: flex; align-items: stretch; gap: 1px; padding: 0 8px; background: var(--panel); border-bottom: 1px solid var(--border); overflow-x: auto; min-height: 30px; }
 .tab { display: flex; align-items: center; gap: 6px; padding: 0 6px 0 12px; cursor: default; border-bottom: 2px solid transparent; white-space: nowrap; color: var(--muted); }
 .tab:hover { background: var(--hover); }
+/* A linked worktree: its icon and the name of its main repository. */
+.tab .tab-icon { color: var(--accent); }
+.tab-main { font-size: 11px; font-weight: normal; color: var(--muted); }
 .tab.on { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
 .tab-close, .tab-add { border: none; background: none; color: var(--muted); cursor: pointer; border-radius: 4px; padding: 0 4px; font: inherit; }
 .tab-close { font-size: 10px; visibility: hidden; }
