@@ -2,7 +2,7 @@
 // user marks files as viewed, adds notes to lines, and merges the branch from here.
 
 import { visit } from "./nav";
-import { registerWindow } from "./windows";
+import { onRepoChange, registerWindow } from "./windows";
 import type { Change, FileContent, ReviewComment, ReviewDetail, ReviewEdit, ReviewSummary, RevSpec } from "./api";
 import { statusName } from "./changes-panel";
 import { dragResize, formatDate, h, icon, rowSplitter, twisty } from "./dom";
@@ -102,6 +102,7 @@ export async function openReview(branch: string, cb: ReviewCallbacks, path?: str
 
   const close = () => {
     unregister();
+    stopWatching();
     overlay.remove();
     document.removeEventListener("keydown", onKey, true);
     closeOpen = null;
@@ -376,6 +377,29 @@ export async function openReview(branch: string, cb: ReviewCallbacks, path?: str
       d.message(detail.summary.exists ? "The branch has no changes from the merge base." : "");
       renderNotes();
     }
+  };
+
+  // A change of refs outside the app, for example a new commit on the branch or a fetch that moves the
+  // base: the review loads again. The selected file stays, and its diff keeps its scroll position. A
+  // commit that is gone (after a rebase) leaves its scope for All changes.
+  const stopWatching = onRepoChange((change) => {
+    if (change === "repo") void refreshFromOutside();
+  });
+  const refreshFromOutside = async () => {
+    if (!detail) return;
+    const before = `${detail.head} ${detail.baseOid}`;
+    const keep = rows[selected]?.path;
+    let next;
+    try {
+      next = await cb.load(current);
+    } catch {
+      return;
+    }
+    if (`${next.head} ${next.baseOid}` === before) return;
+    detail = next;
+    if (scope !== "all" && !detail.commitList.some((c) => c.oid === scope)) scope = "all";
+    firstPath = keep;
+    await showFiles();
   };
 
   /** Loads the review again after a change, and keeps the selected file. */
